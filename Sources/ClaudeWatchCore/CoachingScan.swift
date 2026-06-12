@@ -193,8 +193,11 @@ public enum CoachingScan {
             msgs.append(UserMsg(ts: ts, text: text, lineIndex: lineIndex))
         }
 
-        // First prompt = earliest timestamp. Chỉ emit nếu rơi vào range filter.
-        guard let first = msgs.min(by: { $0.ts < $1.ts }),
+        // Skip auto-injected continuation prompts (Claude Code khi resume/compact
+        // chèn tin ngắn như ".", ",", "Continue", <command-name>, <system-reminder>,
+        // hoặc compaction summary). Lấy first message THỰC SỰ user gõ.
+        let realMsgs = msgs.filter { !isLikelySystemInjection($0.text) }
+        guard let first = realMsgs.min(by: { $0.ts < $1.ts }),
               range.contains(first.ts) else { return [] }
 
         return [PromptRecord(
@@ -206,9 +209,49 @@ public enum CoachingScan {
         )]
     }
 
+    /// True nếu text trông giống auto-injected message của Claude Code thay vì
+    /// user's real prompt. Heuristic:
+    /// - Pure punctuation / quá ngắn (< 3 alphanumeric chars) — vd ".", ",", "."
+    /// - Bắt đầu bằng tag XML system (Claude Code dùng để wrap command output)
+    /// - Compaction header standard
+    /// - Slash command resume markers
+    nonisolated static func isLikelySystemInjection(_ rawText: String) -> Bool {
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Quá ngắn — đếm alphanumeric chars, < 3 = noise (vd ".", "..", ",.")
+        let alphaCount = text.unicodeScalars.filter {
+            CharacterSet.alphanumerics.contains($0)
+        }.count
+        if alphaCount < 3 { return true }
+
+        // Claude Code wrapper tags — chèn tự động cho slash command / hook output.
+        let systemPrefixes = [
+            "<command-name>",
+            "<command-message>",
+            "<command-stdout>",
+            "<command-args>",
+            "<local-command-stdout>",
+            "<local-command-stderr>",
+            "<system-reminder>",
+            "<bash-stdout>",
+            "<bash-stderr>",
+            "<user-prompt-submit-hook>",
+        ]
+        for prefix in systemPrefixes where text.hasPrefix(prefix) { return true }
+
+        // Compaction continuation header — Claude Code generate khi context full.
+        if text.hasPrefix("This session is being continued from a previous conversation") {
+            return true
+        }
+        if text.hasPrefix("Caveat:") && text.contains("<local-command-stdout>") {
+            return true
+        }
+
+        return false
+    }
+
     private static func extractUserText(from message: Any?) -> String {
         guard let dict = message as? [String: Any] else { return "" }
-        if let raw = dict["content"] as? String { return raw }
+        if let raw = dict["content"] as? String { return stripSystemTags(raw) }
         guard let blocks = dict["content"] as? [[String: Any]] else { return "" }
         var pieces: [String] = []
         for block in blocks {
@@ -216,7 +259,28 @@ public enum CoachingScan {
                   let txt = block["text"] as? String, !txt.isEmpty else { continue }
             pieces.append(txt)
         }
-        return pieces.joined(separator: "\n")
+        return stripSystemTags(pieces.joined(separator: "\n"))
+    }
+
+    /// Loại bỏ `<tag>...</tag>` của các wrapper system Claude Code chèn vào user
+    /// message (hook output, command name, system reminder, stdout). Để text
+    /// còn lại đại diện cho prompt user gõ thật sự.
+    nonisolated static func stripSystemTags(_ text: String) -> String {
+        let tags = [
+            "command-name", "command-message", "command-stdout", "command-args",
+            "local-command-stdout", "local-command-stderr",
+            "system-reminder", "bash-stdout", "bash-stderr",
+            "user-prompt-submit-hook",
+        ]
+        var s = text
+        for tag in tags {
+            let pattern = "<\(tag)>[\\s\\S]*?</\(tag)>"
+            if let re = try? NSRegularExpression(pattern: pattern, options: []) {
+                let range = NSRange(s.startIndex..., in: s)
+                s = re.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: "")
+            }
+        }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func parseISO(_ s: String) -> Date? {

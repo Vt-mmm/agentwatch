@@ -40,7 +40,7 @@ targets:
         SUPublicEDKey: "ynaSo3Ac+GxZgbfaRN57FgCzf9mXsbUWeKPXUzg8msE="
     settings:
       MARKETING_VERSION: "0.1.0"
-      CURRENT_PROJECT_VERSION: "1"
+      CURRENT_PROJECT_VERSION: "010"
       GENERATE_INFOPLIST_FILE: NO
       ENABLE_HARDENED_RUNTIME: YES
       CODE_SIGN_STYLE: Automatic

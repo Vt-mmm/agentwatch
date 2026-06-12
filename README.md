@@ -148,7 +148,15 @@ User chạy bản cũ sẽ thấy popup update trong ≤1h, hoặc dùng menu Ch
 
 ### User install bản đầu (chia cho team)
 
-Gửi link `https://github.com/Vt-mmm/claudewatch/releases/latest` → tải `.zip` → kéo `ClaudeWatchMac.app` vô `/Applications` → mở. Vì app ad-hoc signed, lần đầu macOS chặn → right-click → **Open** → **Open** lần nữa. Từ bản 2 trở đi, Sparkle tự update không cần thao tác thủ công.
+1. Tải `.zip` từ https://github.com/Vt-mmm/claudewatch/releases/latest → unzip → kéo `ClaudeWatchMac.app` vô `/Applications`.
+2. **Bypass Gatekeeper lần đầu** (app ad-hoc signed, không có Developer ID):
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/ClaudeWatchMac.app
+   ```
+   Hoặc qua UI: **System Settings → Privacy & Security** → kéo xuống cuối → **Open Anyway** cho ClaudeWatchMac.
+3. Mở app bình thường.
+
+Từ version 2 trở đi, Sparkle tự update không cần bypass nữa vì update binary không bị macOS gắn quarantine.
 
 ## Known limits
 

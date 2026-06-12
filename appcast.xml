@@ -8,6 +8,14 @@
         <description>Most recent changes for Claude Watch macOS.</description>
         <language>en</language>
         <item>
+            <title>Version 0.1.18</title>
+            <sparkle:version>0118</sparkle:version>
+            <sparkle:shortVersionString>0.1.18</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>Fri, 12 Jun 2026 09:24:02 +0000</pubDate>
+            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.18/ClaudeWatchMac-0.1.18.zip" sparkle:edSignature="nJSTjNA7yvWFtq70MPNLYxcbM08NF7LNG+UorxRteAa6Be3DC7CyyHRqymv6EvSFRMXIRGDqekatR87u+3oRAg==" length="3592494" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Version 0.1.17</title>
             <sparkle:version>0117</sparkle:version>
             <sparkle:shortVersionString>0.1.17</sparkle:shortVersionString>

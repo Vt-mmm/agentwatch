@@ -26,6 +26,10 @@ final class CoachingDataStore {
     var lastRefreshAt: Date = .distantPast
     var isLoading: Bool = false
 
+    /// Pet mascot state — derive từ aggregate signals (avg★ delta, outlier
+    /// count, agent loop count). Update mỗi lần reload xong.
+    var petState: PetState = .sleepy
+
     /// Scope tham chiếu đến reload gần nhất — nếu user đổi scope/anchor,
     /// data cũ không match → buộc reload.
     var lastScopeFingerprint: String = ""
@@ -90,6 +94,15 @@ final class CoachingDataStore {
                 self.previousAvgStars = prevStats.avgStars
                 self.previousPromptCount = prevStats.totalPrompts
                 self.dailyCostTrend = trend
+                // Compute pet state từ aggregate đã có — outlier/agent loop dùng
+                // CoachingInsights logic, avgStarsDelta lấy từ ReportGenerator stats.
+                let curStats = ReportGenerator.stats(for: curP)
+                let signals = PetSignals(
+                    hasActivity: !curS.isEmpty,
+                    outlierCount: CoachingInsights.outlierSessions(curS).count,
+                    agentLoopCount: CoachingInsights.agentLoopSessions(curS).count,
+                    avgStarsDelta: curStats.avgStars - prevStats.avgStars)
+                self.petState = PetMood.resolve(signals)
                 self.lastRefreshAt = Date()
                 self.isLoading = false
             }

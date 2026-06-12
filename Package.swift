@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "ClaudeWatchCore", targets: ["ClaudeWatchCore"]),
         .executable(name: "claude-watch-demo", targets: ["ClaudeWatchDemo"]),
+        .executable(name: "claudewatch", targets: ["ClaudeWatchCLI"]),
     ],
     targets: [
         .target(
@@ -17,6 +18,11 @@ let package = Package(
             name: "ClaudeWatchDemo",
             dependencies: ["ClaudeWatchCore"],
             path: "Sources/ClaudeWatchDemo"
+        ),
+        .executableTarget(
+            name: "ClaudeWatchCLI",
+            dependencies: ["ClaudeWatchCore"],
+            path: "Sources/ClaudeWatchCLI"
         ),
         .testTarget(
             name: "ClaudeWatchCoreTests",

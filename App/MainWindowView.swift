@@ -8,6 +8,7 @@ struct MainWindowView: View {
     @Environment(ProjectStore.self) private var projectStore
     @Environment(AppearanceStore.self) private var appearance
     @Environment(UpdaterController.self) private var updater
+    @Environment(CoachingDataStore.self) private var coaching
     @State private var tab: Tab = .live
     @State private var showPrivacy: Bool = false
 
@@ -62,6 +63,7 @@ struct MainWindowView: View {
                 ProjectPickerView()
             }
             Spacer()
+            PetMascot(state: coaching.petState)
             themePicker
             settingsMenu
         }

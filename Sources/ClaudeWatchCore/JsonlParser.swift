@@ -206,11 +206,16 @@ public enum JsonlParser {
             guard blockType == "tool_result",
                   let id = block["tool_use_id"] as? String else { continue }
 
-            // Mark matching tool_use event as completed.
+            // Mark matching tool_use event as completed + extract result content
+            // (text snippet + image attachment nếu có).
             if let idx = pendingTools[id] {
                 stats.events[idx].completed = true
                 stats.events[idx].completedAt = timestamp
-                stats.events[idx].resultPreview = extractResultSnippet(from: block["content"])
+                let extracted = extractResult(from: block["content"])
+                stats.events[idx].resultPreview = extracted.text
+                stats.events[idx].imageBase64 = extracted.imageBase64
+                stats.events[idx].imageMimeType = extracted.imageMimeType
+                stats.events[idx].imageURL = extracted.imageURL
                 pendingTools.removeValue(forKey: id)
             }
 
@@ -219,7 +224,7 @@ public enum JsonlParser {
                let aIdx = stats.agents.firstIndex(where: { $0.id == id }) {
                 stats.agents[aIdx].completed = true
                 stats.agents[aIdx].completedAt = timestamp
-                stats.agents[aIdx].resultSnippet = extractResultSnippet(from: block["content"])
+                stats.agents[aIdx].resultSnippet = extractResult(from: block["content"]).text
                 pendingAgents.remove(id)
             }
         }
@@ -307,17 +312,50 @@ public enum JsonlParser {
         return name
     }
 
-    /// `content` of a tool_result can be either a String or an array of
-    /// `{type: "text", text: "..."}` blocks. Normalise to a short snippet.
-    private static func extractResultSnippet(from raw: Any?) -> String? {
+    /// Trả về (text snippet ≤600ch, image base64, mime type, image URL) — full
+    /// payload từ tool_result. Để renderer (UI) decide hiện gì.
+    /// Cap base64 5MB để tránh OOM khi screenshot 4K bị embed.
+    private static func extractResult(from raw: Any?)
+        -> (text: String?, imageBase64: String?, imageMimeType: String?, imageURL: String?) {
+        // String đơn giản — chỉ có text.
         if let s = raw as? String {
-            return String(s.prefix(600))
+            return (String(s.prefix(600)), nil, nil, nil)
         }
-        if let arr = raw as? [[String: Any]] {
-            let joined = arr.compactMap { $0["text"] as? String }.joined(separator: "\n")
-            if !joined.isEmpty { return String(joined.prefix(600)) }
+        guard let arr = raw as? [[String: Any]] else {
+            return (nil, nil, nil, nil)
         }
-        return nil
+        // Gom text blocks + tìm image block đầu tiên (nếu có).
+        var textPieces: [String] = []
+        var imgB64: String?
+        var imgMime: String?
+        var imgUrl: String?
+        for block in arr {
+            switch block["type"] as? String {
+            case "text":
+                if let t = block["text"] as? String, !t.isEmpty {
+                    textPieces.append(t)
+                }
+            case "image":
+                guard imgB64 == nil && imgUrl == nil,
+                      let source = block["source"] as? [String: Any] else { continue }
+                if let kind = source["type"] as? String {
+                    switch kind {
+                    case "base64":
+                        if let data = source["data"] as? String, data.count < 5_000_000 {
+                            imgB64 = data
+                            imgMime = (source["media_type"] as? String) ?? "image/png"
+                        }
+                    case "url":
+                        imgUrl = source["url"] as? String
+                    default: break
+                    }
+                }
+            default: break
+            }
+        }
+        let text = textPieces.joined(separator: "\n")
+        let textOut = text.isEmpty ? nil : String(text.prefix(600))
+        return (textOut, imgB64, imgMime, imgUrl)
     }
 
     private static func intValue(_ raw: Any?) -> Int {

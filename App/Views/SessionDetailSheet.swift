@@ -3,6 +3,7 @@
 // Lazy parse JSONL khi sheet appear → không block list.
 
 import SwiftUI
+import AppKit
 import ClaudeWatchCore
 
 struct SessionDetailSheet: View {
@@ -13,12 +14,33 @@ struct SessionDetailSheet: View {
     @State private var loading: Bool = true
     @State private var page: Int = 0
     @State private var expandedTools: Set<String> = []
+    @State private var toolFilter: String = ""   // "" = all, else specific tool/kind
     private let pageSize: Int = 30
 
-    /// Events sau khi reverse: mới nhất ở đầu — user thường tò mò bước cuối.
+    /// Events sau khi reverse + áp filter: mới nhất ở đầu.
     private var events: [SessionEvent] {
         guard let s = stats else { return [] }
-        return Array(s.events.reversed())
+        let reversed = Array(s.events.reversed())
+        guard !toolFilter.isEmpty else { return reversed }
+        return reversed.filter { e in
+            switch toolFilter {
+            case "_user":      return e.kind == .userMessage
+            case "_assistant": return e.kind == .assistantText
+            case "_thinking":  return e.kind == .assistantThinking
+            case "_tool":      return e.kind == .toolUse
+            default:           return e.toolName == toolFilter
+            }
+        }
+    }
+
+    /// Distinct tool names trong session, sorted theo count giảm dần.
+    private var availableToolNames: [String] {
+        guard let s = stats else { return [] }
+        var counts: [String: Int] = [:]
+        for e in s.events where e.kind == .toolUse {
+            if let n = e.toolName { counts[n, default: 0] += 1 }
+        }
+        return counts.sorted { $0.value > $1.value }.map(\.key)
     }
 
     private var toolBreakdown: [(name: String, count: Int)] {
@@ -291,6 +313,7 @@ struct SessionDetailSheet: View {
                             .textSelection(.enabled)
                             .lineLimit(4)
                     }
+                    attachmentView(for: e)
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -318,11 +341,65 @@ struct SessionDetailSheet: View {
                 Spacer()
                 Paginator(page: info.page, totalPages: info.totalPages) { page = $0 }
             }
+            eventFilterPicker
             ForEach(Array(info.slice)) { e in
                 eventRow(e)
             }
         }
         .claudeCard()
+    }
+
+    /// Dropdown filter — All / kind / specific tool. Reset page về 0 khi đổi.
+    private var eventFilterPicker: some View {
+        Menu {
+            Button("Tất cả events") { toolFilter = ""; page = 0 }
+            Divider()
+            Section("By kind") {
+                Button("User messages")      { toolFilter = "_user"; page = 0 }
+                Button("Assistant replies")  { toolFilter = "_assistant"; page = 0 }
+                Button("Thinking")           { toolFilter = "_thinking"; page = 0 }
+                Button("All tool calls")     { toolFilter = "_tool"; page = 0 }
+            }
+            if !availableToolNames.isEmpty {
+                Divider()
+                Section("By tool name") {
+                    ForEach(availableToolNames, id: \.self) { name in
+                        Button(name) { toolFilter = name; page = 0 }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Claude.textMuted)
+                Text(filterDisplayLabel)
+                    .font(ClaudeFont.body(11))
+                    .foregroundStyle(Claude.textPrimary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Claude.textMuted)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Claude.surfaceAlt)
+            .overlay(RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Claude.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var filterDisplayLabel: String {
+        switch toolFilter {
+        case "":           return "Filter: Tất cả"
+        case "_user":      return "Filter: User"
+        case "_assistant": return "Filter: Reply"
+        case "_thinking":  return "Filter: Thinking"
+        case "_tool":      return "Filter: Tools"
+        default:           return "Filter: \(toolFilter)"
+        }
     }
 
     private func eventRow(_ e: SessionEvent) -> some View {
@@ -389,6 +466,66 @@ struct SessionDetailSheet: View {
         case .assistantText:     return .green
         case .assistantThinking: return .purple
         case .toolUse:           return Claude.orange
+        }
+    }
+
+    /// Render image attachment nếu tool_result có chứa screenshot/image.
+    /// + nút Save As… để export ra file .png.
+    @ViewBuilder
+    private func attachmentView(for e: SessionEvent) -> some View {
+        if let b64 = e.imageBase64,
+           let data = Data(base64Encoded: b64),
+           let img = NSImage(data: data) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "photo.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Claude.orange)
+                    Text("Attached image (\(e.imageMimeType ?? "image"))")
+                        .font(ClaudeFont.label(9))
+                        .foregroundStyle(Claude.textMuted)
+                    Spacer()
+                    Button("Save…") { saveImage(data: data, mime: e.imageMimeType) }
+                        .buttonStyle(.borderless)
+                        .font(ClaudeFont.body(10))
+                        .foregroundStyle(Claude.orange)
+                }
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 280)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            .padding(.top, 4)
+        } else if let url = e.imageURL, let urlObj = URL(string: url) {
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Claude.orange)
+                Link("Image URL: \(url)", destination: urlObj)
+                    .font(ClaudeFont.mono(10))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func saveImage(data: Data, mime: String?) {
+        let ext: String = {
+            switch mime {
+            case "image/jpeg": return "jpg"
+            case "image/gif":  return "gif"
+            case "image/webp": return "webp"
+            default:           return "png"
+            }
+        }()
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "screenshot-\(Int(Date().timeIntervalSince1970)).\(ext)"
+        panel.allowedContentTypes = [.init(filenameExtension: ext)].compactMap { $0 }
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            try? data.write(to: url)
         }
     }
 

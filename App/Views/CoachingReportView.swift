@@ -13,6 +13,7 @@ struct CoachingReportView: View {
     @State private var sourceFilter: SourceFilter = .all
     @State private var searchQuery: String = ""
     @State private var projectFilter: String = ""    // "" = all projects
+    @State private var modelFilter: String = ""      // "" = all models
     @State private var viewMode: ViewMode = .all
     @State private var selectedRecord: PromptRecord?
     @State private var selectedSession: SessionSummary?
@@ -81,6 +82,7 @@ struct CoachingReportView: View {
         allSessions.filter { s in
             guard sourceFilter.matches(s.source) else { return false }
             if !projectFilter.isEmpty && s.projectDisplay != projectFilter { return false }
+            if !modelFilter.isEmpty && s.model != modelFilter { return false }
             return true
         }
     }
@@ -90,6 +92,11 @@ struct CoachingReportView: View {
         let names = Set(allRecords.map(\.projectDisplay))
             .union(Set(allSessions.map(\.projectDisplay)))
         return names.sorted()
+    }
+
+    /// List unique model names có data trong scope hiện tại.
+    private var modelOptions: [String] {
+        Set(allSessions.map(\.model)).filter { !$0.isEmpty }.sorted()
     }
 
     private var inventory: InventoryAggregate {
@@ -144,6 +151,7 @@ struct CoachingReportView: View {
         .onChange(of: sourceFilter) { _, _ in resetPages() }
         .onChange(of: searchQuery) { _, _ in resetPages() }
         .onChange(of: projectFilter) { _, _ in resetPages() }
+        .onChange(of: modelFilter) { _, _ in resetPages() }
         .onChange(of: viewMode) { _, _ in resetPages() }
         .sheet(item: $selectedRecord) { record in
             PromptDetailSheet(record: record)
@@ -250,10 +258,41 @@ struct CoachingReportView: View {
             HStack(spacing: 10) {
                 searchField
                 projectPicker
+                modelPicker
                 Spacer()
             }
         }
         .claudeCard()
+    }
+
+    private var modelPicker: some View {
+        Menu {
+            Button("Mọi model") { modelFilter = "" }
+            Divider()
+            ForEach(modelOptions, id: \.self) { m in
+                Button(m) { modelFilter = m }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "cpu")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Claude.textMuted)
+                Text(modelFilter.isEmpty ? "Mọi model" : truncateMid(modelFilter, max: 20))
+                    .font(ClaudeFont.body(12))
+                    .foregroundStyle(Claude.textPrimary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Claude.textMuted)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Claude.surfaceAlt)
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Claude.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     /// Đếm hiển thị bên phải segmented, ngắn gọn — KHÔNG nằm trong segmented

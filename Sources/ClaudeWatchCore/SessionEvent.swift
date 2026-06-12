@@ -17,15 +17,23 @@ public struct SessionEvent: Identifiable, Sendable, Equatable {
     public let kind: SessionEventKind
     public let toolName: String?    // only for kind == .toolUse
     public let toolUseId: String?
-    public let summary: String      // ≤120 chars human description
+    public let summary: String
     public var completed: Bool      // toolUse only
     public var completedAt: String?
     public var resultPreview: String?
+    /// Khi tool_result chứa image block (vd mcp screenshot) — capture base64
+    /// + mime type để render inline. Capped 5MB base64 (~3.7MB actual image).
+    public var imageBase64: String?
+    public var imageMimeType: String?
+    /// Khi tool_result content là URL ảnh thay vì base64.
+    public var imageURL: String?
 
     public init(id: String, timestamp: String, kind: SessionEventKind,
                 toolName: String? = nil, toolUseId: String? = nil,
                 summary: String, completed: Bool = false,
-                completedAt: String? = nil, resultPreview: String? = nil) {
+                completedAt: String? = nil, resultPreview: String? = nil,
+                imageBase64: String? = nil, imageMimeType: String? = nil,
+                imageURL: String? = nil) {
         self.id = id
         self.timestamp = timestamp
         self.kind = kind
@@ -35,5 +43,8 @@ public struct SessionEvent: Identifiable, Sendable, Equatable {
         self.completed = completed
         self.completedAt = completedAt
         self.resultPreview = resultPreview
+        self.imageBase64 = imageBase64
+        self.imageMimeType = imageMimeType
+        self.imageURL = imageURL
     }
 }

@@ -23,6 +23,9 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
     public let toolCallCount: Int
     /// Path tới JSONL file — detail sheet re-parse từ đây để hiện events/tools.
     public let fileURL: URL?
+    /// Số lần invoke tool "Agent" (spawn subagent) — heuristic phát hiện
+    /// session bị subagent loop tốn token.
+    public let agentCount: Int
 
     public init(id: String, projectDisplay: String, source: SessionSource,
                 model: String, modelFamily: ModelFamily,
@@ -31,7 +34,8 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
                 cost: Double,
                 firstTimestamp: Date?, lastTimestamp: Date?,
                 promptCount: Int, toolCallCount: Int,
-                fileURL: URL? = nil) {
+                fileURL: URL? = nil,
+                agentCount: Int = 0) {
         self.id = id; self.projectDisplay = projectDisplay; self.source = source
         self.model = model; self.modelFamily = modelFamily
         self.inputTokens = inputTokens; self.outputTokens = outputTokens
@@ -40,10 +44,24 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
         self.firstTimestamp = firstTimestamp; self.lastTimestamp = lastTimestamp
         self.promptCount = promptCount; self.toolCallCount = toolCallCount
         self.fileURL = fileURL
+        self.agentCount = agentCount
     }
 
     public var totalTokens: Int {
         inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+    }
+
+    /// Cache hit rate = cacheRead / (input + cacheRead). High ratio = healthy
+    /// reuse, low = agent restart inefficiency (re-Read cùng file nhiều lần).
+    public var cacheHitRate: Double {
+        let denom = inputTokens + cacheReadTokens
+        return denom > 0 ? Double(cacheReadTokens) / Double(denom) : 0
+    }
+
+    /// Cost trung bình mỗi user prompt — dùng để detect outlier khi 1 prompt
+    /// "đốt" quá nhiều cost so với session khác.
+    public var costPerPrompt: Double {
+        promptCount > 0 ? cost / Double(promptCount) : cost
     }
 }
 
@@ -193,7 +211,8 @@ public enum SessionInventory {
             lastTimestamp: lastTs as Date?,
             promptCount: max(promptCount, stats.messageCount / 2),  // assistant + user
             toolCallCount: stats.toolCalls,
-            fileURL: file
+            fileURL: file,
+            agentCount: stats.agents.count
         )
     }
 

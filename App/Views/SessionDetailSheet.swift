@@ -149,8 +149,11 @@ struct SessionDetailSheet: View {
                     Text(TokenFormatter.usd(session.cost))
                         .font(ClaudeFont.display(28).monospacedDigit())
                         .foregroundStyle(Claude.orange)
-                    Text("\(session.promptCount) prompt · \(session.toolCallCount) tool")
+                    Text("\(session.promptCount) prompt · \(session.toolCallCount) tool · \(session.agentCount) agent")
                         .font(ClaudeFont.mono(11))
+                        .foregroundStyle(Claude.textMuted)
+                    Text("cache \(Int(session.cacheHitRate * 100))% hit · \(TokenFormatter.usd(session.costPerPrompt))/prompt")
+                        .font(ClaudeFont.mono(10))
                         .foregroundStyle(Claude.textMuted)
                 }
             }

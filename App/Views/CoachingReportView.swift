@@ -103,6 +103,16 @@ struct CoachingReportView: View {
         SessionInventory.aggregate(sessions)
     }
 
+    /// Session id outlier theo cost (>2σ avg) — view tô badge cảnh báo.
+    private var outlierIds: Set<String> {
+        CoachingInsights.outlierSessions(sessions)
+    }
+
+    /// Session bị spawn quá nhiều subagent → suspect agent loop.
+    private var agentLoopIds: Set<String> {
+        CoachingInsights.agentLoopSessions(sessions)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -110,6 +120,7 @@ struct CoachingReportView: View {
                 summaryCard
                 tokenCostCard
                 trendCard
+                if dailyCostTrend.contains(where: { $0.cost > 0 }) { forecastCard }
                 if !sessions.isEmpty { topSessionsCard }
                 if !records.isEmpty { distributionCard }
                 if !stats.topMissingSections.isEmpty { gapsCard }
@@ -376,6 +387,45 @@ struct CoachingReportView: View {
         .claudeCard()
     }
 
+    /// Burn rate + monthly forecast card — extrapolate cost từ 7 ngày gần nhất.
+    private var forecastCard: some View {
+        let costs = dailyCostTrend.map(\.cost)
+        let daily = CoachingInsights.dailyBurnRate(costs)
+        let monthly = CoachingInsights.monthlyForecast(costs)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                    .foregroundStyle(Claude.orange)
+                Text("Forecast chi phí")
+                    .font(ClaudeFont.heading())
+                    .foregroundStyle(Claude.textPrimary)
+                Spacer()
+            }
+            HStack(spacing: 16) {
+                forecastCell("Burn rate / ngày", TokenFormatter.usd(daily))
+                forecastCell("Forecast / tháng", TokenFormatter.usd(monthly))
+                forecastCell("Forecast / năm",   TokenFormatter.usd(monthly * 12))
+            }
+            Text("Tính từ 7 ngày gần nhất (tính cả hôm có data). Giả định pace giữ nguyên — anh dùng để báo budget cho team, không phải số liệu cứng.")
+                .font(ClaudeFont.body(10))
+                .foregroundStyle(Claude.textMuted)
+        }
+        .claudeCard()
+    }
+
+    private func forecastCell(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            SectionLabel(text: label)
+            Text(value)
+                .font(ClaudeFont.mono(16, weight: .semibold))
+                .foregroundStyle(Claude.orange)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Claude.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
     private var trendCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -480,20 +530,32 @@ struct CoachingReportView: View {
     }
 
     private func sessionRow(_ s: SessionSummary) -> some View {
-        HStack(spacing: 10) {
+        let isOutlier = outlierIds.contains(s.id)
+        let isAgentLoop = agentLoopIds.contains(s.id)
+        return HStack(spacing: 10) {
             sessionSourcePill(s.source)
             VStack(alignment: .leading, spacing: 2) {
-                Text(s.projectDisplay)
-                    .font(ClaudeFont.body(12))
-                    .fontWeight(.medium)
-                    .foregroundStyle(Claude.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HStack(spacing: 6) {
+                    Text(s.projectDisplay)
+                        .font(ClaudeFont.body(12))
+                        .fontWeight(.medium)
+                        .foregroundStyle(Claude.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if isOutlier {
+                        badge("🚨 outlier", color: .red,
+                              help: "Cost vượt mean + 2σ — đáng review")
+                    }
+                    if isAgentLoop {
+                        badge("⚠️ \(s.agentCount) agents", color: .orange,
+                              help: "Spawn ≥10 Agent — coi chừng loop tốn token")
+                    }
+                }
                 Text(sessionTimeRange(s))
                     .font(ClaudeFont.mono(10))
                     .foregroundStyle(Claude.textPrimary.opacity(0.75))
                     .lineLimit(1)
-                Text("\(s.model.isEmpty ? "?" : s.model) · \(TokenFormatter.compact(s.totalTokens)) tok · \(s.toolCallCount) tools")
+                Text(sessionMetaLabel(s))
                     .font(ClaudeFont.mono(10))
                     .foregroundStyle(Claude.textMuted)
                     .lineLimit(1)
@@ -504,6 +566,24 @@ struct CoachingReportView: View {
                 .foregroundStyle(Claude.orange)
         }
         .padding(.vertical, 3)
+    }
+
+    private func badge(_ text: String, color: Color, help: String) -> some View {
+        Text(text)
+            .font(ClaudeFont.mono(9, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(color.opacity(0.15))
+            .clipShape(Capsule())
+            .help(help)
+    }
+
+    /// Phụ đề row: model · tokens · tools · cache hit%.
+    private func sessionMetaLabel(_ s: SessionSummary) -> String {
+        let modelStr = s.model.isEmpty ? "?" : s.model
+        let cache = s.cacheHitRate
+        let cacheStr = cache > 0 ? " · cache \(Int(cache * 100))%" : ""
+        return "\(modelStr) · \(TokenFormatter.compact(s.totalTokens)) tok · \(s.toolCallCount) tools\(cacheStr)"
     }
 
     /// Format: nếu cùng 1 ngày → "12/06 10:23 → 14:55", khác ngày → "12/06 10:23 → 13/06 14:55".
@@ -598,8 +678,48 @@ struct CoachingReportView: View {
                 }
                 .padding(.vertical, 4)
             }
+            if let topMissing = stats.topMissingSections.first {
+                smartTipBlock(for: topMissing.0)
+            }
         }
         .claudeCard()
+    }
+
+    /// Card gợi ý template cho section thiếu nhiều nhất — actionable, copy-paste-ready.
+    private func smartTipBlock(for section: SpecSection) -> some View {
+        let tip = CoachingTips.tip(for: section)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(Claude.orange)
+                Text("Gợi ý template cho \"\(section.label)\"")
+                    .font(ClaudeFont.body(12))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Claude.textPrimary)
+                Spacer()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(tip.template, forType: .string)
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                        .font(ClaudeFont.body(11))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Claude.orange)
+            }
+            Text(tip.reason)
+                .font(ClaudeFont.body(11))
+                .foregroundStyle(Claude.textMuted)
+            Text(tip.template)
+                .font(ClaudeFont.mono(11))
+                .foregroundStyle(Claude.textPrimary)
+                .textSelection(.enabled)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Claude.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .padding(.top, 8)
     }
 
     private var projectCard: some View {

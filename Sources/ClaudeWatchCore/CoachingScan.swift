@@ -151,8 +151,14 @@ public enum CoachingScan {
         return ScanOne(prompts: prompts, summary: summary)
     }
 
-    /// Extract user prompts từ file, lọc theo range. Tách riêng vì JsonlParser
-    /// truncate 160 char cho UI feed — coaching cần full text.
+    /// Extract CHỈ prompt ĐẦU TIÊN của session (earliest user message). Đánh giá
+    /// coaching dựa trên cách user khởi đầu session — định hướng agent tốt hay
+    /// chưa, có Spec/criteria không. Follow-up messages trong session không tính.
+    ///
+    /// Logic:
+    /// 1. Quét MỌI user message trong file (full session, không filter range)
+    /// 2. Lấy message có timestamp sớm nhất
+    /// 3. Nếu timestamp đó rơi vào `range` → emit 1 PromptRecord; ngược lại bỏ qua
     private static func extractPromptsInRange(file: URL, slug: String, display: String,
                                               source: SessionSource,
                                               range: ClosedRange<Date>) -> [PromptRecord] {
@@ -160,7 +166,13 @@ public enum CoachingScan {
               let raw = String(data: data, encoding: .utf8) else { return [] }
         let sessionUuid = file.deletingPathExtension().lastPathComponent
 
-        var records: [PromptRecord] = []
+        // Gom mọi user message hợp lệ (timestamp + text không rỗng) từ TOÀN BỘ file.
+        struct UserMsg {
+            let ts: Date
+            let text: String
+            let lineIndex: Int
+        }
+        var msgs: [UserMsg] = []
         var lineIndex = 0
         raw.enumerateLines { line, _ in
             lineIndex += 1
@@ -172,21 +184,26 @@ public enum CoachingScan {
 
             let tsStr = (obj["timestamp"] as? String)
                 ?? (obj["_audit_timestamp"] as? String)
-            guard let s = tsStr, let ts = parseISO(s), range.contains(ts) else { return }
+            guard let s = tsStr, let ts = parseISO(s) else { return }
 
             let text = extractUserText(from: obj["message"])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
 
-            records.append(PromptRecord(
-                id: "\(sessionUuid)-\(lineIndex)",
-                timestamp: ts, projectSlug: slug, projectDisplay: display,
-                sessionUuid: sessionUuid, text: text,
-                score: PromptScorer.score(text),
-                source: source
-            ))
+            msgs.append(UserMsg(ts: ts, text: text, lineIndex: lineIndex))
         }
-        return records
+
+        // First prompt = earliest timestamp. Chỉ emit nếu rơi vào range filter.
+        guard let first = msgs.min(by: { $0.ts < $1.ts }),
+              range.contains(first.ts) else { return [] }
+
+        return [PromptRecord(
+            id: "\(sessionUuid)-\(first.lineIndex)",
+            timestamp: first.ts, projectSlug: slug, projectDisplay: display,
+            sessionUuid: sessionUuid, text: first.text,
+            score: PromptScorer.score(first.text),
+            source: source
+        )]
     }
 
     private static func extractUserText(from message: Any?) -> String {

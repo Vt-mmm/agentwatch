@@ -260,7 +260,7 @@ struct CoachingReportView: View {
     /// để chip không bị crop khi window hẹp.
     private var filterCountLabel: String {
         let s = sessions.count, p = records.count
-        return "\(s) session · \(p) prompt"
+        return "\(s) session · \(p) khởi đầu"
     }
 
     private var summaryCard: some View {
@@ -592,10 +592,13 @@ struct CoachingReportView: View {
         let info = Pagination.info(items: records, page: promptPage, pageSize: pageSize)
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                SectionLabel(text: "Prompts (\(records.count))")
+                SectionLabel(text: "Prompts khởi đầu session (\(records.count))")
                 Spacer()
                 Paginator(page: info.page, totalPages: info.totalPages) { promptPage = $0 }
             }
+            Text("Chỉ ghi nhận message ĐẦU tiên của mỗi session — đánh giá cách user khởi đầu, định hướng agent. Follow-up trong session không tính.")
+                .font(ClaudeFont.body(11))
+                .foregroundStyle(Claude.textMuted)
             if records.isEmpty {
                 Text("Không có prompt nào trong khoảng này.")
                     .font(ClaudeFont.body(13))

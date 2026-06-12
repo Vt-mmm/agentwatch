@@ -229,18 +229,33 @@ public enum JsonlParser {
         // We can't see it from blocks iteration; nothing to do here.
     }
 
-    /// Produce a ≤120-char human description for a tool invocation.
+    /// Produce a ≤400-char human description for a tool invocation. Larger cap
+    /// than trước (120) để giữ FULL Bash command + Edit diff snippet cho user
+    /// drill-down xem session làm gì.
     private static func summarizeTool(name: String, input: [String: Any]) -> String {
-        func short(_ s: String) -> String {
+        func short(_ s: String, max n: Int = 400) -> String {
             let trimmed = s.replacingOccurrences(of: "\n", with: " ")
-            return String(trimmed.prefix(120))
+            return String(trimmed.prefix(n))
         }
         switch name {
         case "Bash":
             if let cmd = input["command"] as? String { return short(cmd) }
         case "Read":
             if let p = input["file_path"] as? String { return short(p) }
-        case "Write", "Edit", "NotebookEdit":
+        case "Write":
+            let p = (input["file_path"] as? String) ?? ""
+            let content = (input["content"] as? String) ?? ""
+            return short("\(p) — write \(content.count) chars")
+        case "Edit":
+            let p = (input["file_path"] as? String) ?? ""
+            let old = short(input["old_string"] as? String ?? "", max: 100)
+            let new = short(input["new_string"] as? String ?? "", max: 100)
+            return short("\(p) • '\(old)' → '\(new)'")
+        case "MultiEdit":
+            let p = (input["file_path"] as? String) ?? ""
+            let n = (input["edits"] as? [[String: Any]])?.count ?? 0
+            return short("\(p) — \(n) edits")
+        case "NotebookEdit":
             if let p = input["file_path"] as? String { return short(p) }
         case "Glob":
             if let p = input["pattern"] as? String { return short(p) }
@@ -251,19 +266,41 @@ public enum JsonlParser {
         case "Agent":
             let sub  = (input["subagent_type"] as? String) ?? "default"
             let desc = (input["description"] as? String) ?? ""
-            return short("\(sub): \(desc)")
+            let prompt = short(input["prompt"] as? String ?? "", max: 200)
+            return short("\(sub): \(desc) — \(prompt)")
         case "WebFetch":
             if let u = input["url"] as? String { return short(u) }
         case "WebSearch":
             if let q = input["query"] as? String { return short(q) }
         case "AskUserQuestion":
+            if let qs = input["questions"] as? [[String: Any]],
+               let first = qs.first?["question"] as? String {
+                return short(first)
+            }
             return "Awaiting user response"
-        case "TodoWrite", "TaskCreate":
-            return "Updated task list"
+        case "TodoWrite":
+            if let todos = input["todos"] as? [[String: Any]] {
+                let active = todos.compactMap { ($0["content"] as? String) }
+                    .prefix(3).joined(separator: " · ")
+                return short("\(todos.count) todos: \(active)")
+            }
+            return "Updated todo list"
+        case "TaskCreate":
+            let title = (input["title"] as? String) ?? ""
+            let desc = (input["description"] as? String) ?? ""
+            return short(title.isEmpty ? desc : "\(title) — \(desc)")
+        case "TaskUpdate":
+            let id = (input["taskId"] as? String) ?? ""
+            let status = (input["status"] as? String) ?? ""
+            return short("Task \(id) → \(status)")
         default:
+            // mcp__server__tool và các custom tools: ưu tiên các key thường gặp,
+            // không thì lấy first non-empty string.
+            for key in ["query", "prompt", "url", "command", "text", "input", "path", "file_path", "message"] {
+                if let s = input[key] as? String, !s.isEmpty { return short(s) }
+            }
             break
         }
-        // Fallback: first non-empty string in input.
         for v in input.values {
             if let s = v as? String, !s.isEmpty { return short(s) }
         }

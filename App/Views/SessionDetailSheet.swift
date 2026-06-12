@@ -12,6 +12,7 @@ struct SessionDetailSheet: View {
     @State private var stats: SessionStats?
     @State private var loading: Bool = true
     @State private var page: Int = 0
+    @State private var expandedTools: Set<String> = []
     private let pageSize: Int = 30
 
     /// Events sau khi reverse: mới nhất ở đầu — user thường tò mò bước cuối.
@@ -217,23 +218,94 @@ struct SessionDetailSheet: View {
     private var toolsCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel(text: "Tools used (\(toolBreakdown.count))")
-            ForEach(Array(toolBreakdown.prefix(10).enumerated()), id: \.offset) { _, t in
-                HStack {
-                    Image(systemName: "wrench.and.screwdriver")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Claude.orange)
-                    Text(t.name)
-                        .font(ClaudeFont.body(12))
-                        .foregroundStyle(Claude.textPrimary)
-                    Spacer()
-                    Text("\(t.count)")
-                        .font(ClaudeFont.mono(12, weight: .semibold))
-                        .foregroundStyle(Claude.textPrimary)
-                }
-                .padding(.vertical, 2)
+            Text("Click tên tool để xem chi tiết từng lần invoke.")
+                .font(ClaudeFont.body(11))
+                .foregroundStyle(Claude.textMuted)
+            ForEach(Array(toolBreakdown.enumerated()), id: \.offset) { _, t in
+                toolGroup(name: t.name, count: t.count)
             }
         }
         .claudeCard()
+    }
+
+    /// Disclosure 1 tool: header row clickable → expand list invocations.
+    @ViewBuilder
+    private func toolGroup(name: String, count: Int) -> some View {
+        let expanded = expandedTools.contains(name)
+        Button {
+            if expanded { expandedTools.remove(name) } else { expandedTools.insert(name) }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Claude.textMuted)
+                    .frame(width: 12)
+                Image(systemName: "wrench.and.screwdriver")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Claude.orange)
+                Text(name)
+                    .font(ClaudeFont.body(12))
+                    .foregroundStyle(Claude.textPrimary)
+                    .lineLimit(1)
+                Spacer()
+                Text("\(count)")
+                    .font(ClaudeFont.mono(12, weight: .semibold))
+                    .foregroundStyle(Claude.textPrimary)
+            }
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+
+        if expanded { toolInvocations(name: name) }
+    }
+
+    /// List các SessionEvent có toolName == name (capped 30 để không quá dài).
+    @ViewBuilder
+    private func toolInvocations(name: String) -> some View {
+        let calls = (stats?.events ?? []).filter { $0.kind == .toolUse && $0.toolName == name }
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(calls.prefix(30).enumerated()), id: \.offset) { idx, e in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("#\(idx + 1)")
+                            .font(ClaudeFont.mono(9, weight: .bold))
+                            .foregroundStyle(Claude.textMuted)
+                            .frame(width: 24, alignment: .leading)
+                        Text(shortTime(e.timestamp))
+                            .font(ClaudeFont.mono(9))
+                            .foregroundStyle(Claude.textMuted)
+                        if !e.completed {
+                            Text("⏳").font(.system(size: 9))
+                        }
+                    }
+                    Text(e.summary)
+                        .font(ClaudeFont.mono(11))
+                        .foregroundStyle(Claude.textPrimary)
+                        .textSelection(.enabled)
+                        .lineLimit(8)
+                    if let r = e.resultPreview, !r.isEmpty {
+                        Text(r)
+                            .font(ClaudeFont.mono(10))
+                            .foregroundStyle(Claude.textMuted)
+                            .textSelection(.enabled)
+                            .lineLimit(4)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Claude.surfaceAlt)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            if calls.count > 30 {
+                Text("…và \(calls.count - 30) lần invoke nữa (events window cap = 500)")
+                    .font(ClaudeFont.body(10))
+                    .foregroundStyle(Claude.textMuted)
+                    .padding(.leading, 32)
+            }
+        }
+        .padding(.leading, 24)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Events

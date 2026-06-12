@@ -42,6 +42,7 @@ struct CoachingReportView: View {
     enum ScopeKind: String, CaseIterable, Identifiable {
         case day = "Ngày"
         case week = "Tuần"
+        case month = "Tháng"
         var id: String { rawValue }
     }
 
@@ -195,14 +196,14 @@ struct CoachingReportView: View {
                     ForEach(ScopeKind.allCases) { s in Text(s.rawValue).tag(s) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 140)
+                .frame(width: 200)
 
-                // Prev/next nav: 1 ngày khi scope=day, 7 ngày khi scope=week.
+                // Prev/next nav: 1 ngày · 7 ngày · 30 ngày tùy scope.
                 Button { shiftAnchor(by: -1) } label: {
                     Image(systemName: "chevron.left")
                 }
                 .buttonStyle(.bordered)
-                .help(scope == .day ? "Ngày trước" : "Tuần trước")
+                .help(shiftHelp(forward: false))
 
                 // in: …Date() chặn DatePicker calendar không cho chọn ngày tương lai.
                 DatePicker("", selection: $anchor, in: ...Date(), displayedComponents: .date)
@@ -215,7 +216,7 @@ struct CoachingReportView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(!canShiftForward)
-                .help(scope == .day ? "Ngày sau" : "Tuần sau")
+                .help(shiftHelp(forward: true))
 
                 Button("Hôm nay") { anchor = Date() }
                     .buttonStyle(.bordered)
@@ -800,7 +801,8 @@ struct CoachingReportView: View {
     // MARK: - Data
 
     /// Label đầy đủ cho range đang filter — show ở top filterCard.
-    /// Day: "Thứ 5, 12/06/2026" — Week: "Tuần 09/06/2026 → 15/06/2026"
+    /// Day: "Thứ 5, 12/06/2026" — Week: "Tuần 09/06/2026 → 15/06/2026" —
+    /// Month: "30 ngày 14/05/2026 → 12/06/2026"
     private var scopeRangeLabel: String {
         switch scope {
         case .day:
@@ -815,19 +817,39 @@ struct CoachingReportView: View {
             let start = cal.date(from: comps) ?? anchor
             let end = cal.date(byAdding: .day, value: 6, to: start) ?? start
             return "Tuần \(f.string(from: start)) → \(f.string(from: end))"
+        case .month:
+            let f = DateFormatter(); f.dateFormat = "dd/MM/yyyy"
+            let cal = Calendar.current
+            let start = cal.date(byAdding: .day, value: -29, to: anchor) ?? anchor
+            return "30 ngày \(f.string(from: start)) → \(f.string(from: anchor))"
         }
     }
 
-    /// Dịch anchor: ngày → ±1 day, tuần → ±7 day. Clamp tối đa = hôm nay
-    /// (không cho filter ngày tương lai).
+    /// Tooltip text cho nút prev/next theo scope hiện tại.
+    private func shiftHelp(forward: Bool) -> String {
+        let suffix = forward ? "sau" : "trước"
+        switch scope {
+        case .day:   return "Ngày \(suffix)"
+        case .week:  return "Tuần \(suffix)"
+        case .month: return "30 ngày \(suffix)"
+        }
+    }
+
+    /// Dịch anchor: ngày → ±1 day, tuần → ±7 day, tháng → ±30 day. Clamp tối
+    /// đa = hôm nay (không cho filter ngày tương lai).
     private func shiftAnchor(by direction: Int) {
         let cal = Calendar.current
-        let days = scope == .day ? direction : direction * 7
-        let next = cal.date(byAdding: .day, value: days, to: anchor) ?? anchor
+        let step: Int
+        switch scope {
+        case .day:   step = direction
+        case .week:  step = direction * 7
+        case .month: step = direction * 30
+        }
+        let next = cal.date(byAdding: .day, value: step, to: anchor) ?? anchor
         anchor = min(next, Date())
     }
 
-    /// Disable nút → khi đã ở/quá hôm nay (day mode) hoặc tuần hiện tại (week mode).
+    /// Disable nút → khi range hiện tại đã chạm hôm nay.
     private var canShiftForward: Bool {
         let cal = Calendar.current
         switch scope {
@@ -839,6 +861,9 @@ struct CoachingReportView: View {
             return (comps.yearForWeekOfYear ?? 0) < (nowComps.yearForWeekOfYear ?? 0)
                 || ((comps.yearForWeekOfYear ?? 0) == (nowComps.yearForWeekOfYear ?? 0)
                     && (comps.weekOfYear ?? 0) < (nowComps.weekOfYear ?? 0))
+        case .month:
+            // Anchor là ngày cuối của 30-day window, nên chặn khi anchor ≥ hôm nay.
+            return !cal.isDate(anchor, inSameDayAs: Date()) && anchor < Date()
         }
     }
 
@@ -851,6 +876,15 @@ struct CoachingReportView: View {
             let comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: anchor)
             let start = cal.date(from: comps) ?? anchor
             return .week(start: start)
+        case .month:
+            // 30 ngày lùi về từ anchor (inclusive). End = end-of-anchor-day.
+            let cal = Calendar.current
+            let startDay = cal.startOfDay(for: cal.date(byAdding: .day, value: -29, to: anchor) ?? anchor)
+            let endOfDay = (cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: anchor)) ?? anchor)
+                .addingTimeInterval(-1)
+            let f = DateFormatter(); f.dateFormat = "dd/MM"
+            let label = "30 ngày \(f.string(from: startDay))→\(f.string(from: endOfDay))"
+            return .custom(start: startDay, end: endOfDay, label: label)
         }
     }
 

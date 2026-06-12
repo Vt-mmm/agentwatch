@@ -178,7 +178,8 @@ struct CoachingReportView: View {
                 .buttonStyle(.bordered)
                 .help(scope == .day ? "Ngày trước" : "Tuần trước")
 
-                DatePicker("", selection: $anchor, displayedComponents: .date)
+                // in: …Date() chặn DatePicker calendar không cho chọn ngày tương lai.
+                DatePicker("", selection: $anchor, in: ...Date(), displayedComponents: .date)
                     .labelsHidden()
                     .datePickerStyle(.compact)
                     .fixedSize()
@@ -187,6 +188,7 @@ struct CoachingReportView: View {
                     Image(systemName: "chevron.right")
                 }
                 .buttonStyle(.bordered)
+                .disabled(!canShiftForward)
                 .help(scope == .day ? "Ngày sau" : "Tuần sau")
 
                 Button("Hôm nay") { anchor = Date() }
@@ -642,11 +644,28 @@ struct CoachingReportView: View {
         }
     }
 
-    /// Dịch anchor: ngày → ±1 day, tuần → ±7 day.
+    /// Dịch anchor: ngày → ±1 day, tuần → ±7 day. Clamp tối đa = hôm nay
+    /// (không cho filter ngày tương lai).
     private func shiftAnchor(by direction: Int) {
         let cal = Calendar.current
         let days = scope == .day ? direction : direction * 7
-        anchor = cal.date(byAdding: .day, value: days, to: anchor) ?? anchor
+        let next = cal.date(byAdding: .day, value: days, to: anchor) ?? anchor
+        anchor = min(next, Date())
+    }
+
+    /// Disable nút → khi đã ở/quá hôm nay (day mode) hoặc tuần hiện tại (week mode).
+    private var canShiftForward: Bool {
+        let cal = Calendar.current
+        switch scope {
+        case .day:
+            return !cal.isDate(anchor, inSameDayAs: Date()) && anchor < Date()
+        case .week:
+            let comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: anchor)
+            let nowComps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+            return (comps.yearForWeekOfYear ?? 0) < (nowComps.yearForWeekOfYear ?? 0)
+                || ((comps.yearForWeekOfYear ?? 0) == (nowComps.yearForWeekOfYear ?? 0)
+                    && (comps.weekOfYear ?? 0) < (nowComps.weekOfYear ?? 0))
+        }
     }
 
     private var currentScope: ReportScope {

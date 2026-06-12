@@ -21,6 +21,7 @@ struct ClaudeWatchMacApp: App {
                 .environment(appearance)
                 .environment(bookmarks)
                 .environment(coachingData)
+                .environment(updater)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .onAppear { startWatchingIfPossible() }
                 .onChange(of: watcher.stats) { _, new in

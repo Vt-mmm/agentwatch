@@ -7,6 +7,7 @@ struct MainWindowView: View {
     @Environment(SessionWatcher.self) private var watcher
     @Environment(ProjectStore.self) private var projectStore
     @Environment(AppearanceStore.self) private var appearance
+    @Environment(UpdaterController.self) private var updater
     @State private var tab: Tab = .live
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -60,10 +61,36 @@ struct MainWindowView: View {
             }
             Spacer()
             themePicker
+            settingsMenu
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(Claude.surface)
+    }
+
+    /// Settings menu: bật cập nhật, mở trang Releases, hiển thị version hiện tại.
+    private var settingsMenu: some View {
+        Menu {
+            Button {
+                updater.checkForUpdates()
+            } label: {
+                Label("Check for Updates…", systemImage: "arrow.down.circle")
+            }
+            Link(destination: URL(string: "https://github.com/Vt-mmm/claudewatch/releases")!) {
+                Label("Mở GitHub Releases", systemImage: "link")
+            }
+            Divider()
+            Text("Version \(updater.currentVersion)")
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Claude.textPrimary)
+                .frame(width: 28, height: 22)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Settings")
     }
 
     @ViewBuilder

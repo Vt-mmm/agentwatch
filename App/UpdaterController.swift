@@ -8,27 +8,40 @@ import Foundation
 import Observation
 import Sparkle
 
+/// Delegate bỏ qua first-launch prompt "Do you want to automatically check for
+/// updates?" — auto-check luôn từ launch đầu. User vẫn có thể tắt qua Settings.
+private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
+    nonisolated func updaterShouldPromptForPermissionToCheck(forUpdates updater: SPUUpdater) -> Bool {
+        false   // skip permission dialog
+    }
+}
+
 @Observable
 @MainActor
 final class UpdaterController {
-    /// Sparkle controller — start ngay khi init để auto-check theo schedule
-    /// (SUScheduledCheckInterval trong Info.plist, default 1h).
     private let controller: SPUStandardUpdaterController
+    private let delegate = UpdaterDelegate()
 
-    /// Mirror canCheckForUpdates để menu item disable đúng lúc.
     var canCheck: Bool = true
 
-    init() {
-        // startingUpdater: true → tự bật + tự enqueue check theo schedule.
-        // Không gắn delegate — dùng default UI driver (alert + progress).
-        self.controller = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: nil,
-            userDriverDelegate: nil
-        )
+    /// Version hiện tại để show trong Settings menu.
+    var currentVersion: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
     }
 
-    /// Gọi từ menu "Check for Updates…" — Sparkle sẽ tự show UI.
+    init() {
+        self.controller = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: delegate,
+            userDriverDelegate: nil
+        )
+        // Force enable + check ngay khi launch — đảm bảo team thấy update mới ngay.
+        controller.updater.automaticallyChecksForUpdates = true
+    }
+
+    /// Gọi từ menu "Check for Updates…" — Sparkle tự show UI (popup có/không update).
     func checkForUpdates() {
         controller.checkForUpdates(nil)
     }

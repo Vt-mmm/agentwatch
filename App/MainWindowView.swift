@@ -9,6 +9,7 @@ struct MainWindowView: View {
     @Environment(AppearanceStore.self) private var appearance
     @Environment(UpdaterController.self) private var updater
     @State private var tab: Tab = .live
+    @State private var showPrivacy: Bool = false
 
     enum Tab: String, CaseIterable, Identifiable {
         case live = "Live"
@@ -31,6 +32,7 @@ struct MainWindowView: View {
         .frame(minWidth: 620, minHeight: 560)
         .background(Claude.backgroundGradient)
         .background(shortcutKeys)
+        .sheet(isPresented: $showPrivacy) { PrivacyView() }
     }
 
     /// Invisible buttons giữ keyboardShortcut active toàn window.
@@ -75,6 +77,11 @@ struct MainWindowView: View {
                 updater.checkForUpdates()
             } label: {
                 Label("Check for Updates…", systemImage: "arrow.down.circle")
+            }
+            Button {
+                showPrivacy = true
+            } label: {
+                Label("Privacy & Data Access…", systemImage: "lock.shield")
             }
             Link(destination: URL(string: "https://github.com/Vt-mmm/claudewatch/releases")!) {
                 Label("Mở GitHub Releases", systemImage: "link")

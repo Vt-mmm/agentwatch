@@ -26,5 +26,14 @@ Releases/
 *.swp
 *~
 
+# Secrets — defense in depth (hiện không xài env nhưng future-proof)
+.env
+.env.local
+.env.*.local
+*.secret
+*.pem
+*.key
+secrets/
+
 # Local debug artifacts produced by iteration
 /tmp/cw-*.log

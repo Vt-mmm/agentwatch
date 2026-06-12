@@ -158,6 +158,33 @@ User chạy bản cũ sẽ thấy popup update trong ≤1h, hoặc dùng menu Ch
 
 Từ version 2 trở đi, Sparkle tự update không cần bypass nữa vì update binary không bị macOS gắn quarantine.
 
+## Privacy
+
+App **chỉ đọc data local** trên máy user, **không gửi gì lên Internet** ngoài việc check update.
+
+### Folders app đọc
+
+| Path | Chứa gì |
+|---|---|
+| `~/.claude/projects/<slug>/*.jsonl` | Transcript Claude Code CLI + Desktop Code panel |
+| `~/Library/Application Support/Claude/local-agent-mode-sessions/<slug>/audit.jsonl` | Transcript Claude Desktop Computer Use |
+| `~/Library/Application Support/Claude/claude-code-sessions/*/local_*.json` | Index để classify Desktop vs CLI |
+
+Click **Settings (gear) → Privacy & Data Access…** để xem **danh sách file thực tế** app sẽ scan + kích thước + mtime — full transparency.
+
+### Network calls
+
+| Khi nào | Tới đâu | Data sent |
+|---|---|---|
+| Mỗi 1h (Sparkle auto-check) | `https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml` | Chỉ request — **không** kèm user agent identifier, project info, prompt, cost… |
+| Khi user accept update | `https://github.com/Vt-mmm/claudewatch/releases/download/.../*.zip` | Chỉ request — verify bằng EdDSA pubkey hard-coded trong app |
+
+**Không** có analytics, telemetry, error reporting, hay bất kỳ outbound call nào khác. Source code public tại https://github.com/Vt-mmm/claudewatch để team tự kiểm tra.
+
+### Export
+
+Khi user bấm **Export MD / HTML / CSV** trong tab Coaching → file lưu trực tiếp xuống ổ user chọn qua `NSSavePanel`. Không qua server trung gian.
+
 ## Known limits
 
 - Cost = ước tính theo Anthropic list price; 5m vs 1h cache prompt không phân biệt riêng.

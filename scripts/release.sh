@@ -54,7 +54,10 @@ cp -R "$APP_SRC" "$APP_DST"
 # Fix: deep re-sign toàn bộ bundle bằng ad-hoc. --deep ký tất cả XPC services,
 # Updater.app, Autoupdate, Downloader, Installer trong Sparkle.framework.
 echo "→ [3/7] Re-sign frameworks bằng ad-hoc"
-codesign --force --deep --sign - --options runtime --timestamp=none "$APP_DST" 2>&1 | tail -5
+# KHÔNG dùng --options runtime: hardened runtime → Library Validation enforce
+# Team ID match cực nghiêm. Ngay cả 2 ad-hoc binary cũng bị reject. Tắt
+# hardened runtime cho ad-hoc distribution (chỉ matter khi notarize).
+codesign --force --deep --sign - --timestamp=none "$APP_DST" 2>&1 | tail -5
 codesign --verify --deep --strict "$APP_DST" || { echo "✗ Signature verify failed"; exit 1; }
 
 echo "→ [4/7] Zip → $ZIP"

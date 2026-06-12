@@ -18,9 +18,11 @@ let args = Array(CommandLine.arguments.dropFirst())
 let sub = args.first ?? "watch"
 
 switch sub {
-case "watch":  WatchCommand().run()
-case "status": StatusCommand().run()
-case "report": ReportCommand(arg: args.dropFirst().first).run()
+case "watch":      WatchCommand().run()
+case "status":     StatusCommand().run()
+case "statusline": StatusLineCommand().run()
+case "report":     ReportCommand(arg: args.dropFirst().first).run()
+case "setup":      SetupCommand().run()
 case "-h", "--help", "help":
     printHelp()
 default:
@@ -35,16 +37,60 @@ func printHelp() {
     Usage:
       claudewatch watch                 live dashboard với pet (Ctrl+C để thoát)
       claudewatch status                snapshot 1 lần
+      claudewatch statusline            inject vào Claude Code statusLine
+      claudewatch setup                 cài tự động vào ~/.claude/settings.json
       claudewatch report [day|week]     stats coaching ngày/tuần
 
-    Pet state phản ánh coaching signals:
-      😺 happy    — burn rate ổn
-      ★_★ excited — chất lượng prompt tăng
-      😟 worried  — outlier session (cost vượt 2σ)
-      @_@ dizzy   — agent loop (≥10 Agent/session)
-      -_- sleepy  — không có hoạt động
+    Inject pet vào Claude Code CLI:
+      claudewatch setup                 (auto)
+      hoặc edit ~/.claude/settings.json:
+        "statusLine": { "type": "command", "command": "claudewatch statusline" }
     """
     print(txt)
+}
+
+/// Auto-write statusLine vào ~/.claude/settings.json. Idempotent — chạy nhiều
+/// lần không clone duplicate. Merge với keys khác đã có trong file.
+struct SetupCommand {
+    func run() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let path = home.appendingPathComponent(".claude/settings.json")
+        let binary = "/usr/local/bin/claudewatch"
+        // Cảnh báo nếu binary chưa ở /usr/local/bin — Claude Code chạy từ
+        // PATH limited, full path an toàn hơn.
+        if !FileManager.default.fileExists(atPath: binary) {
+            print(colorize("⚠️  Chưa thấy \(binary)", Ansi.yellow))
+            print("   Em sẽ dùng path absolute hiện tại của claudewatch.")
+        }
+        let cmd = FileManager.default.fileExists(atPath: binary)
+            ? binary
+            : (CommandLine.arguments.first ?? "claudewatch")
+
+        var obj: [String: Any] = [:]
+        if let data = try? Data(contentsOf: path),
+           let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            obj = parsed
+        }
+        obj["statusLine"] = [
+            "type": "command",
+            "command": "\(cmd) statusline"
+        ]
+        guard let out = try? JSONSerialization.data(
+            withJSONObject: obj,
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) else {
+            print(colorize("✗ JSON encode failed", Ansi.red)); exit(1)
+        }
+        try? FileManager.default.createDirectory(
+            at: path.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        do {
+            try out.write(to: path)
+            print(colorize("✓ Đã cài statusLine vào \(path.path)", Ansi.green))
+            print("  Mở Claude Code (claude) trong terminal mới để thấy pet ở status bar.")
+        } catch {
+            print(colorize("✗ Write fail: \(error)", Ansi.red)); exit(1)
+        }
+    }
 }
 
 // MARK: - ANSI helpers

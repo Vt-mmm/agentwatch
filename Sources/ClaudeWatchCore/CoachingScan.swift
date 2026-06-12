@@ -137,7 +137,8 @@ public enum CoachingScan {
                 lastTimestamp: lastTs,
                 promptCount: max(stats.events.filter { $0.kind == .userMessage }.count,
                                  stats.messageCount / 2),
-                toolCallCount: stats.toolCalls
+                toolCallCount: stats.toolCalls,
+                fileURL: file
             )
             : nil
 

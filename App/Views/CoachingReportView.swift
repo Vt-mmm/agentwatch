@@ -15,6 +15,7 @@ struct CoachingReportView: View {
     @State private var projectFilter: String = ""    // "" = all projects
     @State private var viewMode: ViewMode = .all
     @State private var selectedRecord: PromptRecord?
+    @State private var selectedSession: SessionSummary?
 
     /// Derived data từ store (shared, persist across tab switch).
     private var allRecords: [PromptRecord] { data.allRecords }
@@ -146,6 +147,9 @@ struct CoachingReportView: View {
         .onChange(of: viewMode) { _, _ in resetPages() }
         .sheet(item: $selectedRecord) { record in
             PromptDetailSheet(record: record)
+        }
+        .sheet(item: $selectedSession) { session in
+            SessionDetailSheet(session: session)
         }
     }
 
@@ -426,7 +430,12 @@ struct CoachingReportView: View {
                 Spacer()
                 Paginator(page: info.page, totalPages: info.totalPages) { sessionPage = $0 }
             }
-            ForEach(Array(info.slice)) { s in sessionRow(s) }
+            ForEach(Array(info.slice)) { s in
+                Button { selectedSession = s } label: {
+                    sessionRow(s)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .claudeCard()
     }

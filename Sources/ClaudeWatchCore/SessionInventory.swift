@@ -21,6 +21,26 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
     public let lastTimestamp: Date?
     public let promptCount: Int            // số user message
     public let toolCallCount: Int
+    /// Path tới JSONL file — detail sheet re-parse từ đây để hiện events/tools.
+    public let fileURL: URL?
+
+    public init(id: String, projectDisplay: String, source: SessionSource,
+                model: String, modelFamily: ModelFamily,
+                inputTokens: Int, outputTokens: Int,
+                cacheReadTokens: Int, cacheWriteTokens: Int,
+                cost: Double,
+                firstTimestamp: Date?, lastTimestamp: Date?,
+                promptCount: Int, toolCallCount: Int,
+                fileURL: URL? = nil) {
+        self.id = id; self.projectDisplay = projectDisplay; self.source = source
+        self.model = model; self.modelFamily = modelFamily
+        self.inputTokens = inputTokens; self.outputTokens = outputTokens
+        self.cacheReadTokens = cacheReadTokens; self.cacheWriteTokens = cacheWriteTokens
+        self.cost = cost
+        self.firstTimestamp = firstTimestamp; self.lastTimestamp = lastTimestamp
+        self.promptCount = promptCount; self.toolCallCount = toolCallCount
+        self.fileURL = fileURL
+    }
 
     public var totalTokens: Int {
         inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
@@ -172,7 +192,8 @@ public enum SessionInventory {
             firstTimestamp: firstTs as Date?,
             lastTimestamp: lastTs as Date?,
             promptCount: max(promptCount, stats.messageCount / 2),  // assistant + user
-            toolCallCount: stats.toolCalls
+            toolCallCount: stats.toolCalls,
+            fileURL: file
         )
     }
 

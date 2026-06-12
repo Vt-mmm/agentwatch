@@ -32,8 +32,8 @@ mkdir -p "$REL_DIR"
 echo "→ [1/7] Bump version → $VERSION (build $BUILD)"
 sed -i '' "s|MARKETING_VERSION: \".*\"|MARKETING_VERSION: \"$VERSION\"|" project.yml
 sed -i '' "s|CURRENT_PROJECT_VERSION: \".*\"|CURRENT_PROJECT_VERSION: \"$BUILD\"|" project.yml
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" App/Info.plist
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" App/Info.plist
+# Info.plist dùng $(MARKETING_VERSION) / $(CURRENT_PROJECT_VERSION) template —
+# xcodebuild substitute lúc build. Không cần PlistBuddy nữa.
 xcodegen generate >/dev/null
 
 echo "→ [2/7] Archive"

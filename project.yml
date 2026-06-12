@@ -31,8 +31,11 @@ targets:
         LSUIElement: false
         LSMinimumSystemVersion: "14.0"
         CFBundleDisplayName: Claude Watch
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        # Template substitution — xcodebuild replace at build time từ
+        # MARKETING_VERSION / CURRENT_PROJECT_VERSION build settings dưới.
+        # Tránh xcodegen ghi đè Info.plist bằng giá trị hardcoded mỗi lần generate.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSHumanReadableCopyright: "© 2026 vtamm"
         SUFeedURL: "https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml"
         SUEnableAutomaticChecks: true

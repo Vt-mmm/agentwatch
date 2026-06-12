@@ -83,9 +83,16 @@ git add project.yml App/Info.plist
 git commit -m "chore: release $VERSION" || true
 git tag "$TAG"
 git push origin main "$TAG"
-gh release create "$TAG" "$REL_DIR/$ZIP" \
+
+# Build CLI release binary cùng release — user có thể download standalone.
+echo "   building CLI binary…"
+swift build -c release --product claudewatch >/tmp/cli-build.log 2>&1 || {
+    tail -20 /tmp/cli-build.log; exit 1; }
+cp .build/release/claudewatch "$REL_DIR/claudewatch"
+
+gh release create "$TAG" "$REL_DIR/$ZIP" "$REL_DIR/claudewatch" \
     --title "Claude Watch $VERSION" \
-    --notes "Built from $TAG. Auto-update sẽ tự tải qua Sparkle." \
+    --notes "Built from $TAG. Auto-update sẽ tự tải qua Sparkle. CLI binary có sẵn — chmod +x rồi copy vào /usr/local/bin/." \
     --latest
 
 URL="https://github.com/Vt-mmm/claudewatch/releases/download/$TAG/$ZIP"

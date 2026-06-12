@@ -7,7 +7,8 @@ import ClaudeWatchCore
 
 struct FloatingPetView: View {
     let state: PetState
-    let talk: PetTalk?       // optional — nil = không show bubble
+    let talk: PetTalk?
+    let characterName: String   // "char0".."char8" từ SpriteStore
 
     var body: some View {
         VStack(spacing: 4) {
@@ -16,10 +17,8 @@ struct FloatingPetView: View {
                     .transition(.scale(scale: 0.5, anchor: .bottom)
                                     .combined(with: .opacity))
             }
-            // Mascot scale up 2.4x (36×36 → ~86). Wrap trong frame để layout
-            // ổn định khi bubble xuất hiện/biến mất.
-            PetMascot(state: state)
-                .scaleEffect(2.4)
+            // Sprite 24×24 scale lên 96×96 (4x) — pixel-perfect.
+            SpritePet(state: state, characterName: characterName)
                 .frame(width: 96, height: 96)
         }
         .padding(8)

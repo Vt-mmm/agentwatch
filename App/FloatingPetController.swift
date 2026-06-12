@@ -23,6 +23,9 @@ final class FloatingPetController {
     /// Talk bubble — set non-nil để pet "nói", tự nil sau dismissAfterSec.
     var talk: PetTalk? = nil { didSet { refresh() } }
 
+    /// Character sprite name (char0..char8). Caller sync từ SpriteStore.
+    var characterName: String = "char1" { didSet { refresh() } }
+
     private var window: NSWindow?
     private var dismissTask: Task<Void, Never>?
     private let frameKey = "FloatingPetController.frame"
@@ -62,7 +65,8 @@ final class FloatingPetController {
     private func refresh() {
         guard let win = window,
               let host = win.contentView as? NSHostingView<FloatingPetView> else { return }
-        host.rootView = FloatingPetView(state: state, talk: talk)
+        host.rootView = FloatingPetView(state: state, talk: talk,
+                                         characterName: characterName)
     }
 
     private func createWindow() {
@@ -81,7 +85,8 @@ final class FloatingPetController {
         win.ignoresMouseEvents = false
         win.hidesOnDeactivate = false
 
-        let host = NSHostingView(rootView: FloatingPetView(state: state, talk: talk))
+        let host = NSHostingView(rootView: FloatingPetView(state: state, talk: talk,
+                                                            characterName: characterName))
         host.translatesAutoresizingMaskIntoConstraints = true
         host.autoresizingMask = [.width, .height]
         host.frame = win.contentView?.bounds ?? initialSize

@@ -1,0 +1,13 @@
+Sprite assets in this folder are from:
+
+  Kenney — Pixel Platformer Pack
+  https://kenney.nl/assets/pixel-platformer
+  License: Creative Commons Zero (CC0) — Public Domain
+
+The creator has waived all copyright. No attribution is required, but we
+include this notice as a courtesy.
+
+Files (per character folder):
+  idle.png    — 24×24 static pose
+  walk1.png   — 24×24 walk frame 1
+  walk2.png   — 24×24 walk frame 2

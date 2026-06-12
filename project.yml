@@ -18,8 +18,12 @@ targets:
       - path: App
         excludes:
           - "Info.plist"
+          - "Resources"
       - path: App/Assets.xcassets
         type: folder
+      - path: App/Resources
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: ClaudeWatchCore
         product: ClaudeWatchCore

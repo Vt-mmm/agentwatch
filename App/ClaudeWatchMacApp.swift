@@ -14,6 +14,7 @@ struct ClaudeWatchMacApp: App {
     @State private var updater = UpdaterController()
     @State private var floatingPet = FloatingPetController()
     @State private var petBroker = PetTalkBroker()
+    @State private var sprites = SpriteStore()
 
     var body: some Scene {
         WindowGroup("Claude Watch", id: "main") {
@@ -25,10 +26,15 @@ struct ClaudeWatchMacApp: App {
                 .environment(coachingData)
                 .environment(updater)
                 .environment(floatingPet)
+                .environment(sprites)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .onAppear {
                     startWatchingIfPossible()
                     petBroker.attach(floatingPet)
+                    floatingPet.characterName = sprites.currentName
+                }
+                .onChange(of: sprites.selected) { _, _ in
+                    floatingPet.characterName = sprites.currentName
                 }
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)

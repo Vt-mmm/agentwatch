@@ -10,6 +10,7 @@ struct MainWindowView: View {
     @Environment(UpdaterController.self) private var updater
     @Environment(CoachingDataStore.self) private var coaching
     @Environment(FloatingPetController.self) private var pet
+    @Environment(SpriteStore.self) private var sprites
     @State private var tab: Tab = .live
     @State private var showPrivacy: Bool = false
 
@@ -87,6 +88,7 @@ struct MainWindowView: View {
                 Label(pet.isVisible ? "Ẩn desktop pet" : "Hiện desktop pet",
                       systemImage: pet.isVisible ? "eye.slash" : "pawprint")
             }
+            characterPicker
             Button {
                 showPrivacy = true
             } label: {
@@ -107,6 +109,23 @@ struct MainWindowView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Settings")
+    }
+
+    /// Sub-menu chọn character sprite — 9 nhân vật Kenney pixel-platformer pack.
+    @ViewBuilder
+    private var characterPicker: some View {
+        @Bindable var binding = sprites
+        Menu {
+            Picker("", selection: $binding.selected) {
+                ForEach(0..<SpriteStore.count, id: \.self) { i in
+                    Label("Pet #\(i) — \(SpriteStore.names[i])", systemImage: "person")
+                        .tag(i)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label("Chọn nhân vật pet…", systemImage: "person.crop.square")
+        }
     }
 
     @ViewBuilder

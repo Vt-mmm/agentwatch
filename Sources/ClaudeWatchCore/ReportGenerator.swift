@@ -73,7 +73,14 @@ public enum ReportGenerator {
         for r in task {
             for s in r.score.sectionsMissing { missingCount[s, default: 0] += 1 }
         }
-        let topMissing = missingCount.sorted { $0.value > $1.value }
+        // Stable sort: primary theo count desc, tie-break theo rawValue asc.
+        // Dict iteration không deterministic → nếu chỉ sort count, ties đổi thứ
+        // tự mỗi render → UI smart-tip flicker.
+        let topMissing = missingCount
+            .sorted {
+                if $0.value != $1.value { return $0.value > $1.value }
+                return $0.key.rawValue < $1.key.rawValue
+            }
             .prefix(3).map { ($0.key, $0.value) }
 
         var byProj: [String: (count: Int, total: Int)] = [:]
@@ -84,7 +91,10 @@ public enum ReportGenerator {
         let proj = byProj
             .map { (project: $0.key, count: $0.value.count,
                     avgStars: Double($0.value.total) / Double(max($0.value.count, 1))) }
-            .sorted { $0.count > $1.count }
+            .sorted {
+                if $0.count != $1.count { return $0.count > $1.count }
+                return $0.project < $1.project  // tie-break stable
+            }
 
         var srcCount: [SessionSource: Int] = [:]
         for r in records { srcCount[r.source, default: 0] += 1 }

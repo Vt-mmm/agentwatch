@@ -1,6 +1,7 @@
 // Quản lý lựa chọn nhân vật sprite. Persist qua UserDefaults.
-// Sprites bundle vào app từ App/Resources/Sprites/charN/{idle,walk1,walk2}.png
-// (Kenney pixel-platformer pack, CC0 — public domain, free commercial use).
+// 27 character riêng biệt từ Kenney pixel-platformer pack (CC0 public domain).
+// Mỗi character chỉ có 1 idle frame — animation đến từ wiggle/rotate state-driven
+// thay vì frame-by-frame walk cycle (pack này không có walk animation thật).
 
 import Foundation
 import Observation
@@ -8,9 +9,9 @@ import Observation
 @Observable
 @MainActor
 final class SpriteStore {
-    static let count = 9   // char0..char8
+    static let count = 27   // char00..char26
 
-    /// Index character đang chọn. Persist; default = 1 (orange dude).
+    /// Index character đang chọn. Persist; default = 1.
     var selected: Int = 1 {
         didSet { UserDefaults.standard.set(selected, forKey: "SpriteStore.selected") }
     }
@@ -20,10 +21,11 @@ final class SpriteStore {
         self.selected = raw.map { max(0, min($0, Self.count - 1)) } ?? 1
     }
 
-    var currentName: String { "char\(selected)" }
+    /// Folder name: char00, char01, ..., char26 (2-digit padded).
+    var currentName: String { String(format: "char%02d", selected) }
 
-    /// Display label cho dropdown — tạm gán tên theo màu/style trực quan.
-    static let names: [String] = [
-        "Đỏ", "Cam", "Vàng", "Lục", "Lam", "Tím", "Hồng", "Ninja", "Đặc biệt"
-    ]
+    /// Label hiển thị trong picker.
+    static func displayName(_ idx: Int) -> String {
+        "Pet #\(String(format: "%02d", idx))"
+    }
 }

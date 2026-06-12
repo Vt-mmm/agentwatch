@@ -23,8 +23,8 @@ final class FloatingPetController {
     /// Talk bubble — set non-nil để pet "nói", tự nil sau dismissAfterSec.
     var talk: PetTalk? = nil { didSet { refresh() } }
 
-    /// Character sprite name (char0..char8). Caller sync từ SpriteStore.
-    var characterName: String = "char1" { didSet { refresh() } }
+    /// Character sprite name (char00..char26). Caller sync từ SpriteStore.
+    var characterName: String = "char01" { didSet { refresh() } }
 
     private var window: NSWindow?
     private var dismissTask: Task<Void, Never>?

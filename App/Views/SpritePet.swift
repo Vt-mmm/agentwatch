@@ -1,16 +1,13 @@
-// Pixel sprite pet — load PNG từ bundle, cycle frame theo PetState.
-// Pixel-perfect rendering nhờ .interpolation(.none) — sprite 24×24 scale up
-// không bị mờ.
+// Pixel sprite pet — 1 frame idle PNG, animation đến từ SwiftUI effects
+// (bounce/wiggle/rotate/scale) thay vì frame-by-frame swap.
 //
-// Animation strategy:
-//   sleepy   → 1 frame idle, no swap
-//   happy    → 2 frames idle ↔ walk1 (slow breathe ~1Hz)
-//   excited  → 3 frames cycle (idle → walk1 → walk2) 6Hz
-//   worried  → 2 frames idle ↔ walk2 (lắc) 3Hz
-//   dizzy    → 3 frames cycle nhanh + rotation
-//
-// Mỗi character (char0..char8) có 3 frame PNG: idle/walk1/walk2 từ Kenney
-// pixel-platformer pack CC0.
+// Pack Kenney pixel-platformer không có walk animation thực sự (27 sprite
+// đều static), nên dùng state effects để tạo "life":
+//   happy   → bounce nhẹ
+//   excited → bounce mạnh
+//   worried → wiggle rotate ±5°
+//   dizzy   → spin 360° liên tục
+//   sleepy  → static + scale 0.95 (thở)
 
 import SwiftUI
 import ClaudeWatchCore
@@ -19,92 +16,70 @@ struct SpritePet: View {
     let state: PetState
     let characterName: String
 
-    @State private var frameIndex: Int = 0
+    @State private var bounce: CGFloat = 0
     @State private var wiggle: Double = 0
-
-    /// Frames sẽ cycle theo state.
-    private var frames: [String] {
-        switch state {
-        case .sleepy:  return ["idle"]
-        case .happy:   return ["idle", "walk1"]
-        case .excited: return ["idle", "walk1", "walk2"]
-        case .worried: return ["idle", "walk2"]
-        case .dizzy:   return ["idle", "walk1", "walk2"]
-        }
-    }
-
-    /// Tốc độ animation theo state (frames per second).
-    private var fps: Double {
-        switch state {
-        case .sleepy:  return 0      // static
-        case .happy:   return 1.2
-        case .excited: return 6
-        case .worried: return 3
-        case .dizzy:   return 8
-        }
-    }
+    @State private var spin: Double = 0
+    @State private var breathe: CGFloat = 1.0
 
     var body: some View {
         sprite
-            .rotationEffect(.degrees(wiggle))
-            .onAppear { startTimer(); startWiggle() }
-            .onChange(of: state) { _, _ in
-                frameIndex = 0; startWiggle()
-            }
-            .onChange(of: characterName) { _, _ in frameIndex = 0 }
+            .scaleEffect(breathe)
+            .offset(y: bounce)
+            .rotationEffect(.degrees(state == .dizzy ? spin : wiggle))
+            .onAppear { startAnimations() }
+            .onChange(of: state) { _, _ in startAnimations() }
     }
 
     @ViewBuilder
     private var sprite: some View {
-        let frameName = frames[frameIndex % frames.count]
-        if let nsImage = NSImage(named: "Sprites/\(characterName)/\(frameName)") ??
-            loadFromBundle(name: frameName) {
+        if let nsImage = loadFromBundle() {
             Image(nsImage: nsImage)
                 .resizable()
-                .interpolation(.none)        // pixel-perfect, không blur
+                .interpolation(.none)        // pixel-perfect
                 .aspectRatio(contentMode: .fit)
         } else {
-            // Fallback nếu thiếu asset — placeholder cho visible debug.
             Image(systemName: "questionmark.square")
                 .resizable()
                 .foregroundStyle(.red)
         }
     }
 
-    /// Bundle.main lookup — Resources folder type: folder bundle theo path,
-    /// nên cần resourcePath join thủ công.
-    private func loadFromBundle(name: String) -> NSImage? {
+    /// Resources/Sprites/charNN/idle.png (xcodegen folder buildPhase đặt dưới
+    /// Contents/Resources/Resources/Sprites/...).
+    private func loadFromBundle() -> NSImage? {
         guard let res = Bundle.main.resourcePath else { return nil }
-        let path = "\(res)/Resources/Sprites/\(characterName)/\(name).png"
-        // Try cả 2 path (xcodegen có thể flatten Resources/ hoặc giữ nguyên).
-        if let img = NSImage(contentsOfFile: path) { return img }
-        let alt = "\(res)/Sprites/\(characterName)/\(name).png"
+        let primary = "\(res)/Resources/Sprites/\(characterName)/idle.png"
+        if let img = NSImage(contentsOfFile: primary) { return img }
+        let alt = "\(res)/Sprites/\(characterName)/idle.png"
         return NSImage(contentsOfFile: alt)
     }
 
-    private func startTimer() {
-        guard fps > 0 else { return }
-        let interval = UInt64(1_000_000_000.0 / fps)
-        Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: interval)
-                frameIndex += 1
-            }
-        }
-    }
-
-    private func startWiggle() {
-        wiggle = 0
+    /// Reset + apply animation tương ứng state. Cancel implicit qua việc set
+    /// lại từ đầu (SwiftUI tự diff).
+    private func startAnimations() {
+        bounce = 0; wiggle = 0; breathe = 1.0
         switch state {
+        case .happy:
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                bounce = -3
+            }
+        case .excited:
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.4)
+                            .repeatForever(autoreverses: true)) {
+                bounce = -6
+            }
         case .worried:
-            withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-                wiggle = 4
+            withAnimation(.easeInOut(duration: 0.4).repeatForever(autoreverses: true)) {
+                wiggle = 5
             }
         case .dizzy:
-            withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
-                wiggle = 360
+            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                spin = 360
             }
-        default: break
+        case .sleepy:
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                breathe = 0.94
+            }
         }
     }
 }

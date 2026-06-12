@@ -110,20 +110,21 @@ struct MainWindowView: View {
         .help("Settings")
     }
 
-    /// Sub-menu chọn character sprite — 9 nhân vật Kenney pixel-platformer pack.
+    /// Sub-menu chọn character sprite — 27 nhân vật Kenney pixel-platformer pack.
+    /// Inline picker dài, anh scroll trong menu để xem hết.
     @ViewBuilder
     private var characterPicker: some View {
         @Bindable var binding = sprites
         Menu {
             Picker("", selection: $binding.selected) {
                 ForEach(0..<SpriteStore.count, id: \.self) { i in
-                    Label("Pet #\(i) — \(SpriteStore.names[i])", systemImage: "person")
-                        .tag(i)
+                    Text(SpriteStore.displayName(i)).tag(i)
                 }
             }
             .pickerStyle(.inline)
         } label: {
-            Label("Chọn nhân vật pet…", systemImage: "person.crop.square")
+            Label("Chọn nhân vật pet (\(SpriteStore.displayName(sprites.selected)))…",
+                  systemImage: "person.crop.square")
         }
     }
 

@@ -887,9 +887,10 @@ private struct PromptRow: View {
         }
     }
 
+    /// "dd/MM HH:mm" — gồm cả ngày để week mode biết prompt thuộc ngày nào.
     private var timeLabel: DateFormatter {
         let f = DateFormatter()
-        f.dateFormat = "HH:mm"
+        f.dateFormat = "dd/MM HH:mm"
         f.timeZone = .current
         return f
     }
@@ -920,9 +921,16 @@ private struct PromptDetailSheet: View {
                 }
                 chip("\(record.score.charCount) chars", Claude.Chip.infoBg, Claude.Chip.infoFg)
                 Spacer()
-                Text(record.projectDisplay)
-                    .font(ClaudeFont.mono(11))
-                    .foregroundStyle(Claude.textMuted)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(fullTimestamp(record.timestamp))
+                        .font(ClaudeFont.mono(11, weight: .semibold))
+                        .foregroundStyle(Claude.textPrimary)
+                    Text(record.projectDisplay)
+                        .font(ClaudeFont.mono(10))
+                        .foregroundStyle(Claude.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
 
             if record.score.isTaskPrompt {
@@ -977,6 +985,14 @@ private struct PromptDetailSheet: View {
             .foregroundStyle(fg)
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background(bg).clipShape(Capsule())
+    }
+
+    /// "dd/MM/yyyy HH:mm:ss" — full datetime cho detail sheet.
+    private func fullTimestamp(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM/yyyy HH:mm:ss"
+        f.timeZone = .current
+        return f.string(from: d)
     }
 }
 

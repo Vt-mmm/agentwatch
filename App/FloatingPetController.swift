@@ -31,10 +31,10 @@ final class FloatingPetController {
     private let frameKey = "FloatingPetController.frame"
 
     init() {
-        // Restore visibility từ UserDefaults — pet stays hidden cho tới khi
-        // user explicit bật. Tránh annoying first-launch.
-        isVisible = UserDefaults.standard.bool(forKey: "FloatingPetController.visible")
-        if isVisible { syncWindow() }
+        // Pet giờ luôn ở header inline, không cần floating window. Clear flag
+        // cũ cho user đã turn-on trước v0.1.23.
+        isVisible = false
+        UserDefaults.standard.set(false, forKey: "FloatingPetController.visible")
     }
 
     /// Set talk message + auto-dismiss sau N giây.

@@ -23,6 +23,9 @@ case "status":     StatusCommand().run()
 case "statusline": StatusLineCommand().run()
 case "report":     ReportCommand(arg: args.dropFirst().first).run()
 case "setup":      SetupCommand().run()
+case "hook":
+    let evt = args.dropFirst().first ?? "session-start"
+    HookCommand(event: evt).run()
 case "-h", "--help", "help":
     printHelp()
 default:
@@ -75,6 +78,21 @@ struct SetupCommand {
             "type": "command",
             "command": "\(cmd) statusline"
         ]
+        // Hooks: pet greets ở SessionStart, "task done" ở Stop. Output đi
+        // thẳng vào conversation luôn (Claude Code render stdout của hook).
+        // Merge với hooks đã có thay vì ghi đè.
+        var hooksRoot = obj["hooks"] as? [String: Any] ?? [:]
+        hooksRoot["SessionStart"] = [
+            ["matcher": "*",
+             "hooks": [["type": "command",
+                        "command": "\(cmd) hook session-start"]]]
+        ]
+        hooksRoot["Stop"] = [
+            ["matcher": "*",
+             "hooks": [["type": "command",
+                        "command": "\(cmd) hook stop"]]]
+        ]
+        obj["hooks"] = hooksRoot
         guard let out = try? JSONSerialization.data(
             withJSONObject: obj,
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) else {

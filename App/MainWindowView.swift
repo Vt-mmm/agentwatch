@@ -81,12 +81,6 @@ struct MainWindowView: View {
             } label: {
                 Label("Check for Updates…", systemImage: "arrow.down.circle")
             }
-            Button {
-                pet.toggle()
-            } label: {
-                Label(pet.isVisible ? "Ẩn desktop pet" : "Hiện desktop pet",
-                      systemImage: pet.isVisible ? "eye.slash" : "pawprint")
-            }
             characterPicker
             Button {
                 showPrivacy = true

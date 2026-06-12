@@ -17,6 +17,7 @@ struct ProjectPickerView: View {
                 folderSubtitle
             }
             Spacer()
+            HeaderPet()
             if watcher.isWatching {
                 watchingPill
             }

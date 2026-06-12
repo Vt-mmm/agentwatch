@@ -1,0 +1,48 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0"   stop-color="#FAF1E6"/>
+      <stop offset="0.55" stop-color="#E89572"/>
+      <stop offset="1"    stop-color="#CC785C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.4" cy="0.4" r="0.65">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sparkle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF4E8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded warm-orange background -->
+  <rect width="1024" height="1024" rx="232" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="232" fill="url(#glow)"/>
+
+  <!-- Main four-point sparkle (Claude's signature mark) -->
+  <g transform="translate(512 512)" fill="url(#sparkle)">
+    <path d="M 0 -380
+             C 28 -160, 160 -28, 380 0
+             C 160 28, 28 160, 0 380
+             C -28 160, -160 28, -380 0
+             C -160 -28, -28 -160, 0 -380 Z"/>
+  </g>
+
+  <!-- Secondary sparkle, top-right -->
+  <g transform="translate(800 250)" fill="#FFFFFF" opacity="0.92">
+    <path d="M 0 -120
+             C 10 -48, 48 -10, 120 0
+             C 48 10, 10 48, 0 120
+             C -10 48, -48 10, -120 0
+             C -48 -10, -10 -48, 0 -120 Z"/>
+  </g>
+
+  <!-- Tertiary sparkle, bottom-left -->
+  <g transform="translate(240 780)" fill="#FFFFFF" opacity="0.72">
+    <path d="M 0 -78
+             C 7 -32, 32 -7, 78 0
+             C 32 7, 7 32, 0 78
+             C -7 32, -32 7, -78 0
+             C -32 -7, -7 -32, 0 -78 Z"/>
+  </g>
+</svg>

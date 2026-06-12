@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coaching Dev Fresher: Từ Vibe Coding đến SDD/VSDD/CoDD</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --paper: #ffffff;
+      --ink: #172033;
+      --muted: #5b667a;
+      --line: #e5e9f2;
+      --primary: #1f5eff;
+      --primary-dark: #173fb2;
+      --accent: #00a67e;
+      --warn: #ffb020;
+      --danger: #d92d20;
+      --soft-blue: #edf4ff;
+      --soft-green: #ebfff8;
+      --soft-yellow: #fff7e6;
+      --soft-red: #fff1f0;
+      --code: #101828;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.65;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #12204a 0%, #1f5eff 62%, #00a67e 100%);
+      color: white;
+      border-radius: 28px;
+      padding: 44px 36px;
+      box-shadow: 0 18px 45px rgba(31, 94, 255, 0.22);
+      margin-bottom: 28px;
+    }
+
+    .hero .tag {
+      display: inline-block;
+      padding: 7px 12px;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 999px;
+      font-size: 13px;
+      letter-spacing: .3px;
+      margin-bottom: 18px;
+      background: rgba(255,255,255,0.11);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.12;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      max-width: 860px;
+      font-size: 18px;
+      margin: 0;
+      color: rgba(255,255,255,0.92);
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin: 22px 0 0;
+    }
+
+    .meta div {
+      background: rgba(255,255,255,0.13);
+      border: 1px solid rgba(255,255,255,0.18);
+      padding: 14px;
+      border-radius: 16px;
+      min-height: 84px;
+    }
+
+    .meta b {
+      display: block;
+      font-size: 13px;
+      opacity: .85;
+      margin-bottom: 4px;
+    }
+
+    .meta span {
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 24px;
+      box-shadow: 0 8px 26px rgba(16, 24, 40, 0.05);
+      margin-bottom: 18px;
+    }
+
+    h2 {
+      font-size: 28px;
+      line-height: 1.22;
+      margin: 0 0 14px;
+      letter-spacing: -0.025em;
+    }
+
+    h3 {
+      font-size: 20px;
+      margin: 22px 0 8px;
+      letter-spacing: -0.015em;
+    }
+
+    h4 {
+      font-size: 16px;
+      margin: 16px 0 6px;
+    }
+
+    p { margin: 8px 0 12px; }
+
+    ul, ol { padding-left: 22px; margin: 8px 0 12px; }
+
+    li { margin: 6px 0; }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--soft-blue);
+      color: var(--primary-dark);
+      font-weight: 700;
+      font-size: 12px;
+      margin-right: 6px;
+    }
+
+    .callout {
+      border-radius: 18px;
+      padding: 18px 18px;
+      border: 1px solid var(--line);
+      margin: 16px 0;
+    }
+
+    .callout.blue { background: var(--soft-blue); border-color: #cfe0ff; }
+    .callout.green { background: var(--soft-green); border-color: #b9f4df; }
+    .callout.yellow { background: var(--soft-yellow); border-color: #ffe0a6; }
+    .callout.red { background: var(--soft-red); border-color: #ffd0cc; }
+
+    .quote {
+      font-size: 22px;
+      line-height: 1.45;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      padding: 22px;
+      border-radius: 20px;
+      background: #101828;
+      color: white;
+      margin: 18px 0;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .step:last-child { border-bottom: 0; }
+
+    .num {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: var(--primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      overflow: hidden;
+      border-radius: 14px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 12px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f1f4f9;
+      text-align: left;
+      font-weight: 800;
+    }
+
+    tr:nth-child(even) td {
+      background: #fbfcff;
+    }
+
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    pre {
+      background: var(--code);
+      color: #e8eefc;
+      padding: 18px;
+      border-radius: 16px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.55;
+      margin: 14px 0;
+    }
+
+    .checklist label {
+      display: block;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin: 8px 0;
+      background: #fff;
+    }
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      vertical-align: -2px;
+      margin-right: 8px;
+    }
+
+    .kpi {
+      font-size: 34px;
+      line-height: 1;
+      font-weight: 900;
+      color: var(--primary);
+      letter-spacing: -0.04em;
+      margin: 6px 0 8px;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .footer {
+      margin-top: 30px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .print-note {
+      background: #fff;
+      border: 1px dashed #b8c1d1;
+      color: #44516a;
+      padding: 12px 14px;
+      border-radius: 14px;
+      margin-bottom: 18px;
+    }
+
+    @media (max-width: 860px) {
+      .meta, .grid.two, .grid.three {
+        grid-template-columns: 1fr;
+      }
+      .hero { padding: 30px 22px; }
+      .container { padding: 18px 12px 56px; }
+      .card { padding: 18px; border-radius: 18px; }
+      table { font-size: 13px; }
+    }
+
+    @media print {
+      body { background: white; }
+      .container { max-width: none; padding: 0; }
+      .hero, .card { box-shadow: none; break-inside: avoid; }
+      .print-note { display: none; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <section class="hero">
+      <div class="tag">Tài liệu Coaching Dev Fresher Sài Gòn · AI Coding · SDD/VSDD/CoDD</div>
+      <h1>Từ Vibe Coding đến Spec-Driven Development</h1>
+      <p>
+        Tài liệu học nhanh, áp dụng ngay vào task thật: giúp Dev Fresher biết cách dùng AI để code có kiểm soát,
+        tránh “phê lúc đầu, vỡ hệ thống lúc sau”, và nâng cấp vai trò từ người nhờ AI viết code thành người điều khiển ý đồ kỹ thuật.
+      </p>
+
+      <div class="meta">
+        <div><b>Đối tượng</b><span>Fresher / Intern Dev</span></div>
+        <div><b>Thời lượng coaching</b><span>90–120 phút</span></div>
+        <div><b>Áp dụng ngay</b><span>Task thật trong sprint</span></div>
+        <div><b>Mục tiêu</b><span>Code nhanh nhưng không vỡ</span></div>
+      </div>
+    </section>
+
+    <div class="print-note">
+      Gợi ý sử dụng: mở file này trên trình duyệt, dùng làm giáo án coaching, checklist giao task, hoặc in PDF cho team tự học.
+    </div>
+
+    <section class="card">
+      <h2>1. Mục tiêu buổi coaching</h2>
+      <div class="grid three">
+        <div class="callout blue">
+          <h3>Nhận diện vấn đề</h3>
+          <p>Dev hiểu vì sao Vibe Coding chạy rất nhanh ở demo nhưng dễ sụp khi dự án có nhiều module, nhiều người, nhiều trạng thái.</p>
+        </div>
+        <div class="callout green">
+          <h3>Có quy trình thay thế</h3>
+          <p>Dev biết chuyển từ prompt mơ hồ sang bộ Spec tối thiểu trước khi yêu cầu AI viết code.</p>
+        </div>
+        <div class="callout yellow">
+          <h3>Áp dụng vào task ngay</h3>
+          <p>Mỗi task phải có Spec, test case, checklist kiểm chứng và ghi nhận ràng buộc trước khi merge.</p>
+        </div>
+      </div>
+
+      <div class="quote">
+        AI có thể viết code rất nhanh. Nhưng người kỹ sư vẫn phải định nghĩa đúng ý đồ, ràng buộc và tiêu chí hoàn thành.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Vấn đề cốt lõi: Vibe Coding không giữ được “ý đồ thiết kế”</h2>
+      <p>
+        Vibe Coding là cách dùng AI theo cảm hứng: mô tả nhanh, yêu cầu AI viết code, chạy thử, rồi sửa tiếp.
+        Cách này tạo cảm giác rất hiệu quả ở giai đoạn đầu vì có sản phẩm chạy được chỉ sau vài phút.
+      </p>
+      <p>
+        Nhưng khi dự án lớn hơn, AI bắt đầu mất bối cảnh. Nó không tự nhớ được toàn bộ quyết định kỹ thuật, rule nghiệp vụ,
+        trạng thái dữ liệu, edge case và các phần không được phá vỡ.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Dấu hiệu</th>
+            <th>Biểu hiện trong task thật</th>
+            <th>Hậu quả</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Context sụp đổ</td>
+            <td>AI quên logic cũ, viết code mới không khớp module hiện tại.</td>
+            <td>Code chạy được ở một case nhưng lệch kiến trúc tổng thể.</td>
+          </tr>
+          <tr>
+            <td>Bug dây chuyền</td>
+            <td>Sửa màn hình này thì vỡ API kia; sửa role Shop thì hỏng role User/Admin.</td>
+            <td>Dev mất nhiều giờ debug hậu quả do AI sinh ra.</td>
+          </tr>
+          <tr>
+            <td>Kỹ sư kiệt quệ</td>
+            <td>Thời gian đọc lại, sửa lại, hỏi lại AI nhiều hơn thời gian tự thiết kế.</td>
+            <td>Team tưởng nhanh nhưng velocity thật bị giảm.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout red">
+        <strong>Luật cảnh báo:</strong> Nếu dev không thể giải thích task bằng flow, rule, input/output và test case trước khi prompt AI,
+        thì dev chưa sẵn sàng để cho AI viết code.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>3. Ngưỡng sụp đổ của Vibe Coding với Dev Fresher</h2>
+      <p>Vibe Coding bắt đầu nguy hiểm khi task có một trong các điều kiện sau:</p>
+      <div class="checklist">
+        <label><input type="checkbox" />Task liên quan từ 3 file trở lên.</label>
+        <label><input type="checkbox" />Task có nhiều role: User, Shop, Admin, Creator, Witness.</label>
+        <label><input type="checkbox" />Task có trạng thái: pending, active, used, expired, rejected, cancelled.</label>
+        <label><input type="checkbox" />Task liên quan tiền, eVoucher, thanh toán, hóa đơn, phí, hoa hồng.</label>
+        <label><input type="checkbox" />Task cần sửa logic cũ hoặc liên quan module người khác đã viết.</label>
+        <label><input type="checkbox" />Task phải chạy ổn sau nhiều session AI hoặc nhiều lần refactor.</label>
+      </div>
+
+      <div class="callout yellow">
+        <strong>Quy tắc cho Fresher:</strong> Chỉ được Vibe Coding tự do với prototype nhỏ, màn hình demo hoặc đoạn code độc lập.
+        Với task trong sản phẩm thật, bắt buộc chuyển sang SDD.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4. Mô hình 3 tầng: SDD → VSDD → CoDD</h2>
+
+      <div class="grid three">
+        <div class="card" style="box-shadow:none; margin:0;">
+          <span class="badge">Tầng 1</span>
+          <h3>SDD</h3>
+          <p><strong>Spec-Driven Development</strong></p>
+          <p>Viết Spec tối thiểu để AI không đoán mò. Spec là bộ nhớ ngoài của task.</p>
+        </div>
+        <div class="card" style="box-shadow:none; margin:0;">
+          <span class="badge">Tầng 2</span>
+          <h3>VSDD</h3>
+          <p><strong>Verified Spec-Driven Development</strong></p>
+          <p>Kiểm chứng code có đúng với Spec, ý đồ và edge case không.</p>
+        </div>
+        <div class="card" style="box-shadow:none; margin:0;">
+          <span class="badge">Tầng 3</span>
+          <h3>CoDD</h3>
+          <p><strong>Coherence-Driven Development</strong></p>
+          <p>Giữ tính nhất quán toàn hệ thống khi nhiều module phụ thuộc nhau.</p>
+        </div>
+      </div>
+
+      <h3>Cách hiểu đơn giản cho Fresher</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Tầng</th>
+            <th>Câu hỏi chính</th>
+            <th>Sản phẩm đầu ra</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SDD</td>
+            <td>Mình muốn AI làm chính xác cái gì?</td>
+            <td>Spec task rõ ràng</td>
+          </tr>
+          <tr>
+            <td>VSDD</td>
+            <td>Code AI viết đã đúng ý đồ chưa?</td>
+            <td>Checklist verify + test case</td>
+          </tr>
+          <tr>
+            <td>CoDD</td>
+            <td>Sửa task này có làm lệch hệ thống không?</td>
+            <td>Dependency map + constrained_by</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>5. Quy trình Step by Step áp dụng vào mọi task</h2>
+
+      <div class="step">
+        <div class="num">1</div>
+        <div>
+          <h3>Đọc task và viết lại bằng ngôn ngữ của mình</h3>
+          <p>Dev phải tự diễn giải lại task trước khi dùng AI. Nếu không diễn giải được, nghĩa là chưa hiểu task.</p>
+          <pre>Task gốc:
+Shop upload ảnh hóa đơn để đối chiếu eVoucher.
+
+Dev viết lại:
+Khi Shop upload ảnh hóa đơn, hệ thống lưu ảnh, tạo record invoice_verification,
+gắn với eVoucher đã scan, trạng thái ban đầu là pending_review, sau đó chuyển qua approved/rejected.</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">2</div>
+        <div>
+          <h3>Xác định user role và quyền</h3>
+          <p>Không có role rõ ràng thì AI rất dễ viết API/màn hình sai quyền.</p>
+          <pre>Role liên quan:
+- Shop: upload hóa đơn, xem trạng thái đối chiếu.
+- User: xem giao dịch eVoucher của mình.
+- Admin: duyệt hoặc từ chối hóa đơn.
+Không cho Shop duyệt hóa đơn của chính mình.</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">3</div>
+        <div>
+          <h3>Viết input/output</h3>
+          <p>AI cần biết dữ liệu vào, dữ liệu ra và format lỗi.</p>
+          <pre>Input:
+- voucher_id
+- shop_id
+- invoice_image
+- invoice_amount
+- note optional
+
+Output success:
+- verification_id
+- status: pending_review
+- image_url
+- created_at
+
+Output error:
+- voucher_invalid
+- voucher_expired
+- file_too_large
+- permission_denied</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">4</div>
+        <div>
+          <h3>Vẽ flow xử lý</h3>
+          <p>Flow giúp dev và AI không nhảy cóc logic.</p>
+          <pre>Flow:
+1. Shop scan eVoucher.
+2. System kiểm tra voucher active.
+3. Shop upload ảnh hóa đơn.
+4. System validate file.
+5. System tạo invoice_verification.
+6. Admin review.
+7. Nếu approved: ghi nhận sử dụng eVoucher.
+8. Nếu rejected: giữ voucher ở trạng thái cũ và ghi lý do.</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">5</div>
+        <div>
+          <h3>Liệt kê edge case</h3>
+          <p>Edge case là nơi AI thường bỏ sót nhất.</p>
+          <pre>Edge case:
+- Voucher đã expired.
+- Voucher đã used.
+- Shop upload ảnh trùng.
+- Ảnh quá dung lượng.
+- User không thuộc voucher.
+- Admin reject nhưng thiếu lý do.
+- Mạng lỗi sau khi upload ảnh nhưng trước khi tạo record.</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">6</div>
+        <div>
+          <h3>Viết prompt cho AI dựa trên Spec</h3>
+          <p>Không prompt kiểu “làm tính năng upload hóa đơn”. Prompt phải ép AI bám Spec.</p>
+          <pre>Prompt chuẩn:
+Bạn là senior backend engineer. Hãy triển khai API upload invoice cho Shop theo Spec dưới đây.
+Không tự ý đổi schema. Không thay đổi logic voucher hiện tại.
+Trước khi code, hãy liệt kê các file cần sửa và rủi ro ảnh hưởng.
+Sau khi code, hãy tạo test case cho success, permission_denied, voucher_expired, file_too_large.
+
+[PASTE SPEC HERE]</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">7</div>
+        <div>
+          <h3>Kiểm chứng bằng VSDD trước khi merge</h3>
+          <p>Sau khi AI viết code, dev phải kiểm tra code có đúng Spec không, không chỉ kiểm tra “có chạy không”.</p>
+          <pre>Checklist VSDD:
+- Code có đúng role không?
+- Code có đúng trạng thái không?
+- Có phá flow cũ không?
+- Có test case cho edge case không?
+- Có log/audit cho hành động quan trọng không?
+- Có lỗi nào bị AI tự giả định không?</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>6. Template Spec tối thiểu cho mọi task</h2>
+      <p>Dev copy template này vào ticket, Notion, GitHub Issue hoặc comment trước khi nhờ AI code.</p>
+
+      <pre># TASK SPEC - Minimum Spec Set
+
+## 1. Mục tiêu
+Mô tả task trong 2–3 câu. Tính năng này giải quyết vấn đề gì?
+
+## 2. User Role
+- Ai được dùng?
+- Ai không được dùng?
+- Quyền nào bị giới hạn?
+
+## 3. Input
+- Field bắt buộc:
+- Field optional:
+- Validation:
+
+## 4. Output
+- Success response:
+- Error response:
+- UI state/API state:
+
+## 5. Flow chính
+1.
+2.
+3.
+4.
+
+## 6. State/Status
+- Trạng thái ban đầu:
+- Trạng thái sau khi xử lý:
+- Trạng thái lỗi:
+
+## 7. Edge Case
+- Case 1:
+- Case 2:
+- Case 3:
+
+## 8. constrained_by
+Task này bị ràng buộc bởi:
+- Schema nào?
+- API nào?
+- Business rule nào?
+- Module nào không được phá?
+
+## 9. Test Case
+- Happy path:
+- Permission case:
+- Invalid data:
+- Edge case:
+
+## 10. Definition of Done
+- Code pass test.
+- Không phá tính năng cũ.
+- Có xử lý lỗi.
+- Có log/audit nếu là hành động quan trọng.
+- CTO/Lead review được ý đồ.</pre>
+    </section>
+
+    <section class="card">
+      <h2>7. VSDD: Vòng kiểm chứng code AI</h2>
+      <p>
+        Với Dev Fresher, lỗi phổ biến là thấy AI code chạy được thì nghĩ đã xong. Nhưng trong sản phẩm thật,
+        “chạy được” chưa đủ. Code phải đúng Spec, đúng ý đồ và không làm lệch hệ thống.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Bước kiểm chứng</th>
+            <th>Câu hỏi dev phải trả lời</th>
+            <th>Kết quả mong muốn</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Spec Match</td>
+            <td>Code có bám đúng từng mục trong Spec không?</td>
+            <td>Không có logic tự ý thêm/sửa ngoài yêu cầu.</td>
+          </tr>
+          <tr>
+            <td>Role Check</td>
+            <td>Quyền User/Shop/Admin có đúng không?</td>
+            <td>Không lộ quyền, không bypass permission.</td>
+          </tr>
+          <tr>
+            <td>State Check</td>
+            <td>Trạng thái dữ liệu có chuyển đúng không?</td>
+            <td>Không có trạng thái mồ côi hoặc trạng thái sai.</td>
+          </tr>
+          <tr>
+            <td>Regression Check</td>
+            <td>Có làm hỏng tính năng cũ không?</td>
+            <td>Test cũ vẫn pass.</td>
+          </tr>
+          <tr>
+            <td>Edge Case Check</td>
+            <td>Các case xấu đã được xử lý chưa?</td>
+            <td>Lỗi trả về rõ, không crash, không mất dữ liệu.</td>
+          </tr>
+          <tr>
+            <td>Audit Check</td>
+            <td>Hành động quan trọng có log không?</td>
+            <td>Có thể truy vết người làm, thời điểm, dữ liệu thay đổi.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout green">
+        <strong>Khẩu quyết VSDD:</strong> Không hỏi “AI code xong chưa?”. Hãy hỏi “Code này đã chứng minh được là đúng với Spec chưa?”.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>8. CoDD: Giữ tính nhất quán khi task chạm nhiều module</h2>
+      <p>
+        CoDD dành cho task có ảnh hưởng dây chuyền. Fresher chưa cần làm phức tạp, nhưng phải biết khai báo phụ thuộc bằng
+        <code>constrained_by</code>.
+      </p>
+
+      <pre>Ví dụ constrained_by cho task eVoucher:
+
+constrained_by:
+- Voucher chỉ được redeem nếu status = active.
+- Shop chỉ được upload invoice sau khi scan voucher hợp lệ.
+- Một voucher chỉ được approved một lần.
+- Admin phải ghi reason khi rejected.
+- Mọi thay đổi status phải ghi audit log.
+- Không update đè lịch sử giao dịch.</pre>
+
+      <h3>Checklist CoDD đơn giản cho Fresher</h3>
+      <div class="checklist">
+        <label><input type="checkbox" />Task này phụ thuộc schema nào?</label>
+        <label><input type="checkbox" />Task này gọi API nào?</label>
+        <label><input type="checkbox" />Task này có thay đổi trạng thái quan trọng không?</label>
+        <label><input type="checkbox" />Task này có ảnh hưởng role/quyền không?</label>
+        <label><input type="checkbox" />Task này có ảnh hưởng báo cáo, log, thanh toán hoặc dữ liệu lịch sử không?</label>
+        <label><input type="checkbox" />Nếu upstream đổi rule, downstream nào phải sửa theo?</label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>9. Bài tập thực hành ngay trong buổi coaching</h2>
+
+      <div class="grid two">
+        <div class="callout blue">
+          <h3>Bài tập 1: Chuyển prompt mơ hồ thành Spec</h3>
+          <p><strong>Prompt mơ hồ:</strong> “Làm chức năng Shop upload hóa đơn để trừ eVoucher.”</p>
+          <p><strong>Yêu cầu:</strong> Dev viết lại thành Minimum Spec Set gồm mục tiêu, role, input/output, flow, edge case, DoD.</p>
+        </div>
+
+        <div class="callout green">
+          <h3>Bài tập 2: Bắt lỗi Spec thiếu</h3>
+          <p>Lead đưa một Spec cố tình thiếu edge case. Dev phải tìm ít nhất 5 điểm mơ hồ trước khi cho AI code.</p>
+        </div>
+
+        <div class="callout yellow">
+          <h3>Bài tập 3: Viết prompt AI chuẩn</h3>
+          <p>Dev dùng Spec đã hoàn thiện để viết prompt yêu cầu AI: phân tích file cần sửa, rủi ro, code, test case.</p>
+        </div>
+
+        <div class="callout red">
+          <h3>Bài tập 4: VSDD Review</h3>
+          <p>Dev nhận code AI sinh ra và đối chiếu từng dòng logic với Spec. Mục tiêu: tìm điểm AI tự ý giả định.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>10. SOP giao task cho Dev Fresher dùng AI</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Giai đoạn</th>
+            <th>Dev phải làm</th>
+            <th>Lead/CTO kiểm tra</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Trước khi code</td>
+            <td>Viết Minimum Spec Set, edge case, constrained_by.</td>
+            <td>Spec có đủ rõ để AI không đoán mò không?</td>
+          </tr>
+          <tr>
+            <td>Khi prompt AI</td>
+            <td>Yêu cầu AI phân tích trước khi code, không cho sửa lan man.</td>
+            <td>Prompt có giới hạn phạm vi không?</td>
+          </tr>
+          <tr>
+            <td>Sau khi AI code</td>
+            <td>Đọc diff, kiểm chứng với Spec, chạy test.</td>
+            <td>Dev có hiểu code hay chỉ copy?</td>
+          </tr>
+          <tr>
+            <td>Trước khi merge</td>
+            <td>Nộp VSDD checklist và test result.</td>
+            <td>Không có bug dây chuyền, không phá rule cũ.</td>
+          </tr>
+          <tr>
+            <td>Sau khi merge</td>
+            <td>Ghi lại lesson learned và điểm AI đã sai.</td>
+            <td>Cập nhật Spec/knowledge base nếu cần.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>11. Bảng đánh giá Fresher sau buổi coaching</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Năng lực</th>
+            <th>Mức chưa đạt</th>
+            <th>Mức đạt</th>
+            <th>Mức tốt</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Hiểu task</td>
+            <td>Copy yêu cầu, chưa diễn giải được.</td>
+            <td>Diễn giải được mục tiêu và flow chính.</td>
+            <td>Phát hiện được điểm mơ hồ, rủi ro, edge case.</td>
+          </tr>
+          <tr>
+            <td>Viết Spec</td>
+            <td>Spec thiếu role, input/output, DoD.</td>
+            <td>Có Minimum Spec Set đầy đủ.</td>
+            <td>Spec rõ tới mức AI có thể code ít sai.</td>
+          </tr>
+          <tr>
+            <td>Dùng AI</td>
+            <td>Prompt ngắn, mơ hồ, phụ thuộc AI đoán.</td>
+            <td>Prompt theo Spec, có giới hạn phạm vi.</td>
+            <td>Biết yêu cầu AI phân tích rủi ro trước khi code.</td>
+          </tr>
+          <tr>
+            <td>Verify code</td>
+            <td>Chỉ chạy thử UI/API đơn giản.</td>
+            <td>Đối chiếu code với Spec và test case.</td>
+            <td>Phát hiện hallucination, regression, sai state.</td>
+          </tr>
+          <tr>
+            <td>Tư duy hệ thống</td>
+            <td>Chỉ nhìn file mình sửa.</td>
+            <td>Biết module liên quan.</td>
+            <td>Biết khai báo constrained_by và downstream impact.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout blue">
+        <strong>Tiêu chuẩn qua buổi:</strong> Dev có thể nhận một task thật, viết Spec tối thiểu trong 15–30 phút,
+        prompt AI đúng cấu trúc, và tự kiểm chứng code trước khi nhờ Lead review.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>12. Mẫu daily report sau khi áp dụng SDD/VSDD</h2>
+
+      <pre># DAILY REPORT - AI Coding theo SDD/VSDD
+
+## 1. Task hôm nay
+Tên task:
+
+## 2. Spec đã viết chưa?
+- Link/spec:
+- Điểm còn mơ hồ:
+
+## 3. AI đã hỗ trợ phần nào?
+- Phân tích:
+- Code:
+- Test:
+- Refactor:
+
+## 4. AI đã sai/chưa chắc ở đâu?
+- Sai logic:
+- Bỏ sót edge case:
+- Tự ý đổi code ngoài phạm vi:
+
+## 5. VSDD Checklist
+- Spec match: Pass/Fail
+- Role check: Pass/Fail
+- State check: Pass/Fail
+- Edge case: Pass/Fail
+- Regression: Pass/Fail
+
+## 6. Kết quả
+- Đã hoàn thành:
+- Còn vướng:
+- Cần Lead/CTO hỗ trợ:</pre>
+    </section>
+
+    <section class="card">
+      <h2>13. Khẩu quyết cho Dev Fresher Sài Gòn</h2>
+      <div class="grid three">
+        <div class="callout blue">
+          <div class="kpi">01</div>
+          <h3>Không hiểu thì không prompt</h3>
+          <p>Chưa hiểu task mà hỏi AI code là đang chuyển sự mơ hồ của mình thành bug.</p>
+        </div>
+        <div class="callout green">
+          <div class="kpi">02</div>
+          <h3>Spec trước, code sau</h3>
+          <p>Spec là dây an toàn. AI càng mạnh, Spec càng phải rõ.</p>
+        </div>
+        <div class="callout yellow">
+          <div class="kpi">03</div>
+          <h3>Chạy được chưa phải là đúng</h3>
+          <p>Đúng nghĩa là khớp Spec, pass test, không phá hệ thống cũ.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>14. Checklist cuối cùng trước khi nộp task</h2>
+      <div class="checklist">
+        <label><input type="checkbox" />Em đã viết Minimum Spec Set.</label>
+        <label><input type="checkbox" />Em đã xác định role và permission.</label>
+        <label><input type="checkbox" />Em đã liệt kê input/output và error case.</label>
+        <label><input type="checkbox" />Em đã liệt kê edge case quan trọng.</label>
+        <label><input type="checkbox" />Em đã khai báo constrained_by nếu task chạm module khác.</label>
+        <label><input type="checkbox" />Em đã yêu cầu AI phân tích rủi ro trước khi code.</label>
+        <label><input type="checkbox" />Em đã đọc diff, không copy mù.</label>
+        <label><input type="checkbox" />Em đã chạy test/happy path/error path.</label>
+        <label><input type="checkbox" />Em đã kiểm tra không phá tính năng cũ.</label>
+        <label><input type="checkbox" />Em có thể giải thích lại code vừa merge cho Lead/CTO.</label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>15. Kết luận cho buổi coaching</h2>
+      <p>
+        Vibe Coding không sai. Nó rất tốt cho demo, prototype và khám phá ý tưởng. Nhưng khi bước vào sản phẩm thật,
+        nhất là hệ thống có dữ liệu, tiền, phân quyền, workflow và audit log, team phải chuyển sang SDD/VSDD/CoDD.
+      </p>
+      <p>
+        Dev Fresher muốn dùng AI hiệu quả không phải là người gõ prompt nhiều nhất, mà là người biết biến yêu cầu mơ hồ
+        thành Spec rõ, biết kiểm chứng code AI và biết giữ tính nhất quán của hệ thống.
+      </p>
+
+      <div class="quote">
+        Tốc độ viết code thuộc về AI. Trách nhiệm định nghĩa ý đồ, kiểm chứng và bảo vệ hệ thống thuộc về kỹ sư.
+      </div>
+    </section>
+
+    <div class="footer">
+      Tài liệu coaching nội bộ · Chủ đề: AI Coding có kiểm soát · Biên soạn theo hướng thực chiến cho Dev Fresher Sài Gòn · 2026
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,30 @@
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# Xcode-generated project (regenerate via `xcodegen generate`)
+ClaudeWatchMac.xcodeproj/
+
+# Xcode user state — never commit
+*.xcuserstate
+**/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# DerivedData & local builds
+DerivedData/
+Releases/
+*.app
+*.dSYM
+*.ipa
+*.dmg
+*.zip
+
+# macOS noise
+.DS_Store
+*.swp
+*~
+
+# Local debug artifacts produced by iteration
+/tmp/cw-*.log

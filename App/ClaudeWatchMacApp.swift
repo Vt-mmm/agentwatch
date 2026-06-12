@@ -12,6 +12,8 @@ struct ClaudeWatchMacApp: App {
     @State private var bookmarks = BookmarkStore()
     @State private var coachingData = CoachingDataStore()
     @State private var updater = UpdaterController()
+    @State private var floatingPet = FloatingPetController()
+    @State private var petBroker = PetTalkBroker()
 
     var body: some Scene {
         WindowGroup("Claude Watch", id: "main") {
@@ -22,10 +24,21 @@ struct ClaudeWatchMacApp: App {
                 .environment(bookmarks)
                 .environment(coachingData)
                 .environment(updater)
+                .environment(floatingPet)
                 .preferredColorScheme(appearance.mode.colorScheme)
-                .onAppear { startWatchingIfPossible() }
+                .onAppear {
+                    startWatchingIfPossible()
+                    petBroker.attach(floatingPet)
+                }
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)
+                }
+                .onChange(of: coachingData.petState) { _, s in
+                    floatingPet.state = s
+                }
+                .onChange(of: coachingData.lastRefreshAt) { _, _ in
+                    petBroker.observe(sessions: coachingData.allSessions,
+                                      activeProject: watcher.stats?.projectSlug)
                 }
         }
         .windowResizability(.contentMinSize)

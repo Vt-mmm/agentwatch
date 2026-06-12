@@ -9,6 +9,7 @@ struct MainWindowView: View {
     @Environment(AppearanceStore.self) private var appearance
     @Environment(UpdaterController.self) private var updater
     @Environment(CoachingDataStore.self) private var coaching
+    @Environment(FloatingPetController.self) private var pet
     @State private var tab: Tab = .live
     @State private var showPrivacy: Bool = false
 
@@ -79,6 +80,12 @@ struct MainWindowView: View {
                 updater.checkForUpdates()
             } label: {
                 Label("Check for Updates…", systemImage: "arrow.down.circle")
+            }
+            Button {
+                pet.toggle()
+            } label: {
+                Label(pet.isVisible ? "Ẩn desktop pet" : "Hiện desktop pet",
+                      systemImage: pet.isVisible ? "eye.slash" : "pawprint")
             }
             Button {
                 showPrivacy = true

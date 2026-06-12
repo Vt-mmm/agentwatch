@@ -109,25 +109,67 @@ struct StatusCommand {
         let sessions = scanDaySessions()
         let stats = pickActiveStats()
         let pet = computePet(sessions)
-        render(pet: pet, sessions: sessions, active: stats)
+        render(pet: pet, sessions: sessions, active: stats, talk: nil)
     }
 }
 
 struct WatchCommand {
     func run() {
-        // Hide cursor + clear screen. Khi Ctrl+C, signal handler restore lại.
         signal(SIGINT) { _ in
             print(Ansi.showCursor, terminator: "")
             exit(0)
         }
         print(Ansi.hideCursor, terminator: "")
 
+        // State để detect change → emit chat bubble.
+        var warnedOutliers: Set<String> = []
+        var warnedLoops: Set<String> = []
+        var lastSessionCount: Int = -1
+        var variant: Int = 0
+        var lastTalk: PetTalk? = PetTalkOracle.line(for: .startup, variant: 0)
+        var talkExpireAt: Date = Date().addingTimeInterval(5)
+
         while true {
             let sessions = scanDaySessions()
-            let stats = pickActiveStats()
-            let pet = computePet(sessions)
+            let active = pickActiveStats()
+            let petState = computePet(sessions)
+
+            // Emit talk theo event mới phát sinh giữa 2 tick.
+            if lastSessionCount >= 0, sessions.count > lastSessionCount,
+               let proj = active?.projectSlug {
+                variant += 1
+                lastTalk = PetTalkOracle.line(
+                    for: .sessionStarted(project: ProjectPath.displayPath(for: proj)),
+                    variant: variant)
+                talkExpireAt = Date().addingTimeInterval(6)
+            }
+            lastSessionCount = sessions.count
+            for sid in CoachingInsights.outlierSessions(sessions)
+                where !warnedOutliers.contains(sid) {
+                warnedOutliers.insert(sid)
+                if let s = sessions.first(where: { $0.id == sid }) {
+                    variant += 1
+                    lastTalk = PetTalkOracle.line(
+                        for: .outlierDetected(cost: s.cost), variant: variant)
+                    talkExpireAt = Date().addingTimeInterval(8)
+                }
+            }
+            for sid in CoachingInsights.agentLoopSessions(sessions)
+                where !warnedLoops.contains(sid) {
+                warnedLoops.insert(sid)
+                if let s = sessions.first(where: { $0.id == sid }) {
+                    variant += 1
+                    lastTalk = PetTalkOracle.line(
+                        for: .agentLoopDetected(agentCount: s.agentCount),
+                        variant: variant)
+                    talkExpireAt = Date().addingTimeInterval(8)
+                }
+            }
+
+            let showTalk: PetTalk? = (Date() < talkExpireAt) ? lastTalk : nil
+
             print(Ansi.clearScreen, terminator: "")
-            render(pet: pet, sessions: sessions, active: stats)
+            render(pet: petState, sessions: sessions, active: active, talk: showTalk)
             print("\n\(colorize("(Ctrl+C để thoát, refresh mỗi 2s)", Ansi.dim))")
             Thread.sleep(forTimeInterval: 2.0)
         }
@@ -177,10 +219,12 @@ func scanRange(daysBack: Int) -> [SessionSummary] {
 
 // MARK: - Renderers
 
-func render(pet: PetState, sessions: [SessionSummary], active: SessionStats?) {
+func render(pet: PetState, sessions: [SessionSummary],
+            active: SessionStats?, talk: PetTalk?) {
     print(colorize("claudewatch", Ansi.bold) +
           colorize("  \(now())", Ansi.dim))
     print()
+    if let t = talk { renderBubble(t) }
     renderArt(pet)
     print()
     renderTotals(sessions)
@@ -189,6 +233,27 @@ func render(pet: PetState, sessions: [SessionSummary], active: SessionStats?) {
         renderActive(s)
     }
     renderInsights(sessions)
+}
+
+/// Bubble chat ASCII đặt trên đầu pet. Width tự co theo message length.
+func renderBubble(_ talk: PetTalk) {
+    let msg = talk.message
+    let color: String = {
+        switch talk.tone {
+        case .alert:   return Ansi.red
+        case .warning: return Ansi.yellow
+        default:       return Ansi.cyan
+        }
+    }()
+    let w = msg.count + 4
+    let top = "  ╭" + String(repeating: "─", count: w - 2) + "╮"
+    let mid = "  │ " + msg + " │"
+    let bot = "  ╰" + String(repeating: "─", count: w - 2) + "╯"
+    let tail = "       v"
+    print(colorize(top, color))
+    print(colorize(mid, color))
+    print(colorize(bot, color))
+    print(colorize(tail, color))
 }
 
 func renderArt(_ state: PetState) {

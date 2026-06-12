@@ -29,14 +29,14 @@ APPCAST="$ROOT/appcast.xml"
 REL_DIR="$ROOT/Releases"
 mkdir -p "$REL_DIR"
 
-echo "→ [1/6] Bump version → $VERSION (build $BUILD)"
+echo "→ [1/7] Bump version → $VERSION (build $BUILD)"
 sed -i '' "s|MARKETING_VERSION: \".*\"|MARKETING_VERSION: \"$VERSION\"|" project.yml
 sed -i '' "s|CURRENT_PROJECT_VERSION: \".*\"|CURRENT_PROJECT_VERSION: \"$BUILD\"|" project.yml
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" App/Info.plist
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" App/Info.plist
 xcodegen generate >/dev/null
 
-echo "→ [2/6] Archive"
+echo "→ [2/7] Archive"
 ARCHIVE="$REL_DIR/ClaudeWatchMac-$VERSION.xcarchive"
 rm -rf "$ARCHIVE"
 xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac \
@@ -49,11 +49,19 @@ APP_DST="$REL_DIR/ClaudeWatchMac.app"
 rm -rf "$APP_DST" "$REL_DIR/$ZIP"
 cp -R "$APP_SRC" "$APP_DST"
 
-echo "→ [3/6] Zip → $ZIP"
+# Sparkle.framework ship pre-signed với Team ID của Sparkle. Khi main app
+# ad-hoc (Team ID rỗng) → dyld báo "different Team IDs" → app crash launch.
+# Fix: deep re-sign toàn bộ bundle bằng ad-hoc. --deep ký tất cả XPC services,
+# Updater.app, Autoupdate, Downloader, Installer trong Sparkle.framework.
+echo "→ [3/7] Re-sign frameworks bằng ad-hoc"
+codesign --force --deep --sign - --options runtime --timestamp=none "$APP_DST" 2>&1 | tail -5
+codesign --verify --deep --strict "$APP_DST" || { echo "✗ Signature verify failed"; exit 1; }
+
+echo "→ [4/7] Zip → $ZIP"
 # ditto giữ extended attributes + symlinks, Sparkle expect format này.
 (cd "$REL_DIR" && ditto -c -k --keepParent ClaudeWatchMac.app "$ZIP")
 
-echo "→ [4/6] Sign update"
+echo "→ [5/7] Sign update (EdDSA)"
 DD="$(xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac \
         -showBuildSettings 2>/dev/null \
         | awk -F' = ' '/BUILD_DIR/ {print $2; exit}')"
@@ -66,7 +74,7 @@ SIG="$(echo "$SIG_LINE" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')"
 LEN="$(echo "$SIG_LINE" | sed -n 's/.*length="\([^"]*\)".*/\1/p')"
 echo "   sig=${SIG:0:16}… len=$LEN"
 
-echo "→ [5/6] GitHub release + upload"
+echo "→ [6/7] GitHub release + upload"
 TAG="v$VERSION"
 git add project.yml App/Info.plist
 git commit -m "chore: release $VERSION" || true
@@ -80,7 +88,7 @@ gh release create "$TAG" "$REL_DIR/$ZIP" \
 URL="https://github.com/Vt-mmm/claudewatch/releases/download/$TAG/$ZIP"
 DATE="$(date -u "+%a, %d %b %Y %H:%M:%S +0000")"
 
-echo "→ [6/6] Cập nhật appcast.xml"
+echo "→ [7/7] Cập nhật appcast.xml"
 ITEM=$(cat <<EOF
         <item>
             <title>Version $VERSION</title>

@@ -123,10 +123,13 @@ struct CoachingReportView: View {
         }
         .onAppear {
             // Chỉ reload nếu data cũ (>5s) hoặc scope đổi từ lần load trước.
+            // Nếu fresh: vẫn phải setActive để auto-refresh biết scope hiện tại.
             if !data.isFresh(for: scopeFingerprint) {
                 data.reload(scope: currentScope, fingerprint: scopeFingerprint)
+            } else {
+                data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
             }
-            data.startAutoRefresh(scope: currentScope, fingerprint: scopeFingerprint)
+            data.startAutoRefresh()
         }
         .onDisappear { data.stopAutoRefresh() }
         .onChange(of: scope) { _, _ in

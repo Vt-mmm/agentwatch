@@ -30,7 +30,13 @@ final class CoachingDataStore {
     /// data cũ không match → buộc reload.
     var lastScopeFingerprint: String = ""
 
+    /// Scope/fingerprint đang ACTIVE — auto-refresh dùng giá trị này MỖI TICK
+    /// thay vì capture 1 lần lúc start (fix bug filter cũ ghi đè data mới).
+    private var activeScope: ReportScope?
+    private var activeFingerprint: String = ""
+
     private var refreshTask: Task<Void, Never>?
+    private var loadTask: Task<Void, Never>?
     private let stalenessThreshold: TimeInterval = 5
 
     /// True nếu data còn fresh (<5s) VÀ scope match → có thể skip reload khi
@@ -40,8 +46,18 @@ final class CoachingDataStore {
         return Date().timeIntervalSince(lastRefreshAt) < stalenessThreshold
     }
 
+    /// Cập nhật active scope MÀ KHÔNG trigger reload — dùng khi onAppear thấy
+    /// data còn fresh nhưng auto-refresh vẫn cần biết scope hiện tại.
+    func setActive(scope: ReportScope, fingerprint: String) {
+        activeScope = scope
+        activeFingerprint = fingerprint
+    }
+
+    /// Reload sử dụng scope mới nhất. Cancel in-flight load để tránh stale data
+    /// được ghi đè lên UI sau khi user đã đổi filter.
     func reload(scope: ReportScope, fingerprint: String) {
-        if isLoading { return }
+        setActive(scope: scope, fingerprint: fingerprint)
+        loadTask?.cancel()
         isLoading = true
         lastScopeFingerprint = fingerprint
         let currentRange = Self.dateRange(for: scope)
@@ -49,8 +65,11 @@ final class CoachingDataStore {
         let trendRange = Self.trendWindowRange(endingAt: scope)
         let combined = Self.unionRange(currentRange, prevRange, trendRange)
 
-        Task.detached(priority: .userInitiated) { [weak self] in
+        loadTask = Task.detached(priority: .userInitiated) { [weak self] in
             let result = await CoachingScan.scan(in: combined)
+            // Nếu user đã đổi filter trước khi scan xong → bỏ kết quả này,
+            // tránh data cũ ghi đè lên data mới.
+            if Task.isCancelled { return }
             let curP = result.prompts.filter { currentRange.contains($0.timestamp) }
             let curS = result.sessions.filter { Self.intersect(currentRange, $0) }
             let prevP = result.prompts.filter { prevRange.contains($0.timestamp) }
@@ -61,6 +80,10 @@ final class CoachingDataStore {
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
+                // Double-check: chỉ apply nếu fingerprint của lần load này vẫn
+                // khớp với active hiện tại. Nếu user đổi filter trong lúc đang
+                // await MainActor.run, vẫn bỏ qua.
+                guard self.activeFingerprint == fingerprint else { return }
                 self.allRecords = curP
                 self.allSessions = curS.sorted { $0.cost > $1.cost }
                 self.previousAggregate = prevAgg
@@ -73,14 +96,16 @@ final class CoachingDataStore {
         }
     }
 
-    /// Khởi động poll mỗi 5s khi tab Coaching active. Cancel khi disappear.
-    func startAutoRefresh(scope: ReportScope, fingerprint: String) {
+    /// Auto-refresh đọc activeScope/Fingerprint từ store MỖI TICK (không capture
+    /// snapshot lúc start). Đổi filter → tick kế tiếp dùng filter mới.
+    func startAutoRefresh() {
         stopAutoRefresh()
         refreshTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
                 if Task.isCancelled { break }
-                self?.reload(scope: scope, fingerprint: fingerprint)
+                guard let self, let scope = self.activeScope else { continue }
+                self.reload(scope: scope, fingerprint: self.activeFingerprint)
             }
         }
     }

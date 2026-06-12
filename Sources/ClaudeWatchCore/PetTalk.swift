@@ -26,6 +26,10 @@ public enum PetTalkTrigger: Sendable, Equatable {
     case agentLoopDetected(agentCount: Int)
     case idle(minutesIdle: Int)
     case startup
+    // Live triggers từ SessionWatcher (real-time ~1s):
+    case toolBurst(count: Int)           // ≥N tool call trong khoảng ngắn
+    case subagentSpawned(total: Int)     // có agent mới spawn
+    case costThreshold(cost: Double)     // cross mốc $0.5/$1/$5/$10
 }
 
 public enum PetTalkOracle {
@@ -76,6 +80,28 @@ public enum PetTalkOracle {
                 "Em ngủ một xíu nhé... 💤",
                 "Hết task rồi, em đợi thôi.",
             ], variant: variant, tone: .idle)
+
+        case .toolBurst(let count):
+            return rotate([
+                "Wow \(count) tool call liền luôn!",
+                "Đang cày mạnh ghê 💪",
+                "Tay nhanh hơn não — \(count) cú/tick!",
+            ], variant: variant, tone: .working)
+
+        case .subagentSpawned(let total):
+            return rotate([
+                "Subagent thứ \(total) báo cáo!",
+                "Có thêm trợ thủ rồi, tổng \(total).",
+                "\(total) agents đang làm việc cho Cậu Chủ.",
+            ], variant: variant, tone: .working)
+
+        case .costThreshold(let cost):
+            let usd = String(format: "$%.2f", cost)
+            return rotate([
+                "Vừa qua mốc \(usd) rồi đó!",
+                "\(usd) — Cậu Chủ note lại nhé.",
+                "Cost milestone: \(usd).",
+            ], variant: variant, tone: .warning)
         }
     }
 

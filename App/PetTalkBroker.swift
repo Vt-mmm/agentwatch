@@ -22,6 +22,19 @@ final class PetTalkBroker {
     private var lastActivityAt: Date = Date()
     private var idleCheckTask: Task<Void, Never>?
 
+    // Live tracking từ SessionWatcher.stats.
+    private var liveLastToolCalls: Int = 0
+    private var liveLastAgentCount: Int = 0
+    private var liveLastCost: Double = 0
+    private var crossedCostMarks: Set<Int> = []  // các mốc $ đã cảnh báo (cent*100)
+    /// Throttle: tối thiểu 8s giữa 2 talk để pet không lải nhải. Bypass cho
+    /// alert/warning (cảnh báo cần thấy ngay).
+    private var lastTalkAt: Date = .distantPast
+    private let throttleSec: TimeInterval = 8
+
+    // Cost milestone — bất cứ session nào cross các mốc này → talk 1 lần.
+    private static let costMilestones: [Double] = [0.5, 1, 2, 5, 10, 20, 50, 100]
+
     /// Bind controller cần được nói (set sau khi controller init xong).
     func attach(_ controller: FloatingPetController) {
         self.pet = controller
@@ -66,10 +79,53 @@ final class PetTalkBroker {
         emit(.taskDone(durationSec: durationSec))
     }
 
-    private func emit(_ trigger: PetTalkTrigger) {
+    /// Hook real-time từ SessionWatcher.stats. Detect:
+    ///   - tool calls tăng ≥3 trong 1 tick → toolBurst
+    ///   - agents.count tăng → subagentSpawned
+    ///   - cost cross các mốc $0.5/$1/$2/$5/$10... → costThreshold
+    /// Reset state nếu session id đổi (chuyển project).
+    func observeLive(stats: SessionStats?) {
+        guard let s = stats else { return }
+        defer {
+            liveLastToolCalls = s.toolCalls
+            liveLastAgentCount = s.agents.count
+            liveLastCost = s.cost
+            lastActivityAt = Date()
+        }
+        // Reset milestone tracker khi session thay đổi (mới mở Claude khác).
+        if s.toolCalls < liveLastToolCalls {
+            // Session bị rotate hoặc reset — clear state.
+            crossedCostMarks.removeAll()
+            liveLastToolCalls = 0
+            liveLastAgentCount = 0
+            liveLastCost = 0
+        }
+        let toolDelta = s.toolCalls - liveLastToolCalls
+        if toolDelta >= 3 {
+            emit(.toolBurst(count: toolDelta), force: false)
+        }
+        let agentDelta = s.agents.count - liveLastAgentCount
+        if agentDelta > 0 {
+            emit(.subagentSpawned(total: s.agents.count), force: false)
+        }
+        for mark in Self.costMilestones {
+            let markKey = Int(mark * 100)
+            if s.cost >= mark, liveLastCost < mark,
+               !crossedCostMarks.contains(markKey) {
+                crossedCostMarks.insert(markKey)
+                emit(.costThreshold(cost: mark), force: true)  // warning luôn show
+                break
+            }
+        }
+    }
+
+    /// `force=true` bypass throttle — dùng cho alert/warning quan trọng.
+    private func emit(_ trigger: PetTalkTrigger, force: Bool = false) {
+        if !force, Date().timeIntervalSince(lastTalkAt) < throttleSec { return }
         variant += 1
         let talk = PetTalkOracle.line(for: trigger, variant: variant)
         pet?.say(talk)
+        lastTalkAt = Date()
         lastActivityAt = Date()
     }
 

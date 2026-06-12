@@ -65,7 +65,6 @@ struct MainWindowView: View {
                 ProjectPickerView()
             }
             Spacer()
-            PetMascot(state: coaching.petState)
             themePicker
             settingsMenu
         }

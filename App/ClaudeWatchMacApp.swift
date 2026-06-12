@@ -38,6 +38,7 @@ struct ClaudeWatchMacApp: App {
                 }
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)
+                    petBroker.observeLive(stats: new)
                 }
                 .onChange(of: coachingData.petState) { _, s in
                     floatingPet.state = s

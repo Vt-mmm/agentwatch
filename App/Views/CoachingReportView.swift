@@ -114,19 +114,30 @@ struct CoachingReportView: View {
         CoachingInsights.agentLoopSessions(sessions)
     }
 
+    /// True khi scope hiện tại không có session NÀO. Phân biệt với "isLoading"
+    /// — chỉ show empty hero sau khi đã load xong (lastRefreshAt != distantPast).
+    private var isScopeEmpty: Bool {
+        allSessions.isEmpty && allRecords.isEmpty &&
+            lastRefreshAt != .distantPast && !isLoading
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 filterCard
-                summaryCard
-                tokenCostCard
-                trendCard
-                if dailyCostTrend.contains(where: { $0.cost > 0 }) { forecastCard }
-                if !sessions.isEmpty { topSessionsCard }
-                if !records.isEmpty { distributionCard }
-                if !stats.topMissingSections.isEmpty { gapsCard }
-                if !stats.projectBreakdown.isEmpty { projectCard }
-                promptListCard
+                if isScopeEmpty {
+                    coachingEmptyHero
+                } else {
+                    summaryCard
+                    tokenCostCard
+                    trendCard
+                    if dailyCostTrend.contains(where: { $0.cost > 0 }) { forecastCard }
+                    if !sessions.isEmpty { topSessionsCard }
+                    if !records.isEmpty { distributionCard }
+                    if !stats.topMissingSections.isEmpty { gapsCard }
+                    if !stats.projectBreakdown.isEmpty { projectCard }
+                    promptListCard
+                }
             }
             .padding(20)
         }
@@ -174,6 +185,49 @@ struct CoachingReportView: View {
     }
 
     // MARK: - Cards
+
+    /// Hero hiển thị khi không có session/record nào trong scope hiện tại.
+    /// Friendly hint user đổi scope thay vì để màn hình toàn số 0.
+    private var coachingEmptyHero: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Claude.orangeSoft)
+                    .frame(width: 110, height: 110)
+                Image(systemName: "moon.zzz.fill")
+                    .font(.system(size: 44, weight: .medium))
+                    .foregroundStyle(Claude.orange)
+            }
+            VStack(spacing: 6) {
+                Text("Chưa có session nào")
+                    .font(ClaudeFont.display(20))
+                    .foregroundStyle(Claude.textPrimary)
+                Text("Khoảng \(scopeRangeLabel) chưa có hoạt động Claude Code.\nMở 1 phiên `claude` để pet bắt đầu theo dõi.")
+                    .font(ClaudeFont.body(13))
+                    .foregroundStyle(Claude.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Button("Hôm nay") {
+                    scope = .day; anchor = Date()
+                }
+                .buttonStyle(.bordered)
+                Button("7 ngày") {
+                    scope = .week; anchor = Date()
+                }
+                .buttonStyle(.bordered)
+                Button("30 ngày") {
+                    scope = .month; anchor = Date()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Claude.orange)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(40)
+        .claudeCard()
+    }
 
     private var filterCard: some View {
         VStack(spacing: 10) {

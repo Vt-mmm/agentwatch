@@ -173,13 +173,12 @@ struct MainWindowView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Claude.orangeSoft)
+                    .frame(width: 128, height: 128)
+                SpritePet(state: .sleepy, characterName: sprites.currentName)
                     .frame(width: 96, height: 96)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 40, weight: .medium))
-                    .foregroundStyle(Claude.orange)
             }
             VStack(spacing: 6) {
-                Text("No session yet")
+                Text("Chưa có session nào")
                     .font(ClaudeFont.display(22))
                     .foregroundStyle(Claude.textPrimary)
                 Text(placeholderText)
@@ -195,11 +194,11 @@ struct MainWindowView: View {
 
     private var placeholderText: String {
         if projectStore.followLatest {
-            return "Scanning ~/.claude/projects for the most recent session…"
+            return "Đang scan ~/.claude/projects tìm session mới nhất…\nMở 1 phiên `claude` trong terminal để bắt đầu."
         }
         if let folder = projectStore.pinnedFolder {
-            return "Waiting for session activity in \(folder.lastPathComponent)…"
+            return "Đợi hoạt động trong \(folder.lastPathComponent)…"
         }
-        return "Pin a folder above to begin."
+        return "Pin 1 folder ở trên để bắt đầu."
     }
 }

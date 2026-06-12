@@ -117,10 +117,43 @@ claude-watch-mac/
 └── Tests/ClaudeWatchCoreTests/   # parser + watcher tests
 ```
 
+## Auto-update qua Sparkle
+
+App tích Sparkle 2 → user install xong sẽ tự pull update mỗi 1h, hoặc bấm **Menu Bar → Claude Watch → Check for Updates…**.
+
+### Setup MỘT LẦN (maintainer)
+
+```bash
+# 1. Sinh keypair EdDSA — private key vào Keychain, public key vào project.yml
+./scripts/setup-sparkle-keys.sh
+```
+
+**Quan trọng:** private key sống trong Keychain máy này. Backup Keychain hoặc lưu key string ra Bitwarden — mất key = không sign được update mới, phải force user reinstall.
+
+### Phát hành version mới
+
+```bash
+./scripts/release.sh 0.2.0
+```
+
+Script tự làm:
+1. Bump version (`project.yml` + `Info.plist`).
+2. `xcodebuild archive` → export `.app`.
+3. `ditto -c -k --keepParent` → `ClaudeWatchMac-0.2.0.zip`.
+4. Sign EdDSA bằng key trong Keychain.
+5. Tag + push + tạo GitHub Release + upload zip qua `gh`.
+6. Prepend entry vào `appcast.xml`, commit + push.
+
+User chạy bản cũ sẽ thấy popup update trong ≤1h, hoặc dùng menu Check for Updates ngay.
+
+### User install bản đầu (chia cho team)
+
+Gửi link `https://github.com/Vt-mmm/claudewatch/releases/latest` → tải `.zip` → kéo `ClaudeWatchMac.app` vô `/Applications` → mở. Vì app ad-hoc signed, lần đầu macOS chặn → right-click → **Open** → **Open** lần nữa. Từ bản 2 trở đi, Sparkle tự update không cần thao tác thủ công.
+
 ## Known limits
 
 - Cost = ước tính theo Anthropic list price; 5m vs 1h cache prompt không phân biệt riêng.
 - Subagent token cost gộp vào parent session (Claude Code không tách JSONL riêng).
 - macOS 14+ (MenuBarExtra requirement, Observation framework).
 - Polling 1s — trễ tối đa 1 giây so với JSONL append.
-- Local-only: không có installer, không có auto-update, không có Developer ID signing.
+- Ad-hoc signed → user mở lần đầu thấy Gatekeeper warning, right-click Open để bypass.

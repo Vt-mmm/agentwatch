@@ -7,6 +7,9 @@ options:
 packages:
   ClaudeWatchCore:
     path: .
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.4
 targets:
   ClaudeWatchMac:
     type: application
@@ -20,6 +23,8 @@ targets:
     dependencies:
       - package: ClaudeWatchCore
         product: ClaudeWatchCore
+      - package: Sparkle
+        product: Sparkle
     info:
       path: App/Info.plist
       properties:
@@ -29,6 +34,10 @@ targets:
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         NSHumanReadableCopyright: "© 2026 vtamm"
+        SUFeedURL: "https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml"
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 3600
+        SUPublicEDKey: "ynaSo3Ac+GxZgbfaRN57FgCzf9mXsbUWeKPXUzg8msE="
     settings:
       MARKETING_VERSION: "0.1.0"
       CURRENT_PROJECT_VERSION: "1"

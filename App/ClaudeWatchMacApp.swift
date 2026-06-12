@@ -11,6 +11,7 @@ struct ClaudeWatchMacApp: App {
     @State private var appearance = AppearanceStore()
     @State private var bookmarks = BookmarkStore()
     @State private var coachingData = CoachingDataStore()
+    @State private var updater = UpdaterController()
 
     var body: some Scene {
         WindowGroup("Claude Watch", id: "main") {
@@ -27,6 +28,12 @@ struct ClaudeWatchMacApp: App {
                 }
         }
         .windowResizability(.contentMinSize)
+        .commands {
+            // Chèn "Check for Updates…" ngay sau "About Claude Watch" trong app menu.
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { updater.checkForUpdates() }
+            }
+        }
 
         MenuBarExtra {
             MenuBarSummaryView()

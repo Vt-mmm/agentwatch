@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Build + sign + push release. 1 lệnh: ./scripts/release.sh 0.2.0
+#
+# Workflow:
+#  1. Bump MARKETING_VERSION + CFBundleShortVersionString → $1.
+#  2. xcodebuild archive (Release config).
+#  3. Export .app từ archive → Releases/ClaudeWatchMac-$1.zip.
+#  4. sign_update → EdDSA signature.
+#  5. Tạo GitHub Release + upload zip qua gh CLI.
+#  6. Generate entry vào appcast.xml (prepend mới nhất lên top).
+#  7. Commit appcast.xml + push.
+#
+# Sau bước này: mọi user đã install bản cũ → Sparkle auto-check 1h/lần → popup
+# update → 1 click là xong.
+
+set -euo pipefail
+
+VERSION="${1:-}"
+if [[ -z "$VERSION" ]]; then
+    echo "Usage: $0 <version>   (vd: $0 0.2.0)"; exit 1
+fi
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+BUILD="${VERSION//./}"   # 0.2.0 → 020 (CFBundleVersion phải tăng đơn điệu)
+ZIP="ClaudeWatchMac-$VERSION.zip"
+APPCAST="$ROOT/appcast.xml"
+REL_DIR="$ROOT/Releases"
+mkdir -p "$REL_DIR"
+
+echo "→ [1/6] Bump version → $VERSION (build $BUILD)"
+sed -i '' "s|MARKETING_VERSION: \".*\"|MARKETING_VERSION: \"$VERSION\"|" project.yml
+sed -i '' "s|CURRENT_PROJECT_VERSION: \".*\"|CURRENT_PROJECT_VERSION: \"$BUILD\"|" project.yml
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" App/Info.plist
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" App/Info.plist
+xcodegen generate >/dev/null
+
+echo "→ [2/6] Archive"
+ARCHIVE="$REL_DIR/ClaudeWatchMac-$VERSION.xcarchive"
+rm -rf "$ARCHIVE"
+xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac \
+    -configuration Release -destination 'platform=macOS' \
+    -archivePath "$ARCHIVE" archive >/tmp/archive.log 2>&1 || {
+        tail -40 /tmp/archive.log; exit 1; }
+
+APP_SRC="$ARCHIVE/Products/Applications/ClaudeWatchMac.app"
+APP_DST="$REL_DIR/ClaudeWatchMac.app"
+rm -rf "$APP_DST" "$REL_DIR/$ZIP"
+cp -R "$APP_SRC" "$APP_DST"
+
+echo "→ [3/6] Zip → $ZIP"
+# ditto giữ extended attributes + symlinks, Sparkle expect format này.
+(cd "$REL_DIR" && ditto -c -k --keepParent ClaudeWatchMac.app "$ZIP")
+
+echo "→ [4/6] Sign update"
+DD="$(xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac \
+        -showBuildSettings 2>/dev/null \
+        | awk -F' = ' '/BUILD_DIR/ {print $2; exit}')"
+DD_ROOT="$(dirname "$(dirname "$DD")")"
+SIGN="$(find "$DD_ROOT/SourcePackages/artifacts" -name "sign_update" -type f 2>/dev/null | head -1)"
+[[ -z "$SIGN" ]] && { echo "✗ sign_update missing — open Xcode build once."; exit 1; }
+
+SIG_LINE="$("$SIGN" "$REL_DIR/$ZIP")"
+SIG="$(echo "$SIG_LINE" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')"
+LEN="$(echo "$SIG_LINE" | sed -n 's/.*length="\([^"]*\)".*/\1/p')"
+echo "   sig=${SIG:0:16}… len=$LEN"
+
+echo "→ [5/6] GitHub release + upload"
+TAG="v$VERSION"
+git add project.yml App/Info.plist
+git commit -m "chore: release $VERSION" || true
+git tag "$TAG"
+git push origin main "$TAG"
+gh release create "$TAG" "$REL_DIR/$ZIP" \
+    --title "Claude Watch $VERSION" \
+    --notes "Built from $TAG. Auto-update sẽ tự tải qua Sparkle." \
+    --latest
+
+URL="https://github.com/Vt-mmm/claudewatch/releases/download/$TAG/$ZIP"
+DATE="$(date -u "+%a, %d %b %Y %H:%M:%S +0000")"
+
+echo "→ [6/6] Cập nhật appcast.xml"
+ITEM=$(cat <<EOF
+        <item>
+            <title>Version $VERSION</title>
+            <sparkle:version>$BUILD</sparkle:version>
+            <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>$DATE</pubDate>
+            <enclosure url="$URL" sparkle:edSignature="$SIG" length="$LEN" type="application/octet-stream"/>
+        </item>
+EOF
+)
+# Insert ngay sau <language>en</language> (item mới nhất ở top).
+python3 - "$APPCAST" "$ITEM" <<'PY'
+import sys, re
+path, item = sys.argv[1], sys.argv[2]
+with open(path) as f: src = f.read()
+new = re.sub(r"(<language>en</language>\s*\n)", r"\1" + item + "\n", src, count=1)
+with open(path, "w") as f: f.write(new)
+PY
+
+git add appcast.xml
+git commit -m "chore: appcast $VERSION"
+git push
+
+echo "✓ Done. User chạy bản cũ sẽ nhận update trong 1h, hoặc dùng menu Check for Updates."

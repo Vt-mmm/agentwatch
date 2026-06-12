@@ -26,5 +26,13 @@
 	<false/>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 vtamm</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>ynaSo3Ac+GxZgbfaRN57FgCzf9mXsbUWeKPXUzg8msE=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>3600</integer>
 </dict>
 </plist>

@@ -150,6 +150,20 @@ struct CoachingReportView: View {
 
     private var filterCard: some View {
         VStack(spacing: 10) {
+            // Hiển thị rõ range đang được filter — user không bị "nhảy" khi đổi
+            // scope/anchor mà không hiểu hệ thống đang đọc data ngày nào.
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .foregroundStyle(Claude.orange)
+                Text("Đang xem:")
+                    .font(ClaudeFont.label(11))
+                    .foregroundStyle(Claude.textMuted)
+                Text(scopeRangeLabel)
+                    .font(ClaudeFont.mono(13, weight: .semibold))
+                    .foregroundStyle(Claude.textPrimary)
+                Spacer()
+            }
+
             HStack(spacing: 10) {
                 Picker("", selection: $scope) {
                     ForEach(ScopeKind.allCases) { s in Text(s.rawValue).tag(s) }
@@ -157,10 +171,23 @@ struct CoachingReportView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 140)
 
+                // Prev/next nav: 1 ngày khi scope=day, 7 ngày khi scope=week.
+                Button { shiftAnchor(by: -1) } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.bordered)
+                .help(scope == .day ? "Ngày trước" : "Tuần trước")
+
                 DatePicker("", selection: $anchor, displayedComponents: .date)
                     .labelsHidden()
                     .datePickerStyle(.compact)
                     .fixedSize()
+
+                Button { shiftAnchor(by: 1) } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(.bordered)
+                .help(scope == .day ? "Ngày sau" : "Tuần sau")
 
                 Button("Hôm nay") { anchor = Date() }
                     .buttonStyle(.bordered)
@@ -409,6 +436,10 @@ struct CoachingReportView: View {
                     .foregroundStyle(Claude.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                Text(sessionTimeRange(s))
+                    .font(ClaudeFont.mono(10))
+                    .foregroundStyle(Claude.textPrimary.opacity(0.75))
+                    .lineLimit(1)
                 Text("\(s.model.isEmpty ? "?" : s.model) · \(TokenFormatter.compact(s.totalTokens)) tok · \(s.toolCallCount) tools")
                     .font(ClaudeFont.mono(10))
                     .foregroundStyle(Claude.textMuted)
@@ -420,6 +451,23 @@ struct CoachingReportView: View {
                 .foregroundStyle(Claude.orange)
         }
         .padding(.vertical, 3)
+    }
+
+    /// Format: nếu cùng 1 ngày → "12/06 10:23 → 14:55", khác ngày → "12/06 10:23 → 13/06 14:55".
+    /// Đây là local time (Asia/Saigon nếu user ở VN).
+    private func sessionTimeRange(_ s: SessionSummary) -> String {
+        let cal = Calendar.current
+        let first = s.firstTimestamp ?? s.lastTimestamp ?? Date()
+        let last = s.lastTimestamp ?? first
+        let sameDay = cal.isDate(first, inSameDayAs: last)
+        let dayHm = DateFormatter()
+        dayHm.dateFormat = "dd/MM HH:mm"; dayHm.timeZone = .current
+        let hm = DateFormatter()
+        hm.dateFormat = "HH:mm"; hm.timeZone = .current
+        if sameDay {
+            return "\(dayHm.string(from: first)) → \(hm.string(from: last))"
+        }
+        return "\(dayHm.string(from: first)) → \(dayHm.string(from: last))"
     }
 
     private func resetPages() {
@@ -574,6 +622,32 @@ struct CoachingReportView: View {
     }
 
     // MARK: - Data
+
+    /// Label đầy đủ cho range đang filter — show ở top filterCard.
+    /// Day: "Thứ 5, 12/06/2026" — Week: "Tuần 09/06/2026 → 15/06/2026"
+    private var scopeRangeLabel: String {
+        switch scope {
+        case .day:
+            let f = DateFormatter()
+            f.dateFormat = "EEEE, dd/MM/yyyy"
+            f.locale = Locale(identifier: "vi_VN")
+            return f.string(from: anchor).capitalized
+        case .week:
+            let f = DateFormatter(); f.dateFormat = "dd/MM/yyyy"
+            let cal = PromptHistory.currentMondayBased
+            let comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: anchor)
+            let start = cal.date(from: comps) ?? anchor
+            let end = cal.date(byAdding: .day, value: 6, to: start) ?? start
+            return "Tuần \(f.string(from: start)) → \(f.string(from: end))"
+        }
+    }
+
+    /// Dịch anchor: ngày → ±1 day, tuần → ±7 day.
+    private func shiftAnchor(by direction: Int) {
+        let cal = Calendar.current
+        let days = scope == .day ? direction : direction * 7
+        anchor = cal.date(byAdding: .day, value: days, to: anchor) ?? anchor
+    }
 
     private var currentScope: ReportScope {
         switch scope {

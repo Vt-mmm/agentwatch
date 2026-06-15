@@ -23,7 +23,12 @@ fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-BUILD="${VERSION//./}"   # 0.2.0 → 020 (CFBundleVersion phải tăng đơn điệu)
+# CFBundleVersion phải MONOTONIC khi parsed làm số. Cũ dùng `${VERSION//./}`:
+# 0.1.30 → "0130" = 130, nhưng 0.2.0 → "020" = 20 < 130 → Sparkle skip update.
+# Pad mỗi component 2 chữ số: 0.2.1 → "00201" = 201 > 130. Backward-compat
+# với 0.1.x (major=0, minor=1, patch<100 trùng kết quả cũ).
+IFS=. read -r MAJ MIN PAT <<< "$VERSION"
+BUILD="$(printf "%d%02d%02d" "$MAJ" "$MIN" "$PAT")"
 ZIP="ClaudeWatchMac-$VERSION.zip"
 APPCAST="$ROOT/appcast.xml"
 REL_DIR="$ROOT/Releases"

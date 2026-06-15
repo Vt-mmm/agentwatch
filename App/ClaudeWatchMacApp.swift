@@ -15,6 +15,8 @@ struct ClaudeWatchMacApp: App {
     @State private var floatingPet = FloatingPetController()
     @State private var petBroker = PetTalkBroker()
     @State private var sprites = SpriteStore()
+    @State private var petSocketServer = PetSocketServer()
+    @State private var petCollection = PetCollectionStore()
 
     var body: some Scene {
         WindowGroup("Claude Watch", id: "main") {
@@ -27,14 +29,38 @@ struct ClaudeWatchMacApp: App {
                 .environment(updater)
                 .environment(floatingPet)
                 .environment(sprites)
+                .environment(petCollection)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .onAppear {
+                    // Bắt đầu thu thập MetricKit payloads — silent, không có UI.
+                    MetricsCollector.shared.start()
                     startWatchingIfPossible()
                     petBroker.attach(floatingPet)
-                    floatingPet.characterName = sprites.currentName
+                    // Sync floating pet từ PetCollectionStore (nguồn sự thật mới).
+                    floatingPet.characterName = petCollection.selectedId
+                    floatingPet.level = petCollection.pets[petCollection.selectedId]?.level ?? 1
+                    // Start socket server + wire pet controller.
+                    petSocketServer.petController = floatingPet
+                    petSocketServer.start()
+                    // Wire XP hook: mỗi lần Coaching reload xong → inject XP vào pet.
+                    // [weak petCollection] để tránh retain cycle.
+                    coachingData.onReloadComplete = { [weak petCollection] records, sessions, outlierIds, loopIds in
+                        petCollection?.processReload(
+                            records: records,
+                            sessions: sessions,
+                            outlierIds: outlierIds,
+                            agentLoopIds: loopIds
+                        )
+                    }
                 }
-                .onChange(of: sprites.selected) { _, _ in
-                    floatingPet.characterName = sprites.currentName
+                .onChange(of: petCollection.selectedId) { _, newId in
+                    floatingPet.characterName = newId
+                    // Sync level khi đổi pet selection
+                    floatingPet.level = petCollection.pets[newId]?.level ?? 1
+                }
+                .onChange(of: petCollection.pets[petCollection.selectedId]?.level) { _, newLevel in
+                    // Sync level khi XP tăng → level up trong session hiện tại
+                    floatingPet.level = newLevel ?? 1
                 }
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)

@@ -27,10 +27,13 @@ final class PetTalkBroker {
     private var liveLastAgentCount: Int = 0
     private var liveLastCost: Double = 0
     private var crossedCostMarks: Set<Int> = []  // các mốc $ đã cảnh báo (cent*100)
-    /// Throttle: tối thiểu 8s giữa 2 talk để pet không lải nhải. Bypass cho
+    /// Throttle: tối thiểu 5s giữa 2 talk để pet không lải nhải. Bypass cho
     /// alert/warning (cảnh báo cần thấy ngay).
     private var lastTalkAt: Date = .distantPast
-    private let throttleSec: TimeInterval = 8
+    private let throttleSec: TimeInterval = 5
+    /// Cheer timer: pet nói câu động viên mỗi 45s khi user còn active (có
+    /// activity trong 90s vừa qua) → tăng tương tác, đỡ buồn.
+    private var cheerTask: Task<Void, Never>?
 
     // Cost milestone — bất cứ session nào cross các mốc này → talk 1 lần.
     private static let costMilestones: [Double] = [0.5, 1, 2, 5, 10, 20, 50, 100]
@@ -41,6 +44,7 @@ final class PetTalkBroker {
         // Greet 1 lần khi attach lần đầu.
         emit(.startup)
         startIdleWatcher()
+        startCheerTimer()
     }
 
     /// Gọi khi CoachingDataStore reload xong. Compare snapshot mới vs state
@@ -127,6 +131,22 @@ final class PetTalkBroker {
         pet?.say(talk)
         lastTalkAt = Date()
         lastActivityAt = Date()
+    }
+
+    /// Cheer timer: mỗi 45s nếu có activity gần đây (≤90s) thì pet nói 1 câu
+    /// cheer ngẫu nhiên. Skip khi user idle (đã có idle watcher lo).
+    private func startCheerTimer() {
+        cheerTask?.cancel()
+        cheerTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 45_000_000_000)
+                guard let self else { return }
+                let sinceActivity = Date().timeIntervalSince(self.lastActivityAt)
+                if sinceActivity <= 90 {
+                    self.emit(.cheerOn)
+                }
+            }
+        }
     }
 
     /// Idle watcher: nếu pet im lặng >5 phút thì nói câu idle, để user biết

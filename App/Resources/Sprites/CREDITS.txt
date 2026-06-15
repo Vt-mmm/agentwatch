@@ -1,13 +1,27 @@
-Sprite assets in this folder are from:
+Sprite assets in this folder come from multiple CC0 / public-domain sources.
+
+== Pixel Platformer characters (char00 .. char26) ==
 
   Kenney — Pixel Platformer Pack
   https://kenney.nl/assets/pixel-platformer
   License: Creative Commons Zero (CC0) — Public Domain
 
-The creator has waived all copyright. No attribution is required, but we
-include this notice as a courtesy.
+  Files (per character folder):
+    idle.png    — 24×24 static pose
 
-Files (per character folder):
-  idle.png    — 24×24 static pose
-  walk1.png   — 24×24 walk frame 1
-  walk2.png   — 24×24 walk frame 2
+  The creator has waived all copyright. No attribution required.
+
+== Header default mascot (clawd) ==
+
+  Author: malekith97
+  Source: https://opengameart.org/content/crab
+  License: Creative Commons Zero (CC0) — Public Domain
+
+  Files:
+    idle.png    — 64×64 top-down pixel crab
+
+  CC0 = no attribution required; included here as courtesy.
+
+NOTE: This mascot is an INDEPENDENT pixel crab released as CC0. It is NOT
+"Clawd", which is a registered trademark of Anthropic PBC (USPTO Serial
+#98431492). The folder name simply reflects the "crab pet" theme.

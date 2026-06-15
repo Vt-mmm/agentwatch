@@ -2,6 +2,7 @@
 // Khi user đổi Live ↔ Coaching, data không reload nếu vừa load <5s.
 // Auto-refresh chạy khi `isActive == true` (tab Coaching đang hiện).
 
+import AppKit
 import Foundation
 import Observation
 import ClaudeWatchCore
@@ -38,6 +39,12 @@ final class CoachingDataStore {
     /// thay vì capture 1 lần lúc start (fix bug filter cũ ghi đè data mới).
     private var activeScope: ReportScope?
     private var activeFingerprint: String = ""
+
+    /// Callback được gọi sau mỗi reload thành công — dùng để inject XP vào
+    /// PetCollectionStore mà không tạo tight coupling giữa hai store.
+    /// Capture [weak petCollection] ở call site để tránh retain cycle.
+    var onReloadComplete: ((_ records: [PromptRecord], _ sessions: [SessionSummary],
+                            _ outlierIds: Set<String>, _ agentLoopIds: Set<String>) -> Void)?
 
     private var refreshTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
@@ -105,17 +112,29 @@ final class CoachingDataStore {
                 self.petState = PetMood.resolve(signals)
                 self.lastRefreshAt = Date()
                 self.isLoading = false
+                // XP hook — gọi sau khi allRecords/allSessions đã apply, trên MainActor.
+                // outlierIds/agentLoopIds được tính lại ở đây để truyền cùng snapshot.
+                let outlierIds = CoachingInsights.outlierSessions(curS)
+                let loopIds = CoachingInsights.agentLoopSessions(curS)
+                self.onReloadComplete?(curP, curS, outlierIds, loopIds)
             }
         }
     }
 
     /// Auto-refresh đọc activeScope/Fingerprint từ store MỖI TICK (không capture
     /// snapshot lúc start). Đổi filter → tick kế tiếp dùng filter mới.
+    ///
+    /// Idle throttle (P2a): app active → 5s; app inactive → 30s.
+    /// Giảm CPU/IO khi user không nhìn vào Coaching tab (e.g. window ẩn, switch app).
     func startAutoRefresh() {
         stopAutoRefresh()
         refreshTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                // Kiểm tra app active trên MainActor (NSApplication.shared là AppKit).
+                let isActive = NSApplication.shared.isActive
+                // Active → 5s; inactive → 30s để tiết kiệm CPU/IO khi idle.
+                let interval: UInt64 = isActive ? 5_000_000_000 : 30_000_000_000
+                try? await Task.sleep(nanoseconds: interval)
                 if Task.isCancelled { break }
                 guard let self, let scope = self.activeScope else { continue }
                 self.reload(scope: scope, fingerprint: self.activeFingerprint)

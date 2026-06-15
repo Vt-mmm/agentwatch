@@ -7,6 +7,49 @@
 
 import Foundation
 
+// MARK: - Parse result cache (P0 optimisation)
+
+/// Cache kết quả parse JSONL theo (path, mtime, size). Thread-safe via actor.
+/// Tránh re-parse file không đổi trong mỗi auto-refresh tick (5s polling).
+/// Giới hạn 1000 entry — evict theo lastAccess cũ nhất để tránh tăng vô hạn.
+actor JsonlParseCache {
+    static let shared = JsonlParseCache()
+
+    private struct CachedSession {
+        let mtime: Date
+        let size: Int64
+        let stats: SessionStats
+        var lastAccess: Date
+    }
+
+    private var cache: [String: CachedSession] = [:]
+    private let maxEntries = 1000
+
+    /// Trả về cached SessionStats nếu (mtime, size) không đổi; nil nếu stale.
+    func get(path: String, mtime: Date, size: Int64) -> SessionStats? {
+        guard var entry = cache[path],
+              entry.mtime == mtime,
+              entry.size == size else { return nil }
+        // Cập nhật lastAccess để LRU eviction hoạt động đúng.
+        entry.lastAccess = Date()
+        cache[path] = entry
+        return entry.stats
+    }
+
+    /// Lưu kết quả parse vào cache, evict oldest entry nếu vượt 1000.
+    func set(path: String, mtime: Date, size: Int64, stats: SessionStats) {
+        if cache.count >= maxEntries, let oldestKey = oldestKey() {
+            cache.removeValue(forKey: oldestKey)
+        }
+        cache[path] = CachedSession(mtime: mtime, size: size,
+                                    stats: stats, lastAccess: Date())
+    }
+
+    private func oldestKey() -> String? {
+        cache.min(by: { $0.value.lastAccess < $1.value.lastAccess })?.key
+    }
+}
+
 /// Kết quả 1 lần scan rộng. Caller slice cho từng dimension (current/prev/daily).
 public struct CoachingScanResult: Sendable {
     public let prompts: [PromptRecord]
@@ -25,8 +68,8 @@ public enum CoachingScan {
         let results = await withTaskGroup(of: ScanOne?.self) { group in
             for c in candidates {
                 group.addTask {
-                    parseOne(file: c.url, slug: c.slug, display: c.display,
-                             source: c.source(via: index), range: range)
+                    await parseOne(file: c.url, slug: c.slug, display: c.display,
+                                   source: c.source(via: index), range: range)
                 }
             }
             var collected: [ScanOne] = []
@@ -112,10 +155,11 @@ public enum CoachingScan {
 
     /// Parse 1 file: lấy SessionStats (cho summary) + extract user prompts.
     /// JsonlParser.parseSession đã handle full schema CLI + Desktop audit.
+    /// Cache hit: file không đổi (mtime + size) → bỏ qua parse, dùng stats cũ.
     private static func parseOne(file: URL, slug: String, display: String,
                                  source: SessionSource,
-                                 range: ClosedRange<Date>) -> ScanOne? {
-        let stats = JsonlParser.parseSession(at: file)
+                                 range: ClosedRange<Date>) async -> ScanOne? {
+        let stats = await cachedParseSession(at: file)
         let mtime = ProjectPath.mtime(of: file)
         let firstTs = parseISO(stats.startedAt) ?? mtime
         let lastTs = parseISO(stats.lastEventAt) ?? mtime
@@ -150,6 +194,27 @@ public enum CoachingScan {
 
         if summary == nil && prompts.isEmpty { return nil }
         return ScanOne(prompts: prompts, summary: summary)
+    }
+
+    /// Wrapper quanh JsonlParser.parseSession với cache (path, mtime, size).
+    /// Nếu file không thay đổi so với lần parse trước → trả về stats đã cache,
+    /// hoàn toàn bỏ qua parse (0 disk read ngoài stat() inode).
+    /// Hàm async để giao tiếp trực tiếp với JsonlParseCache actor — không cần semaphore.
+    private static func cachedParseSession(at file: URL) async -> SessionStats {
+        let path = file.path
+        let mtime = ProjectPath.mtime(of: file)
+        let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+            .flatMap { Int64($0) } ?? 0
+
+        // Cache hit: file không đổi → trả về ngay, không parse.
+        if let cached = await JsonlParseCache.shared.get(path: path, mtime: mtime, size: size) {
+            return cached
+        }
+
+        // Cache miss → parse thực sự và lưu kết quả.
+        let stats = JsonlParser.parseSession(at: file)
+        await JsonlParseCache.shared.set(path: path, mtime: mtime, size: size, stats: stats)
+        return stats
     }
 
     /// Extract CHỈ prompt ĐẦU TIÊN của session (earliest user message). Đánh giá

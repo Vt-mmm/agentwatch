@@ -1,0 +1,131 @@
+// Prompt list card + PromptRow — paginated list of session-opening prompts with bookmark toggle.
+// Dependency direction: extension on CoachingReportView; PromptRow is internal (used here only).
+
+import SwiftUI
+import ClaudeWatchCore
+
+extension CoachingReportView {
+
+    // MARK: - Prompt list card
+
+    var promptListCard: some View {
+        let info = Pagination.info(items: records, page: promptPage, pageSize: pageSize)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                SectionLabel(text: "Prompts khởi đầu session (\(records.count))")
+                Spacer()
+                Paginator(page: info.page, totalPages: info.totalPages) { promptPage = $0 }
+            }
+            Text("Chỉ ghi nhận message ĐẦU tiên của mỗi session — đánh giá cách user khởi đầu, định hướng agent. Follow-up trong session không tính.")
+                .font(ClaudeFont.body(11))
+                .foregroundStyle(Claude.textMuted)
+            if records.isEmpty {
+                Text("Không có prompt nào trong khoảng này.")
+                    .font(ClaudeFont.body(13))
+                    .foregroundStyle(Claude.textMuted)
+                    .padding(.vertical, 20)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                ForEach(Array(info.slice)) { r in
+                    Button {
+                        selectedRecord = r
+                    } label: {
+                        PromptRow(record: r)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .claudeCard()
+    }
+}
+
+// MARK: - PromptRow
+
+struct PromptRow: View {
+    let record: PromptRecord
+    @Environment(BookmarkStore.self) private var bookmarks
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            badge
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(timeLabel.string(from: record.timestamp))
+                        .font(ClaudeFont.mono(11))
+                        .foregroundStyle(Claude.textMuted)
+                    sourceBadge
+                    Text(record.projectDisplay)
+                        .font(ClaudeFont.body(11))
+                        .foregroundStyle(Claude.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Text(record.text.prefix(140))
+                    .font(ClaudeFont.body(13))
+                    .foregroundStyle(Claude.textPrimary)
+                    .lineLimit(2)
+                if record.score.isTaskPrompt && !record.score.sectionsMissing.isEmpty {
+                    Text("Thiếu: " + record.score.sectionsMissing.prefix(4).map(\.label).joined(separator: ", "))
+                        .font(ClaudeFont.body(11))
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+            Button {
+                bookmarks.toggle(record)
+            } label: {
+                Image(systemName: bookmarks.contains(record.id) ? "star.fill" : "star")
+                    .foregroundStyle(bookmarks.contains(record.id) ? .yellow : Claude.textMuted)
+                    .font(.system(size: 14))
+            }
+            .buttonStyle(.borderless)
+            .help(bookmarks.contains(record.id) ? "Bỏ bookmark" : "Đánh dấu mẫu hay")
+        }
+        .padding(10)
+        .background(Claude.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var sourceBadge: some View {
+        let isCli = record.source == .cli
+        Text(isCli ? "⌨︎ CLI" : "🖥 Desktop")
+            .font(ClaudeFont.mono(10))
+            .fontWeight(.semibold)
+            .foregroundStyle(isCli ? Claude.Chip.infoFg : Claude.Chip.warningFg)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(isCli ? Claude.Chip.infoBg : Claude.Chip.warningBg)
+            .clipShape(Capsule())
+    }
+
+    @ViewBuilder
+    private var badge: some View {
+        if record.score.isTaskPrompt {
+            ZStack {
+                Circle().fill(Claude.orangeSoft).frame(width: 40, height: 40)
+                Text("\(record.score.stars)★")
+                    .font(ClaudeFont.mono(13, weight: .semibold))
+                    .foregroundStyle(Claude.orange)
+            }
+        } else {
+            ZStack {
+                Circle().fill(Claude.surface).frame(width: 40, height: 40)
+                Image(systemName: "arrow.turn.up.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Claude.textMuted)
+            }
+        }
+    }
+
+    /// "dd/MM HH:mm" — gồm cả ngày để week mode biết prompt thuộc ngày nào.
+    private var timeLabel: DateFormatter {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM HH:mm"
+        f.timeZone = .current
+        return f
+    }
+}

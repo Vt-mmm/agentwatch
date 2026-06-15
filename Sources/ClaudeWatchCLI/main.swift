@@ -45,9 +45,12 @@ func printHelp() {
       claudewatch report [day|week]     stats coaching ngày/tuần
 
     Inject pet vào Claude Code CLI:
-      claudewatch setup                 (auto)
+      claudewatch setup                 (auto — cài statusLine + 6 hooks)
       hoặc edit ~/.claude/settings.json:
         "statusLine": { "type": "command", "command": "claudewatch statusline" }
+
+    Hooks cài bởi setup: SessionStart, Stop, PreCompact,
+      UserPromptSubmit, PostToolUse, SubagentStop
     """
     print(txt)
 }
@@ -78,9 +81,9 @@ struct SetupCommand {
             "type": "command",
             "command": "\(cmd) statusline"
         ]
-        // Hooks: pet greets ở SessionStart, "task done" ở Stop. Output đi
-        // thẳng vào conversation luôn (Claude Code render stdout của hook).
-        // Merge với hooks đã có thay vì ghi đè.
+        // Hooks: pet greets ở SessionStart, "task done" ở Stop, và 3 real-time
+        // hooks cho live feedback trong turn. Output đi thẳng vào conversation
+        // (Claude Code render stdout của hook). Merge với hooks đã có thay vì ghi đè.
         var hooksRoot = obj["hooks"] as? [String: Any] ?? [:]
         hooksRoot["SessionStart"] = [
             ["matcher": "*",
@@ -91,6 +94,27 @@ struct SetupCommand {
             ["matcher": "*",
              "hooks": [["type": "command",
                         "command": "\(cmd) hook stop"]]]
+        ]
+        hooksRoot["PreCompact"] = [
+            ["matcher": "*",
+             "hooks": [["type": "command",
+                        "command": "\(cmd) hook pre-compact"]]]
+        ]
+        // Real-time hooks — cho pet phản ứng TRONG turn, không chỉ ở boundaries.
+        hooksRoot["UserPromptSubmit"] = [
+            ["matcher": "*",
+             "hooks": [["type": "command",
+                        "command": "\(cmd) hook user-prompt"]]]
+        ]
+        hooksRoot["PostToolUse"] = [
+            ["matcher": "*",
+             "hooks": [["type": "command",
+                        "command": "\(cmd) hook post-tool-use"]]]
+        ]
+        hooksRoot["SubagentStop"] = [
+            ["matcher": "*",
+             "hooks": [["type": "command",
+                        "command": "\(cmd) hook subagent-stop"]]]
         ]
         obj["hooks"] = hooksRoot
         guard let out = try? JSONSerialization.data(

@@ -13,8 +13,12 @@ import ClaudeWatchCore
 @MainActor
 final class FloatingPetController {
     /// Toggle hiển thị floating pet. Bind từ Settings menu.
+    /// didSet persists tới UserDefaults + syncs NSWindow visibility.
     var isVisible: Bool = false {
-        didSet { syncWindow() }
+        didSet {
+            UserDefaults.standard.set(isVisible, forKey: "FloatingPetController.visible")
+            syncWindow()
+        }
     }
 
     /// PetState hiện tại — caller cập nhật từ CoachingDataStore tick.
@@ -26,15 +30,19 @@ final class FloatingPetController {
     /// Character sprite name (char00..char26). Caller sync từ SpriteStore.
     var characterName: String = "char01" { didSet { refresh() } }
 
+    /// Level hiện tại của pet đang active — sync từ PetCollectionStore.
+    /// Default 1 cho lần đầu hoặc khi chưa có dữ liệu.
+    var level: Int = 1 { didSet { refresh() } }
+
     private var window: NSWindow?
     private var dismissTask: Task<Void, Never>?
     private let frameKey = "FloatingPetController.frame"
 
     init() {
-        // Pet giờ luôn ở header inline, không cần floating window. Clear flag
-        // cũ cho user đã turn-on trước v0.1.23.
-        isVisible = false
-        UserDefaults.standard.set(false, forKey: "FloatingPetController.visible")
+        // Restore từ UserDefaults — default = true vì floating pet giờ có mục
+        // đích thực sự (nhận event từ socket daemon). User có thể tắt từ Settings.
+        isVisible = UserDefaults.standard.object(forKey: "FloatingPetController.visible")
+            .flatMap { $0 as? Bool } ?? true
     }
 
     /// Set talk message + auto-dismiss sau N giây.
@@ -66,7 +74,7 @@ final class FloatingPetController {
         guard let win = window,
               let host = win.contentView as? NSHostingView<FloatingPetView> else { return }
         host.rootView = FloatingPetView(state: state, talk: talk,
-                                         characterName: characterName)
+                                         characterName: characterName, level: level)
     }
 
     private func createWindow() {
@@ -86,7 +94,7 @@ final class FloatingPetController {
         win.hidesOnDeactivate = false
 
         let host = NSHostingView(rootView: FloatingPetView(state: state, talk: talk,
-                                                            characterName: characterName))
+                                                            characterName: characterName, level: level))
         host.translatesAutoresizingMaskIntoConstraints = true
         host.autoresizingMask = [.width, .height]
         host.frame = win.contentView?.bounds ?? initialSize

@@ -17,6 +17,7 @@ struct ProjectPickerView: View {
                 folderSubtitle
             }
             Spacer()
+            // Pet ngay bên trái cụm "live" + "Pin folder".
             HeaderPet()
             if watcher.isWatching {
                 watchingPill

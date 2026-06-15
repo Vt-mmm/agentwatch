@@ -89,6 +89,10 @@ echo "   building CLI binary…"
 swift build -c release --product claudewatch >/tmp/cli-build.log 2>&1 || {
     tail -20 /tmp/cli-build.log; exit 1; }
 cp .build/release/claudewatch "$REL_DIR/claudewatch"
+# Strip debug symbols để giảm size binary (~30-50%). -S strip debug symbols
+# nhưng giữ symbol table cho crash report. -x strip local symbols thêm.
+strip -S -x "$REL_DIR/claudewatch" 2>/dev/null || true
+echo "   CLI size: $(du -h "$REL_DIR/claudewatch" | awk '{print $1}')"
 
 gh release create "$TAG" "$REL_DIR/$ZIP" "$REL_DIR/claudewatch" \
     --title "Claude Watch $VERSION" \

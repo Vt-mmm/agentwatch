@@ -17,34 +17,54 @@ public enum JsonlParser {
 
         guard let handle = try? FileHandle(forReadingFrom: url) else { return stats }
         defer { try? handle.close() }
-        guard let data = try? handle.readToEnd() else { return stats }
 
         var pendingAgentIds: Set<String> = []
         var pendingToolUseIds: [String: Int] = [:]  // tool_use_id → events[index]
         var eventCounter = 0
 
-        data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) in
-            let bytes = buf.bindMemory(to: UInt8.self)
-            var lineStart = 0
-            for i in 0..<bytes.count {
-                if bytes[i] == 0x0A {   // '\n'
-                    if i > lineStart {
-                        let slice = Data(bytes[lineStart..<i])
-                        applyLine(slice, to: &stats,
+        // Streaming: đọc từng chunk 64 KB thay vì readToEnd() toàn bộ file.
+        // Peak memory = O(64 KB buffer + 1-2 dòng) thay vì O(filesize).
+        let chunkSize = 64 * 1024
+        var buffer = Data()
+        buffer.reserveCapacity(chunkSize * 2)
+        let newlineByte = Data([0x0A])
+
+        var endOfFile = false
+        while !endOfFile {
+            autoreleasepool {
+                // Đọc chunk tiếp theo từ file handle.
+                let chunk: Data
+                if #available(macOS 10.15.4, *) {
+                    chunk = (try? handle.read(upToCount: chunkSize)) ?? Data()
+                } else {
+                    chunk = handle.readData(ofLength: chunkSize)
+                }
+                if chunk.isEmpty {
+                    endOfFile = true
+                    return
+                }
+                buffer.append(chunk)
+
+                // Xử lý mọi dòng hoàn chỉnh trong buffer (kết thúc bằng 0x0A).
+                while let nlRange = buffer.firstRange(of: newlineByte) {
+                    let lineData = buffer[buffer.startIndex..<nlRange.lowerBound]
+                    if !lineData.isEmpty {
+                        applyLine(lineData, to: &stats,
                                   pendingAgents: &pendingAgentIds,
                                   pendingTools: &pendingToolUseIds,
                                   counter: &eventCounter)
                     }
-                    lineStart = i + 1
+                    buffer.removeSubrange(buffer.startIndex...nlRange.lowerBound)
                 }
             }
-            if lineStart < bytes.count {
-                let slice = Data(bytes[lineStart..<bytes.count])
-                applyLine(slice, to: &stats,
-                          pendingAgents: &pendingAgentIds,
-                          pendingTools: &pendingToolUseIds,
-                          counter: &eventCounter)
-            }
+        }
+
+        // Flush phần cuối file nếu không kết thúc bằng newline.
+        if !buffer.isEmpty {
+            applyLine(buffer, to: &stats,
+                      pendingAgents: &pendingAgentIds,
+                      pendingTools: &pendingToolUseIds,
+                      counter: &eventCounter)
         }
 
         // Cap events to window size (keep most recent).

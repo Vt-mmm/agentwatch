@@ -11,12 +11,14 @@ struct MainWindowView: View {
     @Environment(CoachingDataStore.self) private var coaching
     @Environment(FloatingPetController.self) private var pet
     @Environment(SpriteStore.self) private var sprites
+    @Environment(PetCollectionStore.self) private var petCollection
     @State private var tab: Tab = .live
     @State private var showPrivacy: Bool = false
 
     enum Tab: String, CaseIterable, Identifiable {
         case live = "Live"
         case coaching = "Coaching"
+        case pets = "Pets"
         var id: String { rawValue }
     }
 
@@ -30,6 +32,8 @@ struct MainWindowView: View {
                 liveTab
             case .coaching:
                 CoachingReportView()
+            case .pets:
+                PetCollectionView()
             }
         }
         .frame(minWidth: 620, minHeight: 560)
@@ -47,13 +51,16 @@ struct MainWindowView: View {
             Button { tab = .coaching } label: { EmptyView() }
                 .keyboardShortcut("2", modifiers: .command)
                 .opacity(0)
+            Button { tab = .pets } label: { EmptyView() }
+                .keyboardShortcut("3", modifiers: .command)
+                .opacity(0)
         }
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
     }
 
     private var topBar: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .center, spacing: 16) {
             Picker("", selection: $tab) {
                 ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
             }
@@ -61,27 +68,41 @@ struct MainWindowView: View {
             .frame(maxWidth: 220)
 
             if tab == .live {
+                // Pet nằm trong ProjectPickerView, ngay bên trái cụm live/pin.
                 Divider().frame(height: 22)
                 ProjectPickerView()
             }
             Spacer()
-            themePicker
-            settingsMenu
+            // Tab Coaching + Pets không có ProjectPickerView → pet ở đây để vẫn hiện.
+            if tab == .coaching || tab == .pets {
+                HeaderPet()
+            }
+            HStack(spacing: 4) {
+                themePicker
+                settingsMenu
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .background(Claude.surface)
     }
 
     /// Settings menu: bật cập nhật, mở trang Releases, hiển thị version hiện tại.
     private var settingsMenu: some View {
-        Menu {
+        @Bindable var petBinding = pet
+        return Menu {
+            // Floating pet toggle — top of menu, most-used setting.
+            Toggle("Floating pet trên desktop", isOn: $petBinding.isVisible)
+            Divider()
             Button {
                 updater.checkForUpdates()
             } label: {
                 Label("Check for Updates…", systemImage: "arrow.down.circle")
             }
-            characterPicker
+            // Gallery pet đã chuyển sang tab Pets riêng (cmd-3).
+            Label("Chọn pet: xem tab Pets (⌘3)", systemImage: "info.circle")
+                .foregroundStyle(Claude.textMuted)
+                .disabled(true)
             Button {
                 showPrivacy = true
             } label: {
@@ -102,24 +123,6 @@ struct MainWindowView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Settings")
-    }
-
-    /// Sub-menu chọn character sprite — 27 nhân vật Kenney pixel-platformer pack.
-    /// Inline picker dài, anh scroll trong menu để xem hết.
-    @ViewBuilder
-    private var characterPicker: some View {
-        @Bindable var binding = sprites
-        Menu {
-            Picker("", selection: $binding.selected) {
-                ForEach(0..<SpriteStore.count, id: \.self) { i in
-                    Text(SpriteStore.displayName(i)).tag(i)
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            Label("Chọn nhân vật pet (\(SpriteStore.displayName(sprites.selected)))…",
-                  systemImage: "person.crop.square")
-        }
     }
 
     @ViewBuilder
@@ -168,8 +171,12 @@ struct MainWindowView: View {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Claude.orangeSoft)
                     .frame(width: 128, height: 128)
-                SpritePet(state: .sleepy, characterName: sprites.currentName)
-                    .frame(width: 96, height: 96)
+                SpritePet(
+                    state: .sleepy,
+                    characterName: petCollection.selectedId,
+                    level: petCollection.pets[petCollection.selectedId]?.level ?? 1
+                )
+                .frame(width: 96, height: 96)
             }
             VStack(spacing: 6) {
                 Text("Chưa có session nào")

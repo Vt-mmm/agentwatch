@@ -1,3 +1,7 @@
+// DEPRECATED (v0.2.0): Dùng PetCollectionStore cho code mới.
+// Giữ class này để tránh break @Environment injection ở những ref còn sót.
+// Sẽ xóa hẳn ở phase 3 sau khi grep confirm không còn consumer nào.
+//
 // Quản lý lựa chọn nhân vật sprite. Persist qua UserDefaults.
 // 27 character riêng biệt từ Kenney pixel-platformer pack (CC0 public domain).
 // Mỗi character chỉ có 1 idle frame — animation đến từ wiggle/rotate state-driven

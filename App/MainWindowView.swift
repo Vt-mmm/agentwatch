@@ -14,6 +14,8 @@ struct MainWindowView: View {
     @Environment(PetCollectionStore.self) private var petCollection
     @State private var tab: Tab = .live
     @State private var showPrivacy: Bool = false
+    // Sync với @AppStorage trong SpritePet — toggle áp dụng cho mọi pet instance.
+    @AppStorage("PetFlippedHorizontally") private var petFlipped: Bool = true
 
     enum Tab: String, CaseIterable, Identifiable {
         case live = "Live"
@@ -93,6 +95,7 @@ struct MainWindowView: View {
         return Menu {
             // Floating pet toggle — top of menu, most-used setting.
             Toggle("Floating pet trên desktop", isOn: $petBinding.isVisible)
+            Toggle("Lật pet sang phải", isOn: $petFlipped)
             Divider()
             Button {
                 updater.checkForUpdates()

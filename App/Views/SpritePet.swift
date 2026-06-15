@@ -60,6 +60,11 @@ struct SpritePet: View {
     @State private var wiggle: Double = 0
     @State private var breathe: CGFloat = 1.0
 
+    // User preference: lật ngang sprite (asset gốc xoay trái → flip = xoay phải).
+    // @AppStorage tự sync mọi SpritePet instance qua UserDefaults — KISS không
+    // cần env propagation. Default `true` vì asset gốc Kenney pack face-left.
+    @AppStorage("PetFlippedHorizontally") private var flippedHorizontally: Bool = true
+
     // State cho level-based animations
     @State private var sparkleOpacity: Double = 0.3
     @State private var haloRotation: Double = 0.0
@@ -103,6 +108,9 @@ struct SpritePet: View {
             .scaleEffect(breathe)
             .offset(y: bounce)
             .rotationEffect(.degrees(wiggle))
+            // Flip horizontal mirror — apply CUỐI để không ảnh hưởng wiggle/bounce.
+            // Halo/sparkle/headwear không flip vì là decoration symmetric/upright.
+            .scaleEffect(x: flippedHorizontally ? -1 : 1, y: 1)
     }
 
     // MARK: - Level layers

@@ -7,32 +7,39 @@ import Foundation
 /// Mỗi tiêu chí trong rubric Minimum Spec Set (mục 6 của tài liệu coaching) +
 /// 3 tiêu chí mở rộng theo Anthropic prompt engineering guides:
 /// - examples (few-shot), motivation (context why), xmlStructure (advanced parsing).
+/// + 2 tiêu chí từ Anthropic Claude Code expertise research (2026-06):
+/// - codebaseContext (Domain Knowledge Integration), verification (Verification Requests).
+/// Ref: https://www.anthropic.com/research/claude-code-expertise
 public enum SpecSection: String, CaseIterable, Sendable {
-    case mucTieu        // Mục tiêu / Goal
-    case userRole       // User Role
-    case input          // Input
-    case output         // Output
-    case flow           // Flow chính
-    case edgeCase       // Edge Case
-    case constrainedBy  // constrained_by (CoDD)
-    case definitionDone // Definition of Done
-    case examples       // Few-shot examples (Anthropic: most reliable steering signal)
-    case motivation     // Context motivation (Why/because/lý do)
-    case xmlStructure   // XML tag hierarchy <example>, <context>, <instructions>
+    case mucTieu          // Mục tiêu / Goal
+    case userRole         // User Role
+    case input            // Input
+    case output           // Output
+    case flow             // Flow chính
+    case edgeCase         // Edge Case
+    case constrainedBy    // constrained_by (CoDD)
+    case definitionDone   // Definition of Done
+    case examples         // Few-shot examples (Anthropic: most reliable steering signal)
+    case motivation       // Context motivation (Why/because/lý do)
+    case xmlStructure     // XML tag hierarchy <example>, <context>, <instructions>
+    case codebaseContext  // Domain knowledge: file paths, identifiers, line refs
+    case verification     // Verification requests: "verify X", "test that", "expected"
 
     public var label: String {
         switch self {
-        case .mucTieu:        return "Mục tiêu"
-        case .userRole:       return "User Role"
-        case .input:          return "Input"
-        case .output:         return "Output"
-        case .flow:           return "Flow"
-        case .edgeCase:       return "Edge Case"
-        case .constrainedBy:  return "constrained_by"
-        case .definitionDone: return "Definition of Done"
-        case .examples:       return "Examples (few-shot)"
-        case .motivation:     return "Motivation (Why)"
-        case .xmlStructure:   return "XML structure"
+        case .mucTieu:         return "Mục tiêu"
+        case .userRole:        return "User Role"
+        case .input:           return "Input"
+        case .output:          return "Output"
+        case .flow:            return "Flow"
+        case .edgeCase:        return "Edge Case"
+        case .constrainedBy:   return "constrained_by"
+        case .definitionDone:  return "Definition of Done"
+        case .examples:        return "Examples (few-shot)"
+        case .motivation:      return "Motivation (Why)"
+        case .xmlStructure:    return "XML structure"
+        case .codebaseContext: return "Codebase context"
+        case .verification:    return "Verification request"
         }
     }
 }
@@ -139,9 +146,72 @@ public enum PromptScorer {
             return keywords.contains(where: { lower.contains($0) })
         case .xmlStructure:
             return hasXmlTagPair(lower)
+        case .codebaseContext:
+            // Domain knowledge signal: file path, identifier, hoặc line ref.
+            // Anthropic research: experts mention specific files/symbols vs novice
+            // generic descriptions. 1 trong các pattern = fire.
+            return hasCodebaseContext(lower, raw: lower)
+        case .verification:
+            // Explicit validation criteria — "verify X", "kiểm tra", "expected output".
+            // Khác Definition of Done: DoD là tiêu chí hoàn thành, verification là
+            // CÁCH để verify (test, assertion, expected value).
+            keywords = ["verify", "kiểm tra", "kiem tra", "test that", "expected output",
+                        "should produce", "should return", "should equal", "should match",
+                        "đảm bảo", "dam bao", "make sure", "assert that", "validate that",
+                        "expected behavior", "expected result", "phải trả về", "phai tra ve"]
+            return keywords.contains(where: { lower.contains($0) })
         }
         return keywords.contains(where: { lower.contains($0) })
     }
+
+    /// Detect signal user hiểu codebase: file path (a/b/c.ext), file:line, hoặc
+    /// identifier có dạng PascalCase/snake_case/camelCase đặc trưng. 1 hit = pass.
+    /// Lowercase string OK — file paths không phụ thuộc case (regex case-insensitive).
+    private static func hasCodebaseContext(_ lower: String, raw: String) -> Bool {
+        // 1. File extension trong path: matches "word.ext" với ext 2-5 ký tự alphanum.
+        if codePathRegex?.firstMatch(in: lower,
+                                     range: NSRange(lower.startIndex..., in: lower)) != nil {
+            return true
+        }
+        // 2. file:line ref (e.g., "main.swift:42", "src/foo.ts:100").
+        if fileLineRegex?.firstMatch(in: lower,
+                                     range: NSRange(lower.startIndex..., in: lower)) != nil {
+            return true
+        }
+        // 3. Function/method call signature: "funcName(" hoặc "Class.method".
+        if symbolCallRegex?.firstMatch(in: lower,
+                                       range: NSRange(lower.startIndex..., in: lower)) != nil {
+            return true
+        }
+        return false
+    }
+
+    nonisolated(unsafe) private static let codePathRegex: NSRegularExpression? = {
+        // Tối thiểu 1 segment + dấu chấm + ext 2-5 alphanum. Ví dụ: foo.swift,
+        // src/bar.ts, App/Views/Sprite.swift. KHÔNG match URL hay câu thường
+        // (require path-like: có /, hoặc tên có upper/snake/camel + ext code).
+        try? NSRegularExpression(
+            pattern: "(?:^|[\\s`(])([a-z0-9_-]+/)*[a-z0-9_-]+\\.(swift|ts|tsx|js|jsx|py|go|rs|java|kt|m|h|cpp|c|rb|php|sh|yml|yaml|json|toml|md)\\b",
+            options: [.caseInsensitive]
+        )
+    }()
+
+    nonisolated(unsafe) private static let fileLineRegex: NSRegularExpression? = {
+        // file.ext:NN dạng "main.swift:42" or "foo.ts:100-110".
+        try? NSRegularExpression(
+            pattern: "[a-z0-9_-]+\\.[a-z]{1,5}:\\d+",
+            options: [.caseInsensitive]
+        )
+    }()
+
+    nonisolated(unsafe) private static let symbolCallRegex: NSRegularExpression? = {
+        // Function call: `funcName(` hoặc method `Object.method(`. Ít nhất 3 char.
+        // KHÔNG match câu thường nhờ require `(` ngay sau tên.
+        try? NSRegularExpression(
+            pattern: "\\b[a-z_][a-z0-9_]{2,}\\.[a-z_][a-z0-9_]{2,}\\(|\\b[a-z_][a-z0-9_]{4,}\\(",
+            options: [.caseInsensitive]
+        )
+    }()
 
     /// Detect ít nhất 1 cặp `<tag>...</tag>` (tag name ≥3 char, lowercase alphanum).
     /// Chấp nhận tag có attribute, tag tự đóng KHÔNG tính (vì single tag không

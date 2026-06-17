@@ -238,6 +238,36 @@ public enum CoachingTips {
                 </instructions>
                 """
             )
+
+        case .codebaseContext:
+            return CoachingTip(
+                section: section,
+                reason: "Anthropic Claude Code expertise research: experts 'convey deep knowledge of codebase' — mention specific files, identifiers, line refs thay vì mô tả chung chung. Tín hiệu domain expertise quan trọng hơn coding skill.",
+                sourceUrl: "https://www.anthropic.com/research/claude-code-expertise",
+                template: """
+                Trỏ thẳng vào codebase:
+                - File path: `src/api/voucher.ts`, `App/Views/SpritePet.swift:42`
+                - Identifier: `parseSession()`, `class CoachingDataStore`
+                - Error message exact: copy paste nguyên log
+                - Library/version: "axios v1.6", "Swift 6 strict concurrency"
+                """,
+                example: "Fix race condition trong `CoachingDataStore.startAutoRefresh()` (App/CoachingDataStore.swift:125) — `isScopeEmpty` đang flip do `isLoading` race với tick 5s."
+            )
+
+        case .verification:
+            return CoachingTip(
+                section: section,
+                reason: "Anthropic research: experts 'know what to ask Claude to verify' — explicit kiểm tra cách (assertion, expected output) → AI tự test cuối, ít lỗi escape. Khác Definition of Done: DoD = WHAT, verification = HOW kiểm tra.",
+                sourceUrl: "https://www.anthropic.com/research/claude-code-expertise",
+                template: """
+                Cuối prompt thêm 1 trong các phrasing:
+                - "Verify by: chạy `npm test`, expected ≥ 90% pass"
+                - "Kiểm tra: response { ok: true, id: <uuid> }"
+                - "Should produce: file X.swift với function Y"
+                - "Make sure: build pass, no warnings"
+                """,
+                example: "Verify by chạy `xcodebuild ... build` → must say '** BUILD SUCCEEDED **'. Expected output: file mới `App/MetricsCollector.swift` < 200 LoC, conform `MXMetricManagerSubscriber`."
+            )
         }
     }
 }

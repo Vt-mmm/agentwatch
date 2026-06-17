@@ -147,6 +147,7 @@ struct CoachingReportView: View {
                     coachingEmptyHero
                 } else {
                     summaryCard
+                    anomalyCard
                     tokenCostCard
                     trendCard
                     if dailyCostTrend.contains(where: { $0.cost > 0 }) { forecastCard }

@@ -9,6 +9,12 @@ import ClaudeWatchCore
 struct PromptDetailSheet: View {
     let record: PromptRecord
     @Environment(\.dismiss) private var dismiss
+    @State private var showFiveStarTemplate: Bool = false
+
+    /// Show 5★ template button khi prompt yếu (≤ 2★) hoặc chưa là task prompt.
+    private var showsTemplateButton: Bool {
+        !record.score.isTaskPrompt || record.score.stars <= 2
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -18,6 +24,17 @@ struct PromptDetailSheet: View {
                 Text("Prompt detail")
                     .font(ClaudeFont.heading())
                 Spacer()
+                if showsTemplateButton {
+                    Button {
+                        showFiveStarTemplate = true
+                    } label: {
+                        Label("Xem 5★ Template", systemImage: "star.circle.fill")
+                            .font(ClaudeFont.label(11))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Claude.orange)
+                    .help("Khung prompt 5★ + ví dụ thực — copy về điền")
+                }
                 Button("Đóng") { dismiss() }.keyboardShortcut(.escape)
             }
 
@@ -60,6 +77,9 @@ struct PromptDetailSheet: View {
         .padding(20)
         .frame(width: 660, height: 680)
         .background(Claude.background)
+        .sheet(isPresented: $showFiveStarTemplate) {
+            FiveStarTemplateSheet()
+        }
     }
 
     /// Checklist 11 section. Mục PRESENT chỉ show 1 dòng; mục MISSING expand

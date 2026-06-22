@@ -18,6 +18,10 @@ struct ClaudeWatchMacApp: App {
     @State private var petSocketServer = PetSocketServer()
     @State private var petCollection = PetCollectionStore()
 
+    // v0.6.0: opt-in toggle cho streak-risk notification (default OFF).
+    @AppStorage("notif.streakRisk.enabled") private var streakRiskNotificationEnabled: Bool = false
+    @AppStorage("notif.streakRisk.hour") private var streakRiskHour: Int = 18
+
     var body: some Scene {
         WindowGroup("Claude Watch", id: "main") {
             MainWindowView()
@@ -72,6 +76,14 @@ struct ClaudeWatchMacApp: App {
                 .onChange(of: coachingData.lastRefreshAt) { _, _ in
                     petBroker.observe(sessions: coachingData.allSessions,
                                       activeProject: watcher.stats?.projectSlug)
+                    // v0.6.0: check streak risk sau mỗi reload (opt-in toggle riêng).
+                    if streakRiskNotificationEnabled {
+                        notifications.checkStreakRisk(
+                            streakDay: petCollection.streakDay,
+                            isStale: petCollection.isStreakStaleToday,
+                            notifyHour: streakRiskHour
+                        )
+                    }
                 }
         }
         .windowResizability(.contentMinSize)

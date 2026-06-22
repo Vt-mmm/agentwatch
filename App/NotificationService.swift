@@ -42,6 +42,43 @@ final class NotificationService {
         processCost(stats.cost)
     }
 
+    // MARK: - Streak risk (v0.6.0)
+
+    /// Day key (YYYYMMDD) when we last posted streak-risk noti — avoid spam multiple/day.
+    private var lastStreakRiskDayKey: String = ""
+
+    /// Check streak risk: nếu streak > 0 + stale today + sau giờ user-configured,
+    /// và chưa post hôm nay → fire 1 notification. opt-in only (default OFF).
+    /// - Parameters:
+    ///   - streakDay: số ngày streak hiện tại
+    ///   - isStale: lastActiveDayStart < startOfToday
+    ///   - notifyHour: giờ user muốn nhắc (mặc định 18)
+    func checkStreakRisk(streakDay: Int, isStale: Bool, notifyHour: Int = 18) {
+        guard streakDay > 0, isStale else { return }
+        let cal = Calendar.current
+        let now = Date()
+        let hour = cal.component(.hour, from: now)
+        guard hour >= notifyHour else { return }
+
+        let key = streakDayKey(now)
+        guard key != lastStreakRiskDayKey else { return }
+        lastStreakRiskDayKey = key
+
+        post(
+            title: "🔥 Streak \(streakDay) ngày sắp mất",
+            subtitle: nil,
+            body: "Hôm nay anh chưa có session — gửi 1 prompt để giữ streak.",
+            identifier: "streak-risk-\(key)"
+        )
+    }
+
+    private func streakDayKey(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd"
+        f.timeZone = .current
+        return f.string(from: date)
+    }
+
     // MARK: - Private: Agent Notifications
 
     private func processAgents(_ agents: [AgentSpawn]) {

@@ -74,6 +74,16 @@ final class PetCollectionStore {
     private(set) var streakDay: Int = 0
     private(set) var lastActiveDayStart: Date?
 
+    /// v0.6.0: Streak Freeze pool — Duolingo pattern. Earn 1 mỗi 7 streak day,
+    /// cap 3 hold. Auto-consume khi user skip 1 ngày → preserve streak.
+    private(set) var streakFreezeCount: Int = 0
+    static let maxStreakFreezes = 3
+
+    /// v0.6.0: Daily Quest — 3 quest/ngày từ pool 10, reset 00:00 local.
+    private(set) var dailyQuests: [DailyQuest] = []
+    private var dailyQuestDayKey: String = ""
+    private static let questUdKey = "DailyQuestSnapshot.v1"
+
     /// v0.4.1 fix #8: true nếu streak hôm nay đang "stale" — user đã streak X ngày
     /// nhưng hôm nay chưa có session. Hiển thị "X ngày (chưa hôm nay)" để không lừa.
     var isStreakStaleToday: Bool {
@@ -86,6 +96,9 @@ final class PetCollectionStore {
 
     /// Append-only audit trail of every XP change. UI hiển thị last 50 entries.
     let ledger = XPLedger()
+
+    /// v0.6.0: BadgeStore — track unlocked badges + aggregate counters.
+    let badgeStore = BadgeStore()
 
     /// Snapshot ledger cho UI — async vì XPLedger là actor.
     /// Cached gần nhất, refresh sau mỗi processReload.
@@ -103,7 +116,101 @@ final class PetCollectionStore {
     init() {
         load()
         loadSeenIds()
+        loadDailyQuests()
         refreshLedgerSnapshot()
+        // v0.6.0: backfill badges từ state đã có (pet level / trainer level / streak).
+        // Counter-based badges (5★ prompts, clean sessions) chỉ unlock từ ver này
+        // trở đi vì counter starts at 0 — accepted limitation.
+        _ = badgeStore.evaluateAndGrant(
+            pets: pets,
+            trainerLevel: trainerLevel,
+            streakDay: streakDay
+        )
+    }
+
+    // MARK: - Daily Quest (v0.6.0)
+
+    /// Load quest snapshot từ UserDefaults, rotate sang ngày mới nếu cần.
+    private func loadDailyQuests() {
+        let today = DailyQuestSnapshot.dayKey(for: Date())
+        if let data = UserDefaults.standard.data(forKey: Self.questUdKey),
+           let snap = try? JSONDecoder().decode(DailyQuestSnapshot.self, from: data),
+           snap.dayKey == today {
+            dailyQuests = snap.quests
+            dailyQuestDayKey = snap.dayKey
+        } else {
+            // Mới ngày → roll quest mới.
+            dailyQuests = DailyQuestEngine.quests(for: Date())
+            dailyQuestDayKey = today
+            persistDailyQuests()
+        }
+    }
+
+    private func persistDailyQuests() {
+        let snap = DailyQuestSnapshot(dayKey: dailyQuestDayKey, quests: dailyQuests)
+        guard let data = try? JSONEncoder().encode(snap) else { return }
+        UserDefaults.standard.set(data, forKey: Self.questUdKey)
+    }
+
+    /// Update quest progress dựa trên signals từ processReload. Auto-complete + claim.
+    /// Trả về tổng bonus XP grant cho trainer.
+    private func updateQuestProgress(newPrompts: [PromptRecord],
+                                     newSessions: [SessionSummary],
+                                     outlierIds: Set<String>,
+                                     petLevelGain: Int) -> Int {
+        // Rotate sang ngày mới nếu user qua nửa đêm.
+        let today = DailyQuestSnapshot.dayKey(for: Date())
+        if today != dailyQuestDayKey {
+            dailyQuests = DailyQuestEngine.quests(for: Date())
+            dailyQuestDayKey = today
+        }
+
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: Date())
+        let promptsToday = newPrompts.filter { $0.timestamp >= todayStart }
+        let sessionsToday = newSessions.filter {
+            ($0.firstTimestamp ?? Date.distantPast) >= todayStart
+        }
+        let cleanSessionsToday = sessionsToday.filter { !outlierIds.contains($0.id) }
+        let highStarToday = promptsToday.filter { $0.score.stars >= 4 }
+        let taskPromptsToday = promptsToday.filter { $0.score.isTaskPrompt }
+        let avgStarsToday: Double = {
+            let stars = promptsToday.map { Double($0.score.stars) }
+            return stars.isEmpty ? 0 : stars.reduce(0, +) / Double(stars.count)
+        }()
+        let outliersToday = sessionsToday.filter { outlierIds.contains($0.id) }
+
+        var bonus = 0
+        var ledgerEvents: [XPEvent] = []
+        for i in 0..<dailyQuests.count {
+            var q = dailyQuests[i]
+            guard !q.claimed else { continue }
+
+            switch q.kind {
+            case .promptHighStar:   q.progress = highStarToday.count
+            case .sessionClean:     q.progress = cleanSessionsToday.count
+            case .promptCount:      q.progress = promptsToday.count
+            case .petLevelUp:       q.progress = max(q.progress, petLevelGain)
+            case .noOutlier:        q.progress = (outliersToday.isEmpty && !sessionsToday.isEmpty) ? 1 : 0
+            case .taskPromptCount:  q.progress = taskPromptsToday.count
+            case .avgStars:         q.progress = avgStarsToday >= Double(q.target) ? q.target : 0
+            }
+            if q.progress >= q.target && !q.completed {
+                q.completed = true
+                q.claimed = true
+                bonus += q.bonusXP
+                ledgerEvents.append(XPEvent(
+                    kind: .achievement,
+                    amount: q.bonusXP,
+                    petId: nil,
+                    detail: "Quest ✓ \(q.title)"
+                ))
+            }
+            dailyQuests[i] = q
+        }
+        if bonus > 0 { appendEventsToLedger(ledgerEvents) }
+        persistDailyQuests()
+        return bonus
     }
 
     // MARK: - Public API
@@ -228,9 +335,40 @@ final class PetCollectionStore {
         appendEventsToLedger(events)
 
         // Pet XP → active pet (prompt training).
+        let petLevelBefore = pets[selectedId]?.level ?? 1
         if split.petXP != 0 { addXP(split.petXP) }
+        let petLevelAfter = pets[selectedId]?.level ?? 1
+        let petLevelGain = max(0, petLevelAfter - petLevelBefore)
+
         // Trainer XP → global (session/streak).
         if split.trainerXP != 0 { addTrainerXP(split.trainerXP) }
+
+        // v0.6.0: Daily Quest progress + bonus.
+        let questBonus = updateQuestProgress(
+            newPrompts: newPrompts,
+            newSessions: newSessions,
+            outlierIds: outlierIds,
+            petLevelGain: petLevelGain
+        )
+        if questBonus > 0 { addTrainerXP(questBonus) }
+
+        // v0.6.0: Badge counters + predicate evaluation.
+        badgeStore.recordReload(newPrompts: newPrompts,
+                                newSessions: newSessions,
+                                outlierIds: outlierIds)
+        let newlyUnlocked = badgeStore.evaluateAndGrant(
+            pets: pets,
+            trainerLevel: trainerLevel,
+            streakDay: streakDay
+        )
+        if !newlyUnlocked.isEmpty {
+            let events = newlyUnlocked.compactMap { id -> XPEvent? in
+                guard let badge = BadgeCatalog.all.first(where: { $0.id == id }) else { return nil }
+                return XPEvent(kind: .achievement, amount: 0, petId: nil,
+                               detail: "🏆 Badge: \(badge.title)")
+            }
+            appendEventsToLedger(events)
+        }
 
         // Đánh dấu đã seen — insert có bounded eviction để tránh unbounded growth.
         for p in newPrompts { insertSeenPrompt(p.id) }
@@ -279,6 +417,7 @@ final class PetCollectionStore {
 
     /// Cập nhật streak dựa trên ngày hôm nay. Trả về streakDay hiện tại.
     /// Chỉ tăng streak khi có session mới trong ngày.
+    /// v0.6.0: nếu có gap ≥1 ngày và còn freeze → consume freeze thay vì reset.
     private func updateStreak(hasSessions: Bool) -> Int {
         guard hasSessions else { return streakDay }
 
@@ -287,18 +426,24 @@ final class PetCollectionStore {
 
         if let last = lastActiveDayStart {
             if todayStart == last {
-                // Cùng ngày → streak không đổi
                 return streakDay
             } else if let yesterday = cal.date(byAdding: .day, value: -1, to: todayStart),
                       last == yesterday {
-                // Ngày liên tiếp → tăng streak
                 streakDay += 1
+                grantFreezeIfMilestone()
             } else if last > todayStart {
-                // Clock backward defense — bỏ qua
                 return streakDay
             } else {
-                // Ngắt quãng ≥2 ngày → reset
-                streakDay = 1
+                // Gap ≥2 days — try freeze first.
+                let gapDays = cal.dateComponents([.day], from: last, to: todayStart).day ?? 99
+                let skippedDays = max(0, gapDays - 1)
+                if skippedDays > 0 && streakFreezeCount >= skippedDays {
+                    streakFreezeCount -= skippedDays
+                    streakDay += 1
+                    grantFreezeIfMilestone()
+                } else {
+                    streakDay = 1
+                }
             }
         } else {
             streakDay = 1
@@ -306,6 +451,19 @@ final class PetCollectionStore {
 
         lastActiveDayStart = todayStart
         return streakDay
+    }
+
+    /// Grant 1 freeze mỗi mốc 7 streak day (7, 14, 21...). Cap tổng = 3.
+    private func grantFreezeIfMilestone() {
+        guard streakDay > 0, streakDay % 7 == 0 else { return }
+        guard streakFreezeCount < Self.maxStreakFreezes else { return }
+        streakFreezeCount += 1
+        appendEventsToLedger([XPEvent(
+            kind: .achievement,
+            amount: 0,
+            petId: nil,
+            detail: "❄️ Earned 1 streak freeze (streak \(streakDay) ngày)"
+        )])
     }
 
     // MARK: - Persistence
@@ -429,7 +587,8 @@ final class PetCollectionStore {
             promptOrder: seenPromptOrder,
             sessionOrder: seenSessionOrder,
             streakDay: streakDay,
-            lastActiveDayStart: lastActiveDayStart
+            lastActiveDayStart: lastActiveDayStart,
+            streakFreezeCount: streakFreezeCount
         )
         guard let data = try? JSONEncoder().encode(combined) else { return }
         UserDefaults.standard.set(data, forKey: seenIdsKey)
@@ -444,6 +603,7 @@ final class PetCollectionStore {
         seenSessionIds = Set(decoded.sessionIds)
         streakDay = decoded.streakDay
         lastActiveDayStart = decoded.lastActiveDayStart
+        streakFreezeCount = decoded.streakFreezeCount
 
         // Forward migration: payload lưu từ schema cũ (trước khi có order arrays)
         // → seed order từ set theo thứ tự tuỳ ý (best-effort, không mất XP).
@@ -474,7 +634,8 @@ final class PetCollectionStore {
 /// schemaVersion/order) vẫn decode thành công — migration xảy ra trong loadSeenIds().
 private struct SeenIdsSnapshot: Codable {
     /// Phiên bản schema hiện tại. Tăng lên khi thêm field mới cần migration.
-    static let currentSchemaVersion = 2
+    /// v3 (0.6.0): + streakFreezeCount
+    static let currentSchemaVersion = 3
 
     var schemaVersion: Int
     var promptIds: [String]
@@ -485,11 +646,13 @@ private struct SeenIdsSnapshot: Codable {
     var sessionOrder: [String]
     var streakDay: Int
     var lastActiveDayStart: Date?
+    /// v0.6.0: streak freeze pool — Duolingo-style protection.
+    var streakFreezeCount: Int
 
     // Custom CodingKeys để decode payload cũ thiếu field mới với giá trị default.
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, promptIds, sessionIds, promptOrder, sessionOrder
-        case streakDay, lastActiveDayStart
+        case streakDay, lastActiveDayStart, streakFreezeCount
     }
 
     init(from decoder: Decoder) throws {
@@ -501,11 +664,13 @@ private struct SeenIdsSnapshot: Codable {
         sessionOrder      = (try? c.decode([String].self, forKey: .sessionOrder))     ?? []
         streakDay         = (try? c.decode(Int.self,    forKey: .streakDay))          ?? 0
         lastActiveDayStart = try? c.decode(Date.self,   forKey: .lastActiveDayStart)
+        streakFreezeCount  = (try? c.decode(Int.self,    forKey: .streakFreezeCount))  ?? 0
     }
 
     init(schemaVersion: Int, promptIds: [String], sessionIds: [String],
          promptOrder: [String], sessionOrder: [String],
-         streakDay: Int, lastActiveDayStart: Date?) {
+         streakDay: Int, lastActiveDayStart: Date?,
+         streakFreezeCount: Int = 0) {
         self.schemaVersion      = schemaVersion
         self.promptIds          = promptIds
         self.sessionIds         = sessionIds
@@ -513,5 +678,6 @@ private struct SeenIdsSnapshot: Codable {
         self.sessionOrder       = sessionOrder
         self.streakDay          = streakDay
         self.lastActiveDayStart = lastActiveDayStart
+        self.streakFreezeCount  = streakFreezeCount
     }
 }

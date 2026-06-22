@@ -16,6 +16,7 @@ struct MainWindowView: View {
     @State private var showPrivacy: Bool = false
     // Sync với @AppStorage trong SpritePet — toggle áp dụng cho mọi pet instance.
     @AppStorage("PetFlippedHorizontally") private var petFlipped: Bool = true
+    @AppStorage("notif.streakRisk.enabled") private var streakRiskNoti: Bool = false
 
     enum Tab: String, CaseIterable, Identifiable {
         case live = "Live"
@@ -96,6 +97,8 @@ struct MainWindowView: View {
             // Floating pet toggle — top of menu, most-used setting.
             Toggle("Floating pet trên desktop", isOn: $petBinding.isVisible)
             Toggle("Lật pet sang phải", isOn: $petFlipped)
+            // v0.6.0: streak-risk notification opt-in (default OFF).
+            Toggle("Nhắc khi streak sắp mất (sau 18h)", isOn: $streakRiskNoti)
             Divider()
             Button {
                 updater.checkForUpdates()

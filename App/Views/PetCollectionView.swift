@@ -27,10 +27,18 @@ struct PetCollectionView: View {
                         Text(streakLabel)
                             .font(ClaudeFont.body(12))
                             .foregroundStyle(Claude.textPrimary)
+                        if store.streakFreezeCount > 0 {
+                            Text("❄️ \(store.streakFreezeCount)")
+                                .font(ClaudeFont.mono(11, weight: .semibold))
+                                .foregroundStyle(.cyan)
+                                .help("\(store.streakFreezeCount) freeze — auto-bảo vệ khi skip ngày")
+                        }
                     }
                     .padding(.horizontal, 4)
                 }
+                DailyQuestCard(quests: store.dailyQuests)
                 activePetSection
+                BadgeWallCard(badges: BadgeCatalog.all, unlockedIds: store.badgeStore.unlockedIds)
                 XPLedgerCard(events: store.ledgerSnapshot)
                 ForEach(PetTier.allCases, id: \.self) { tier in
                     tierSection(tier)

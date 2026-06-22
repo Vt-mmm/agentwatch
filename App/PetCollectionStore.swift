@@ -23,6 +23,28 @@ final class PetCollectionStore {
     /// Bridge cho legacy code còn dùng currentName.
     var currentName: String { selectedId }
 
+    // MARK: - Trainer Level (v0.4.0 — global progression axis)
+
+    /// Tổng XP trainer global, separate khỏi pet XP. Source: session + streak +
+    /// achievement. Derive trainerLevel qua TrainerProgress.level(forTotalXP:).
+    private(set) var trainerXP: Int = 0
+
+    /// Set pet đã đạt PL=10 và đã trao achievement bonus — tránh double-count.
+    private var achievedPetIds: Set<String> = []
+
+    /// Derived trainer level (1-30).
+    var trainerLevel: Int { TrainerProgress.level(forTotalXP: trainerXP) }
+
+    /// Trainer XP progress trong level hiện tại — for UI bar.
+    var trainerProgress: (current: Int, needed: Int, level: Int) {
+        TrainerProgress.progressInCurrentLevel(totalXP: trainerXP)
+    }
+
+    /// Check 1 pet đã unlock chưa — UI lock state.
+    func isUnlocked(_ petId: String) -> Bool {
+        PetUnlockGraph.isUnlocked(petId: petId, pets: pets, trainerLevel: trainerLevel)
+    }
+
     // MARK: - Dedup sets (persist across restart, bounded size)
 
     /// Giới hạn kích thước set để tránh unbounded growth sau nhiều tháng dùng.
@@ -53,21 +75,40 @@ final class PetCollectionStore {
 
     // MARK: - Public API
 
-    /// Chọn pet mới: validate, update lastSeenAt, persist.
-    func select(_ id: String) {
-        guard pets[id] != nil else { return }
+    /// Chọn pet mới: validate + check unlock + update lastSeenAt + persist.
+    /// Trả về false nếu pet chưa unlock — caller có thể show alert.
+    @discardableResult
+    func select(_ id: String) -> Bool {
+        guard pets[id] != nil, isUnlocked(id) else { return false }
         selectedId = id
         pets[id]?.lastSeenAt = Date()
         persist()
+        return true
     }
 
     /// Thêm XP vào pet đang selected (hoặc id cụ thể), recompute level, persist.
+    /// Auto-trigger achievement bonus khi pet hit PL=10 lần đầu.
     func addXP(_ delta: Int, to characterId: String? = nil) {
         let targetId = characterId ?? selectedId
         guard pets[targetId] != nil else { return }
+        let prevLevel = pets[targetId]?.level ?? 1
         let newXP = max(0, (pets[targetId]?.xp ?? 0) + delta)
         pets[targetId]?.xp = newXP
-        pets[targetId]?.level = XPEngine.level(forTotalXP: newXP)
+        let newLevel = XPEngine.level(forTotalXP: newXP)
+        pets[targetId]?.level = newLevel
+
+        // Achievement: pet đạt PL=10 lần đầu → +50 trainer XP bonus.
+        if newLevel == 10 && prevLevel < 10 && !achievedPetIds.contains(targetId) {
+            achievedPetIds.insert(targetId)
+            trainerXP += TrainerProgress.xpPerAchievement
+        }
+        persist()
+    }
+
+    /// Cộng XP trực tiếp vào trainer (session/streak signals).
+    func addTrainerXP(_ delta: Int) {
+        guard delta != 0 else { return }
+        trainerXP = max(0, trainerXP + delta)
         persist()
     }
 
@@ -88,8 +129,8 @@ final class PetCollectionStore {
         // Cập nhật streak day nếu có session mới hôm nay
         let todayStreak = updateStreak(hasSessions: !newSessions.isEmpty)
 
-        // Tính delta
-        let delta = XPEngine.computeDelta(
+        // Tính split delta: pet (prompt) vs trainer (session/streak).
+        let split = XPEngine.computeSplitDelta(
             newPrompts: newPrompts,
             newSessions: newSessions,
             outlierIds: outlierIds,
@@ -97,10 +138,10 @@ final class PetCollectionStore {
             streakDay: todayStreak
         )
 
-        // Áp dụng XP (chỉ khi có delta thực sự)
-        if delta != 0 {
-            addXP(delta)
-        }
+        // Pet XP → active pet (prompt training).
+        if split.petXP != 0 { addXP(split.petXP) }
+        // Trainer XP → global (session/streak).
+        if split.trainerXP != 0 { addTrainerXP(split.trainerXP) }
 
         // Đánh dấu đã seen — insert có bounded eviction để tránh unbounded growth.
         for p in newPrompts { insertSeenPrompt(p.id) }
@@ -176,10 +217,17 @@ final class PetCollectionStore {
             do {
                 let decoded = try JSONDecoder().decode(PetCollection.self, from: data)
                 pets = decoded.pets
+                trainerXP = decoded.trainerXP
+                achievedPetIds = Set(decoded.achievedPetIds)
                 // Đảm bảo có đủ 28 entry — thêm pet mới nếu catalog tăng.
                 seedMissingPets()
-                // Validate selectedId còn hợp lệ.
-                selectedId = pets[decoded.selectedId] != nil ? decoded.selectedId : "clawd"
+                // Validate selectedId còn hợp lệ + đã unlock; nếu không, fallback.
+                let preferred = decoded.selectedId
+                if pets[preferred] != nil && isUnlocked(preferred) {
+                    selectedId = preferred
+                } else {
+                    selectedId = "clawd"
+                }
                 return
             } catch {
                 // JSON decode fail → fallback seed an toàn, không crash.
@@ -218,9 +266,11 @@ final class PetCollectionStore {
 
     private func persist() {
         let snapshot = PetCollection(
-            schemaVersion: 1,
+            schemaVersion: PetCollection.currentSchemaVersion,
             pets: pets,
-            selectedId: selectedId
+            selectedId: selectedId,
+            trainerXP: trainerXP,
+            achievedPetIds: Array(achievedPetIds)
         )
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         UserDefaults.standard.set(data, forKey: udKey)

@@ -39,18 +39,46 @@ public struct PetProgress: Codable, Sendable, Equatable {
 }
 
 /// Snapshot toàn bộ collection — đây là root object persist vào UserDefaults.
+///
+/// Schema versions:
+///   v1: pets + selectedId
+///   v2: + trainerXP (Trainer Lv axis) + achievedPetIds (Set pet đã PL=10
+///       để không double-count achievement XP)
 public struct PetCollection: Codable, Sendable {
-    /// Schema version để forward-compat migration.
-    public var schemaVersion: Int
-    /// Map từ characterId → PetProgress.
-    public var pets: [String: PetProgress]
-    /// Id pet đang được chọn.
-    public var selectedId: String
+    public static let currentSchemaVersion = 2
 
-    public init(schemaVersion: Int = 1, pets: [String: PetProgress], selectedId: String) {
+    public var schemaVersion: Int
+    public var pets: [String: PetProgress]
+    public var selectedId: String
+    /// Tổng trainer XP — derive trainerLevel via TrainerProgress.level(forTotalXP:).
+    public var trainerXP: Int
+    /// Pet đã đạt PL=10 và đã trao achievement bonus (tránh double-count).
+    public var achievedPetIds: [String]
+
+    public init(schemaVersion: Int = currentSchemaVersion,
+                pets: [String: PetProgress],
+                selectedId: String,
+                trainerXP: Int = 0,
+                achievedPetIds: [String] = []) {
         self.schemaVersion = schemaVersion
         self.pets = pets
         self.selectedId = selectedId
+        self.trainerXP = trainerXP
+        self.achievedPetIds = achievedPetIds
+    }
+
+    // Backward-compat decode: v1 payload thiếu trainerXP + achievedPetIds.
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, pets, selectedId, trainerXP, achievedPetIds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion   = (try? c.decode(Int.self, forKey: .schemaVersion)) ?? 1
+        pets            = try c.decode([String: PetProgress].self, forKey: .pets)
+        selectedId      = try c.decode(String.self, forKey: .selectedId)
+        trainerXP       = (try? c.decode(Int.self, forKey: .trainerXP)) ?? 0
+        achievedPetIds  = (try? c.decode([String].self, forKey: .achievedPetIds)) ?? []
     }
 }
 

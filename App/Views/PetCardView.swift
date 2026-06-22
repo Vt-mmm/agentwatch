@@ -1,6 +1,6 @@
 // Cell đơn trong gallery pet — 96×96 sprite preview, tên, level pill.
 // Selected: viền cam 2pt + checkmark góc trên phải.
-// Phase 1: level luôn = 1, XP placeholder cho phase 2.
+// Locked (v0.4.0): grayscale + lock icon overlay + dim opacity.
 
 import SwiftUI
 import ClaudeWatchCore
@@ -8,6 +8,8 @@ import ClaudeWatchCore
 struct PetCardView: View {
     let pet: PetProgress
     let isSelected: Bool
+    /// True nếu pet chưa unlock — render grayscale + lock overlay.
+    var isLocked: Bool = false
     let onTap: () -> Void
 
     private let cardSize: CGFloat = 110
@@ -16,9 +18,11 @@ struct PetCardView: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 4) {
-                // Sprite preview pixel-perfect
+                // Sprite preview pixel-perfect — grayscale khi locked.
                 SpritePet(state: .happy, characterName: pet.characterId, level: pet.level)
                     .frame(width: spriteSize, height: spriteSize)
+                    .saturation(isLocked ? 0 : 1)
+                    .opacity(isLocked ? 0.35 : 1)
 
                 // Tên pet
                 Text(PetCatalog.displayName(pet.characterId))
@@ -55,8 +59,15 @@ struct PetCardView: View {
                     )
             )
 
-            // Checkmark góc trên phải khi selected
-            if isSelected {
+            // Checkmark / lock badge góc trên phải
+            if isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(5)
+                    .background(Circle().fill(Color.black.opacity(0.6)))
+                    .offset(x: 4, y: -4)
+            } else if isSelected {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Claude.orange)
@@ -67,5 +78,6 @@ struct PetCardView: View {
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
         .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .animation(.easeInOut(duration: 0.2), value: isLocked)
     }
 }

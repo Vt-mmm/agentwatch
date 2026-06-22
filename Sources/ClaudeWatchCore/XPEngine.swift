@@ -80,9 +80,44 @@ public enum XPEngine {
 
     // MARK: - Delta compute
 
-    /// Tính net XP delta từ tập records/sessions MỚI (chưa seen).
-    /// Caller phải filter "mới" trước khi truyền vào — hàm này KHÔNG tự dedup.
-    /// streakDay: 0 = không có streak hôm nay.
+    /// Kết quả split: prompt XP đi vào pet đang active, session/streak/penalty
+    /// đi vào trainer (global). 2 axes progression song song.
+    public struct DeltaResult: Sendable, Equatable {
+        public let petXP: Int
+        public let trainerXP: Int
+        public init(petXP: Int, trainerXP: Int) {
+            self.petXP = petXP
+            self.trainerXP = trainerXP
+        }
+    }
+
+    /// Tính split XP delta: pet vs trainer. Caller filter "mới" trước.
+    public static func computeSplitDelta(
+        newPrompts: [PromptRecord],
+        newSessions: [SessionSummary],
+        outlierIds: Set<String>,
+        agentLoopIds: Set<String>,
+        streakDay: Int
+    ) -> DeltaResult {
+        // Pet XP: chỉ từ prompts (active pet được "train").
+        let petXP = newPrompts.reduce(0) { $0 + xpForPrompt(stars: $1.score.stars) }
+
+        // Trainer XP: sessions + streak (penalty áp dụng tại session).
+        let sessionXP = newSessions.reduce(0) {
+            $0 + TrainerProgress.xpForSession(
+                isOutlier: outlierIds.contains($1.id),
+                isAgentLoop: agentLoopIds.contains($1.id)
+            )
+        }
+        let streakXP = (!newSessions.isEmpty && streakDay >= 1)
+            ? TrainerProgress.xpForStreakDay(streakDay) : 0
+
+        return DeltaResult(petXP: petXP, trainerXP: sessionXP + streakXP)
+    }
+
+    /// Legacy single-int delta — giữ cho backward compat. Pet XP = prompt only,
+    /// caller dùng processReload mới nên gọi computeSplitDelta.
+    @available(*, deprecated, message: "Use computeSplitDelta(...) → DeltaResult")
     public static func computeDelta(
         newPrompts: [PromptRecord],
         newSessions: [SessionSummary],
@@ -90,20 +125,11 @@ public enum XPEngine {
         agentLoopIds: Set<String>,
         streakDay: Int
     ) -> Int {
-        // 1. XP từ mỗi prompt mới
-        let promptXP = newPrompts.reduce(0) { $0 + xpForPrompt(stars: $1.score.stars) }
-
-        // 2. XP từ mỗi session mới
-        let sessionXP = newSessions.reduce(0) {
-            $0 + xpForSession(
-                isOutlier: outlierIds.contains($1.id),
-                isAgentLoop: agentLoopIds.contains($1.id)
-            )
-        }
-
-        // 3. Streak day (chỉ cộng 1 lần khi có session mới trong ngày)
-        let streakXP = (!newSessions.isEmpty && streakDay >= 1) ? xpForStreakDay(streakDay) : 0
-
-        return promptXP + sessionXP + streakXP
+        let split = computeSplitDelta(
+            newPrompts: newPrompts, newSessions: newSessions,
+            outlierIds: outlierIds, agentLoopIds: agentLoopIds,
+            streakDay: streakDay
+        )
+        return split.petXP + split.trainerXP
     }
 }

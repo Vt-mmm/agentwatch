@@ -146,6 +146,12 @@ struct CoachingReportView: View {
                 } else if isScopeEmpty {
                     coachingEmptyHero
                 } else {
+                    DailyGoalCard(
+                        records: records,
+                        sessions: sessions,
+                        outlierIds: outlierIds,
+                        agentLoopIds: agentLoopIds
+                    )
                     summaryCard
                     anomalyCard
                     tokenCostCard

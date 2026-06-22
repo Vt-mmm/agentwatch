@@ -6,21 +6,49 @@ import ClaudeWatchCore
 
 extension CoachingReportView {
 
+    // MARK: - Session intent classification
+
+    /// Map sessionUuid → SessionIntent, compute từ allRecords (first 3 prompts/session).
+    /// v0.5.0: Cursor-style "Conversation Insights" but rule-based.
+    var sessionIntents: [String: SessionIntent] {
+        var bySession: [String: [PromptRecord]] = [:]
+        for r in allRecords {
+            bySession[r.sessionUuid, default: []].append(r)
+        }
+        var result: [String: SessionIntent] = [:]
+        for (uuid, recs) in bySession {
+            let firstPrompts = recs.sorted { $0.timestamp < $1.timestamp }
+                                   .prefix(3)
+                                   .map(\.text)
+            result[uuid] = SessionIntentClassifier.classify(prompts: firstPrompts)
+        }
+        return result
+    }
+
     // MARK: - Session row
 
     func sessionRow(_ s: SessionSummary) -> some View {
         let isOutlier = outlierIds.contains(s.id)
         let isAgentLoop = agentLoopIds.contains(s.id)
+        let intent = sessionIntents[s.id] ?? .general
+        let alias = SessionAliasStore.shared.alias(for: s.id)
         return HStack(spacing: 10) {
             sessionSourcePill(s.source)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(s.projectDisplay)
+                    intentBadge(intent)
+                    Text(alias ?? s.projectDisplay)
                         .font(ClaudeFont.body(12))
                         .fontWeight(.medium)
                         .foregroundStyle(Claude.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    if alias != nil {
+                        Text(s.projectDisplay)
+                            .font(ClaudeFont.mono(9))
+                            .foregroundStyle(Claude.textMuted)
+                            .lineLimit(1)
+                    }
                     if isOutlier {
                         badge("🚨 outlier", color: .red,
                               help: "Cost vượt mean + 2σ — đáng review")
@@ -48,6 +76,24 @@ extension CoachingReportView {
     }
 
     // MARK: - Badges & pills
+
+    /// Intent classifier badge — icon + label, color theo intent enum.
+    @ViewBuilder
+    func intentBadge(_ intent: SessionIntent) -> some View {
+        let rgb = intent.colorRGB
+        let color = Color(red: rgb.r, green: rgb.g, blue: rgb.b)
+        HStack(spacing: 3) {
+            Image(systemName: intent.icon)
+                .font(.system(size: 9, weight: .semibold))
+            Text(intent.label)
+                .font(ClaudeFont.mono(9, weight: .semibold))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 5).padding(.vertical, 1)
+        .background(color.opacity(0.15))
+        .clipShape(Capsule())
+        .help("Intent: \(intent.label) — heuristic dựa trên prompt đầu session")
+    }
 
     func badge(_ text: String, color: Color, help: String) -> some View {
         Text(text)

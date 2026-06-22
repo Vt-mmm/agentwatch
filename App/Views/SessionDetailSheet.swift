@@ -15,6 +15,8 @@ struct SessionDetailSheet: View {
     @State private var page: Int = 0
     @State private var expandedTools: Set<String> = []
     @State private var toolFilter: String = ""   // "" = all, else specific tool/kind
+    @State private var showAliasEditor: Bool = false
+    @State private var aliasDraft: String = ""
     private let pageSize: Int = 30
 
     /// Events sau khi reverse + áp filter: mới nhất ở đầu.
@@ -74,6 +76,35 @@ struct SessionDetailSheet: View {
         .frame(width: 760, height: 720)
         .background(Claude.background)
         .task { await loadDetail() }
+        .sheet(isPresented: $showAliasEditor) {
+            aliasEditorSheet
+        }
+    }
+
+    /// Edit alias modal — 60-char limit, blank = remove alias.
+    private var aliasEditorSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Đặt tên cho session")
+                .font(ClaudeFont.heading(15))
+            Text("Tên alias hiển thị thay project display. Để trống → bỏ alias.")
+                .font(ClaudeFont.body(11))
+                .foregroundStyle(Claude.textMuted)
+            TextField("vd: \"Audit auth flow\"", text: $aliasDraft)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Button("Hủy") { showAliasEditor = false }
+                    .keyboardShortcut(.escape)
+                Spacer()
+                Button("Lưu") {
+                    SessionAliasStore.shared.setAlias(aliasDraft, for: session.id)
+                    showAliasEditor = false
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 380)
+        .onAppear { aliasDraft = SessionAliasStore.shared.alias(for: session.id) ?? "" }
     }
 
     // MARK: - Async load
@@ -98,11 +129,22 @@ struct SessionDetailSheet: View {
             Image(systemName: "doc.text.magnifyingglass")
                 .foregroundStyle(Claude.orange)
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.projectDisplay)
-                    .font(ClaudeFont.heading())
-                    .foregroundStyle(Claude.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HStack(spacing: 6) {
+                    Text(SessionAliasStore.shared.alias(for: session.id) ?? session.projectDisplay)
+                        .font(ClaudeFont.heading())
+                        .foregroundStyle(Claude.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Button {
+                        showAliasEditor = true
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Claude.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Đổi tên session")
+                }
                 Text(session.id)
                     .font(ClaudeFont.mono(10))
                     .foregroundStyle(Claude.textMuted)
@@ -243,6 +285,9 @@ struct SessionDetailSheet: View {
     private var toolsCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel(text: "Tools used (\(toolBreakdown.count))")
+            // v0.5.0: proportion bar — Cursor-style breakdown để user thấy nhanh
+            // session là exploration (đa Read) hay build (đa Edit/Write).
+            toolProportionBar
             Text("Click tên tool để xem chi tiết từng lần invoke.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
@@ -251,6 +296,62 @@ struct SessionDetailSheet: View {
             }
         }
         .claudeCard()
+    }
+
+    /// Horizontal stacked bar: tỉ lệ mỗi tool/total. Top 6 tool, gộp còn lại.
+    @ViewBuilder
+    private var toolProportionBar: some View {
+        let total = toolBreakdown.reduce(0) { $0 + $1.count }
+        if total > 0 {
+            let top = Array(toolBreakdown.prefix(6))
+            let otherCount = toolBreakdown.dropFirst(6).reduce(0) { $0 + $1.count }
+            let entries: [(name: String, count: Int)] = otherCount > 0
+                ? top + [(name: "other", count: otherCount)]
+                : top
+            VStack(alignment: .leading, spacing: 4) {
+                GeometryReader { geo in
+                    HStack(spacing: 1) {
+                        ForEach(Array(entries.enumerated()), id: \.offset) { idx, t in
+                            let width = geo.size.width * Double(t.count) / Double(total)
+                            Rectangle()
+                                .fill(toolBarColor(index: idx))
+                                .frame(width: max(2, width))
+                                .help("\(t.name): \(t.count) (\(Int(Double(t.count) / Double(total) * 100))%)")
+                        }
+                    }
+                }
+                .frame(height: 10)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+
+                // Legend chips
+                HStack(spacing: 6) {
+                    ForEach(Array(entries.prefix(5).enumerated()), id: \.offset) { idx, t in
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(toolBarColor(index: idx))
+                                .frame(width: 6, height: 6)
+                            Text(t.name)
+                                .font(ClaudeFont.mono(9))
+                                .foregroundStyle(Claude.textMuted)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Color palette cho proportion bar — 7 distinct hue.
+    private func toolBarColor(index: Int) -> Color {
+        let palette: [Color] = [
+            Color(red: 0.95, green: 0.55, blue: 0.20),   // orange
+            Color(red: 0.30, green: 0.65, blue: 0.95),   // blue
+            Color(red: 0.40, green: 0.80, blue: 0.45),   // green
+            Color(red: 0.85, green: 0.40, blue: 0.65),   // pink
+            Color(red: 0.65, green: 0.50, blue: 0.90),   // purple
+            Color(red: 0.95, green: 0.80, blue: 0.30),   // yellow
+            Color(red: 0.55, green: 0.55, blue: 0.55),   // gray
+        ]
+        return palette[index % palette.count]
     }
 
     /// Disclosure 1 tool: header row clickable → expand list invocations.

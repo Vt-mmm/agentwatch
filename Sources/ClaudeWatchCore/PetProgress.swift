@@ -42,10 +42,10 @@ public struct PetProgress: Codable, Sendable, Equatable {
 ///
 /// Schema versions:
 ///   v1: pets + selectedId
-///   v2: + trainerXP (Trainer Lv axis) + achievedPetIds (Set pet đã PL=10
-///       để không double-count achievement XP)
+///   v2: + trainerXP (Trainer Lv axis) + achievedPetIds (Set pet đã PL=10)
+///   v3: + grandfatheredUnlocks (pet legacy bypass new unlock gate)
 public struct PetCollection: Codable, Sendable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var pets: [String: PetProgress]
@@ -54,31 +54,35 @@ public struct PetCollection: Codable, Sendable {
     public var trainerXP: Int
     /// Pet đã đạt PL=10 và đã trao achievement bonus (tránh double-count).
     public var achievedPetIds: [String]
+    /// v3: Pet được grandfather từ phiên bản trước v0.4.0 (luôn unlock).
+    public var grandfatheredUnlocks: [String]
 
     public init(schemaVersion: Int = currentSchemaVersion,
                 pets: [String: PetProgress],
                 selectedId: String,
                 trainerXP: Int = 0,
-                achievedPetIds: [String] = []) {
+                achievedPetIds: [String] = [],
+                grandfatheredUnlocks: [String] = []) {
         self.schemaVersion = schemaVersion
         self.pets = pets
         self.selectedId = selectedId
         self.trainerXP = trainerXP
         self.achievedPetIds = achievedPetIds
+        self.grandfatheredUnlocks = grandfatheredUnlocks
     }
 
-    // Backward-compat decode: v1 payload thiếu trainerXP + achievedPetIds.
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, pets, selectedId, trainerXP, achievedPetIds
+        case schemaVersion, pets, selectedId, trainerXP, achievedPetIds, grandfatheredUnlocks
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion   = (try? c.decode(Int.self, forKey: .schemaVersion)) ?? 1
-        pets            = try c.decode([String: PetProgress].self, forKey: .pets)
-        selectedId      = try c.decode(String.self, forKey: .selectedId)
-        trainerXP       = (try? c.decode(Int.self, forKey: .trainerXP)) ?? 0
-        achievedPetIds  = (try? c.decode([String].self, forKey: .achievedPetIds)) ?? []
+        schemaVersion        = (try? c.decode(Int.self, forKey: .schemaVersion)) ?? 1
+        pets                 = try c.decode([String: PetProgress].self, forKey: .pets)
+        selectedId           = try c.decode(String.self, forKey: .selectedId)
+        trainerXP            = (try? c.decode(Int.self, forKey: .trainerXP)) ?? 0
+        achievedPetIds       = (try? c.decode([String].self, forKey: .achievedPetIds)) ?? []
+        grandfatheredUnlocks = (try? c.decode([String].self, forKey: .grandfatheredUnlocks)) ?? []
     }
 }
 

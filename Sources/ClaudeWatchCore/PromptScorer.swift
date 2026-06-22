@@ -90,7 +90,7 @@ public enum PromptScorer {
         }
 
         var present: Set<SpecSection> = []
-        for section in SpecSection.allCases where matches(section, in: lower) {
+        for section in SpecSection.allCases where matches(section, in: lower, raw: trimmed) {
             present.insert(section)
         }
 
@@ -108,8 +108,9 @@ public enum PromptScorer {
 
     /// Mỗi section có 1 tập keyword tiếng Việt + tiếng Anh. Dùng substring
     /// trên `lower` đã hạ chữ — đơn giản, không regex để rẻ và dễ debug.
-    /// Riêng `xmlStructure` cần regex check tag pattern <abc>...</abc>.
-    private static func matches(_ section: SpecSection, in lower: String) -> Bool {
+    /// Riêng codebaseContext + xmlStructure cần regex; codebaseContext còn cần
+    /// `raw` (case-preserved) để phát hiện camelCase/PascalCase identifiers.
+    private static func matches(_ section: SpecSection, in lower: String, raw: String) -> Bool {
         let keywords: [String]
         switch section {
         case .mucTieu:
@@ -150,7 +151,8 @@ public enum PromptScorer {
             // Domain knowledge signal: file path, identifier, hoặc line ref.
             // Anthropic research: experts mention specific files/symbols vs novice
             // generic descriptions. 1 trong các pattern = fire.
-            return hasCodebaseContext(lower, raw: lower)
+            // Truyền raw (case-preserved) cho symbolCallRegex bắt camelCase/PascalCase.
+            return hasCodebaseContext(lower, raw: raw)
         case .verification:
             // Explicit validation criteria — "verify X", "kiểm tra", "expected output".
             // Khác Definition of Done: DoD là tiêu chí hoàn thành, verification là
@@ -165,51 +167,65 @@ public enum PromptScorer {
     }
 
     /// Detect signal user hiểu codebase: file path (a/b/c.ext), file:line, hoặc
-    /// identifier có dạng PascalCase/snake_case/camelCase đặc trưng. 1 hit = pass.
-    /// Lowercase string OK — file paths không phụ thuộc case (regex case-insensitive).
+    /// identifier code-like. 1 hit = pass.
+    /// - lower: lowercased text — dùng cho codePath + fileLine (path không phụ thuộc case)
+    /// - raw: case-preserved — symbolCallRegex cần để bắt camelCase/PascalCase
     private static func hasCodebaseContext(_ lower: String, raw: String) -> Bool {
-        // 1. File extension trong path: matches "word.ext" với ext 2-5 ký tự alphanum.
+        // 1. File extension trong path (multi-segment hoặc backtick-wrapped).
         if codePathRegex?.firstMatch(in: lower,
                                      range: NSRange(lower.startIndex..., in: lower)) != nil {
             return true
         }
-        // 2. file:line ref (e.g., "main.swift:42", "src/foo.ts:100").
+        // 2. file:line ref (e.g., "main.swift:42").
         if fileLineRegex?.firstMatch(in: lower,
                                      range: NSRange(lower.startIndex..., in: lower)) != nil {
             return true
         }
-        // 3. Function/method call signature: "funcName(" hoặc "Class.method".
-        if symbolCallRegex?.firstMatch(in: lower,
-                                       range: NSRange(lower.startIndex..., in: lower)) != nil {
+        // 3. Code-like identifier call — chạy trên raw để bắt camelCase/PascalCase.
+        if symbolCallRegex?.firstMatch(in: raw,
+                                       range: NSRange(raw.startIndex..., in: raw)) != nil {
             return true
         }
         return false
     }
 
+    // v0.4.1 fix #3: tighter codePathRegex — REQUIRE multi-segment path (có "/")
+    // hoặc backtick/code-fence wrapping. Đơn lẻ "readme.md" trong prose KHÔNG
+    // còn match — phải là "src/readme.md", "`readme.md`", hoặc trong code fence.
     nonisolated(unsafe) private static let codePathRegex: NSRegularExpression? = {
-        // Tối thiểu 1 segment + dấu chấm + ext 2-5 alphanum. Ví dụ: foo.swift,
-        // src/bar.ts, App/Views/Sprite.swift. KHÔNG match URL hay câu thường
-        // (require path-like: có /, hoặc tên có upper/snake/camel + ext code).
         try? NSRegularExpression(
-            pattern: "(?:^|[\\s`(])([a-z0-9_-]+/)*[a-z0-9_-]+\\.(swift|ts|tsx|js|jsx|py|go|rs|java|kt|m|h|cpp|c|rb|php|sh|yml|yaml|json|toml|md)\\b",
+            // Pattern 1: backtick-wrapped file (`foo.swift`)
+            // Pattern 2: multi-segment path with at least 1 slash (a/b.ext)
+            pattern: "`[a-z0-9_./-]+\\.(swift|ts|tsx|js|jsx|py|go|rs|java|kt|m|h|cpp|c|rb|php|sh|yml|yaml|json|toml|md)`"
+                + "|(?:^|[\\s(])([a-z0-9_-]+/)+[a-z0-9_-]+\\.(swift|ts|tsx|js|jsx|py|go|rs|java|kt|m|h|cpp|c|rb|php|sh|yml|yaml|json|toml|md)\\b",
             options: [.caseInsensitive]
         )
     }()
 
     nonisolated(unsafe) private static let fileLineRegex: NSRegularExpression? = {
-        // file.ext:NN dạng "main.swift:42" or "foo.ts:100-110".
+        // file.ext:NN dạng "main.swift:42" or "foo.ts:100-110" — high signal, giữ nguyên.
         try? NSRegularExpression(
             pattern: "[a-z0-9_-]+\\.[a-z]{1,5}:\\d+",
             options: [.caseInsensitive]
         )
     }()
 
+    // v0.4.1 fix #7: tighter symbolCallRegex — chỉ chấp nhận pattern code-like rõ ràng:
+    //   - `Class.method(` (dot notation chained call)
+    //   - `funcName(` trong backtick (explicit code marking)
+    //   - Snake_case lowercased với ≥6 char (vd: parse_session())
+    // Reject "perform(this)" trong prose vì không match camelCase với uppercase boundary.
     nonisolated(unsafe) private static let symbolCallRegex: NSRegularExpression? = {
-        // Function call: `funcName(` hoặc method `Object.method(`. Ít nhất 3 char.
-        // KHÔNG match câu thường nhờ require `(` ngay sau tên.
         try? NSRegularExpression(
-            pattern: "\\b[a-z_][a-z0-9_]{2,}\\.[a-z_][a-z0-9_]{2,}\\(|\\b[a-z_][a-z0-9_]{4,}\\(",
-            options: [.caseInsensitive]
+            // Pattern 1: backtick-wrapped function call: `funcName(`
+            // Pattern 2: Method chain Class.method( where Class starts with UpperCase
+            //           OR snake_case_method (≥1 underscore in identifier)
+            // Pattern 3: camelCase ≥2 segments (lowerUpper, vd: parseSession)
+            pattern: "`[a-z_][a-z0-9_]{2,}\\("
+                + "|\\b[A-Z][a-zA-Z0-9_]{2,}\\.[a-z_][a-zA-Z0-9_]{2,}\\("
+                + "|\\b[a-z_]+_[a-z_]+\\("
+                + "|\\b[a-z][a-z0-9]*[A-Z][a-zA-Z0-9]*\\(",
+            options: []   // case-sensitive — quan trọng cho camelCase + UpperCase
         )
     }()
 

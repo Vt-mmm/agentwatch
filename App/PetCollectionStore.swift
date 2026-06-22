@@ -32,6 +32,10 @@ final class PetCollectionStore {
     /// Set pet đã đạt PL=10 và đã trao achievement bonus — tránh double-count.
     private var achievedPetIds: Set<String> = []
 
+    /// Pets được grandfather từ phiên bản cũ (trước v0.4.0 có unlock gate).
+    /// Pet trong set này luôn unlock dù không đạt new tier requirements.
+    private var grandfatheredUnlocks: Set<String> = []
+
     /// Derived trainer level (1-30).
     var trainerLevel: Int { TrainerProgress.level(forTotalXP: trainerXP) }
 
@@ -41,8 +45,10 @@ final class PetCollectionStore {
     }
 
     /// Check 1 pet đã unlock chưa — UI lock state.
+    /// Grandfather override: pet đã có XP từ trước v0.4.0 luôn unlock.
     func isUnlocked(_ petId: String) -> Bool {
-        PetUnlockGraph.isUnlocked(petId: petId, pets: pets, trainerLevel: trainerLevel)
+        if grandfatheredUnlocks.contains(petId) { return true }
+        return PetUnlockGraph.isUnlocked(petId: petId, pets: pets, trainerLevel: trainerLevel)
     }
 
     // MARK: - Dedup sets (persist across restart, bounded size)
@@ -65,12 +71,39 @@ final class PetCollectionStore {
 
     // MARK: - Streak tracking (in-memory, persist trong PetCollection)
 
-    private var streakDay: Int = 0
-    private var lastActiveDayStart: Date?
+    private(set) var streakDay: Int = 0
+    private(set) var lastActiveDayStart: Date?
+
+    /// v0.4.1 fix #8: true nếu streak hôm nay đang "stale" — user đã streak X ngày
+    /// nhưng hôm nay chưa có session. Hiển thị "X ngày (chưa hôm nay)" để không lừa.
+    var isStreakStaleToday: Bool {
+        guard streakDay > 0, let last = lastActiveDayStart else { return false }
+        let todayStart = Calendar.current.startOfDay(for: Date())
+        return last < todayStart
+    }
+
+    // MARK: - XP Ledger (v0.4.1 fix #5 — transparency)
+
+    /// Append-only audit trail of every XP change. UI hiển thị last 50 entries.
+    let ledger = XPLedger()
+
+    /// Snapshot ledger cho UI — async vì XPLedger là actor.
+    /// Cached gần nhất, refresh sau mỗi processReload.
+    private(set) var ledgerSnapshot: [XPEvent] = []
+
+    /// Refresh ledger snapshot (gọi sau khi mutate qua append).
+    private func refreshLedgerSnapshot() {
+        Task { [weak self] in
+            guard let self else { return }
+            let snap = await self.ledger.snapshot(limit: 50)
+            await MainActor.run { self.ledgerSnapshot = snap }
+        }
+    }
 
     init() {
         load()
         loadSeenIds()
+        refreshLedgerSnapshot()
     }
 
     // MARK: - Public API
@@ -101,8 +134,25 @@ final class PetCollectionStore {
         if newLevel == 10 && prevLevel < 10 && !achievedPetIds.contains(targetId) {
             achievedPetIds.insert(targetId)
             trainerXP += TrainerProgress.xpPerAchievement
+            appendEventsToLedger([XPEvent(
+                kind: .achievement,
+                amount: TrainerProgress.xpPerAchievement,
+                petId: nil,
+                detail: "\(targetId) đạt Lv 10 (master)"
+            )])
         }
         persist()
+    }
+
+    /// Helper: append XP events vào ledger qua Task (actor bridge) + refresh snapshot.
+    private func appendEventsToLedger(_ events: [XPEvent]) {
+        guard !events.isEmpty else { return }
+        Task { [weak self, events] in
+            guard let self else { return }
+            await self.ledger.append(contentsOf: events)
+            let snap = await self.ledger.snapshot(limit: 50)
+            await MainActor.run { self.ledgerSnapshot = snap }
+        }
     }
 
     /// Cộng XP trực tiếp vào trainer (session/streak signals).
@@ -138,6 +188,45 @@ final class PetCollectionStore {
             streakDay: todayStreak
         )
 
+        // v0.4.1 fix #5: build XP events for audit trail.
+        let activePet = selectedId
+        var events: [XPEvent] = []
+        for p in newPrompts {
+            let amount = XPEngine.xpForPrompt(stars: p.score.stars)
+            guard amount != 0 else { continue }
+            events.append(XPEvent(
+                timestamp: p.timestamp,
+                kind: .prompt,
+                amount: amount,
+                petId: activePet,
+                detail: "Prompt \(p.score.stars)★ • \(p.projectDisplay)"
+            ))
+        }
+        for s in newSessions {
+            let isOut = outlierIds.contains(s.id)
+            let isLoop = agentLoopIds.contains(s.id)
+            let amount = TrainerProgress.xpForSession(isOutlier: isOut, isAgentLoop: isLoop)
+            let kind: XPEventKind = amount < 5 ? .penalty : .session
+            let badge = isOut ? " (outlier)" : isLoop ? " (agent loop)" : ""
+            events.append(XPEvent(
+                timestamp: s.firstTimestamp ?? Date(),
+                kind: kind,
+                amount: amount,
+                petId: nil,
+                detail: "Session\(badge) • \(s.projectDisplay)"
+            ))
+        }
+        if !newSessions.isEmpty && todayStreak >= 1 {
+            let amount = TrainerProgress.xpForStreakDay(todayStreak)
+            events.append(XPEvent(
+                kind: .streak,
+                amount: amount,
+                petId: nil,
+                detail: "Streak day \(todayStreak)"
+            ))
+        }
+        appendEventsToLedger(events)
+
         // Pet XP → active pet (prompt training).
         if split.petXP != 0 { addXP(split.petXP) }
         // Trainer XP → global (session/streak).
@@ -152,8 +241,18 @@ final class PetCollectionStore {
     // MARK: - Bounded set helpers
 
     /// Insert prompt id với FIFO eviction khi vượt maxSeenPromptIds.
-    /// XP dedup vẫn đúng: entry bị evict là prompt cũ (>50k prompts trước),
-    /// user sẽ không gặp lại chúng trong window hiện tại → edge case chấp nhận được.
+    ///
+    /// KNOWN LIMITATION (v0.4.1 audit #6): nếu user expand scope Coaching tới range
+    /// chứa prompts cũ đã bị evict (>50k prompts trước trong history), những prompts
+    /// đó sẽ được count XP LẠI lần 2. Edge case hiếm cho personal use, accepted.
+    ///
+    /// Mitigation tương lai: switch sang per-session high-water mark (track max line
+    /// index per sessionUuid) — bounded O(num_sessions) thay O(num_prompts).
+    ///
+    /// KNOWN LIMITATION (v0.4.1 audit #10): nếu user xoá UserDefaults thủ công nhưng
+    /// JSONL còn nguyên trên disk, lần load tiếp theo sẽ scan + count XP TOÀN BỘ
+    /// history từ đầu → pet/trainer level tăng đột ngột. Đây là "reset semantics"
+    /// expected nhưng không document trong UI.
     private func insertSeenPrompt(_ id: String) {
         guard !seenPromptIds.contains(id) else { return }
         seenPromptIds.insert(id)
@@ -219,15 +318,28 @@ final class PetCollectionStore {
                 pets = decoded.pets
                 trainerXP = decoded.trainerXP
                 achievedPetIds = Set(decoded.achievedPetIds)
+                grandfatheredUnlocks = Set(decoded.grandfatheredUnlocks)
                 // Đảm bảo có đủ 28 entry — thêm pet mới nếu catalog tăng.
                 seedMissingPets()
-                // Validate selectedId còn hợp lệ + đã unlock; nếu không, fallback.
+
+                // v0.4.1 migration fix #1: GRANDFATHER pets.
+                // Pet có xp>0 từ phiên bản cũ (trước có unlock gate) → mark unlocked
+                // vĩnh viễn bằng grandfatheredUnlocks. Trùng selectedId cũ cũng grandfather.
+                // Không silently downgrade pet user đã build.
+                grandfatherLegacyPets(previousSelectedId: decoded.selectedId)
+
+                // v0.4.1 fix #2: backfill achievement XP cho pet đã PL=10 trước v0.4.0.
+                backfillAchievements()
+
+                // Validate selectedId — sau grandfather, pet cũ unlock OK.
                 let preferred = decoded.selectedId
                 if pets[preferred] != nil && isUnlocked(preferred) {
                     selectedId = preferred
                 } else {
                     selectedId = "clawd"
                 }
+                // Persist các thay đổi migration nếu có.
+                persist()
                 return
             } catch {
                 // JSON decode fail → fallback seed an toàn, không crash.
@@ -250,6 +362,35 @@ final class PetCollectionStore {
         persist()
     }
 
+    /// v0.4.1 fix #1: pet đã có xp > 0 từ phiên bản cũ HOẶC trùng previousSelectedId
+    /// → grandfather (luôn unlock dù không match tier requirement mới).
+    /// Tránh silently downgrade pet user đã build công.
+    private func grandfatherLegacyPets(previousSelectedId: String) {
+        for (id, pet) in pets {
+            if pet.xp > 0 || id == previousSelectedId {
+                grandfatheredUnlocks.insert(id)
+            }
+        }
+    }
+
+    /// v0.4.1 fix #2: backfill achievement bonus cho pet đã PL=10 trước khi feature
+    /// achievedPetIds tồn tại. Mark all + grant +50 trainer XP retroactive.
+    /// Log từng event vào ledger để user thấy migration đã add bao nhiêu XP.
+    private func backfillAchievements() {
+        var events: [XPEvent] = []
+        for (id, pet) in pets where pet.level >= 10 && !achievedPetIds.contains(id) {
+            achievedPetIds.insert(id)
+            trainerXP += TrainerProgress.xpPerAchievement
+            events.append(XPEvent(
+                kind: .migration,
+                amount: TrainerProgress.xpPerAchievement,
+                petId: nil,
+                detail: "Backfill: \(id) đã đạt Lv 10 từ trước v0.4.1"
+            ))
+        }
+        appendEventsToLedger(events)
+    }
+
     private func seedAllPets() {
         pets = [:]
         for id in PetCatalog.all {
@@ -270,7 +411,8 @@ final class PetCollectionStore {
             pets: pets,
             selectedId: selectedId,
             trainerXP: trainerXP,
-            achievedPetIds: Array(achievedPetIds)
+            achievedPetIds: Array(achievedPetIds),
+            grandfatheredUnlocks: Array(grandfatheredUnlocks)
         )
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         UserDefaults.standard.set(data, forKey: udKey)

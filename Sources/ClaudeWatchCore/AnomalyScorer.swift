@@ -99,15 +99,21 @@ public enum AnomalyScorer {
 
     // MARK: - Rule 2: Prompt loop
 
-    /// ≥3 prompt trong cùng session có prefix-50-char giống nhau → user lặp lại
-    /// ý, có thể vì AI không hiểu hoặc fail nhiệm vụ trước.
+    /// ≥3 prompt trong cùng session có prefix-80-char giống nhau + text dài
+    /// ≥100 char → user lặp lại ý. v0.4.1 fix #4: bump prefix 50→80 + length gate
+    /// để giảm false positive trên prompts ngắn khác task ("Em fix bug A/B/C").
+    private static let loopPrefixLength = 80
+    private static let loopMinTextLength = 100
+
     private static func detectPromptLoops(_ prompts: [PromptRecord]) -> [Anomaly] {
-        // Group theo session, rồi theo prefix.
         let bySession = Dictionary(grouping: prompts, by: \.sessionUuid)
         var out: [Anomaly] = []
         for (_, sessionPrompts) in bySession {
-            let byPrefix = Dictionary(grouping: sessionPrompts) {
-                String($0.text.prefix(50)).lowercased()
+            // Chỉ xem xét prompt đủ dài — prompts ngắn có cùng mở đầu thường là
+            // task khác nhau (vd "Em sửa X" / "Em sửa Y").
+            let eligible = sessionPrompts.filter { $0.text.count >= loopMinTextLength }
+            let byPrefix = Dictionary(grouping: eligible) {
+                String($0.text.prefix(loopPrefixLength)).lowercased()
             }
             for (prefix, group) in byPrefix where group.count >= 3 && !prefix.isEmpty {
                 guard let rep = group.last else { continue }
@@ -115,7 +121,7 @@ public enum AnomalyScorer {
                     id: "loop-\(rep.sessionUuid)-\(prefix.hashValue)",
                     kind: .promptLoop,
                     representative: rep,
-                    reason: "Lặp \(group.count) prompt cùng nội dung mở đầu trong 1 session — AI có thể đang fail hoặc anh chưa cung cấp đủ context. Cân nhắc viết lại với codebase context + verification criteria.",
+                    reason: "Lặp \(group.count) prompt dài (≥\(loopMinTextLength) char) cùng \(loopPrefixLength) ký tự đầu trong 1 session — khả năng AI fail hoặc thiếu context. Thử rewrite với codebase context + verification criteria.",
                     count: group.count
                 ))
             }

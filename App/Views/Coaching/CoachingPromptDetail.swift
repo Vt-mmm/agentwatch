@@ -11,9 +11,10 @@ struct PromptDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showFiveStarTemplate: Bool = false
 
-    /// Show 5★ template button khi prompt yếu (≤ 2★) hoặc chưa là task prompt.
+    /// v0.4.1 fix #11: show 5★ template button CHỈ khi prompt là task prompt yếu
+    /// (≤ 2★). Bỏ trường hợp non-task (follow-up "ok") — template không phù hợp.
     private var showsTemplateButton: Bool {
-        !record.score.isTaskPrompt || record.score.stars <= 2
+        record.score.isTaskPrompt && record.score.stars <= 2
     }
 
     var body: some View {

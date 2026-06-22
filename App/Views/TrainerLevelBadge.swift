@@ -9,6 +9,9 @@ struct TrainerLevelBadge: View {
     let progress: (current: Int, needed: Int, level: Int)
 
     private var ratio: Double {
+        // v0.4.1 fix #9: tại MAX level, bar luôn full (visual reward) thay vì tính
+        // ratio bằng 0 do progress.current = 0 khi vượt cumulative cap.
+        if level >= TrainerProgress.maxLevel { return 1.0 }
         guard progress.needed > 0 else { return 1.0 }
         return min(1.0, Double(progress.current) / Double(progress.needed))
     }

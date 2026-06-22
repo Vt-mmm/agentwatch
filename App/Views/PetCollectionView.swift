@@ -20,7 +20,18 @@ struct PetCollectionView: View {
                     level: store.trainerLevel,
                     progress: store.trainerProgress
                 )
+                if store.streakDay > 0 {
+                    HStack(spacing: 8) {
+                        Image(systemName: "flame.fill")
+                            .foregroundStyle(store.isStreakStaleToday ? Claude.textMuted : .orange)
+                        Text(streakLabel)
+                            .font(ClaudeFont.body(12))
+                            .foregroundStyle(Claude.textPrimary)
+                    }
+                    .padding(.horizontal, 4)
+                }
                 activePetSection
+                XPLedgerCard(events: store.ledgerSnapshot)
                 ForEach(PetTier.allCases, id: \.self) { tier in
                     tierSection(tier)
                 }
@@ -35,6 +46,14 @@ struct PetCollectionView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    /// Streak label — stale (chưa có session hôm nay) hiển thị rõ để không gian dối.
+    private var streakLabel: String {
+        if store.isStreakStaleToday {
+            return "Streak \(store.streakDay) ngày — hôm nay chưa có session"
+        }
+        return "Streak \(store.streakDay) ngày liên tiếp"
     }
 
     // MARK: - Sections

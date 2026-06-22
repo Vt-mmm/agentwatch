@@ -46,8 +46,8 @@ targets:
         SUScheduledCheckInterval: 3600
         SUPublicEDKey: "ynaSo3Ac+GxZgbfaRN57FgCzf9mXsbUWeKPXUzg8msE="
     settings:
-      MARKETING_VERSION: "0.4.1"
-      CURRENT_PROJECT_VERSION: "00401"
+      MARKETING_VERSION: "0.5.0"
+      CURRENT_PROJECT_VERSION: "00500"
       GENERATE_INFOPLIST_FILE: NO
       ENABLE_HARDENED_RUNTIME: NO
       CODE_SIGN_STYLE: Automatic

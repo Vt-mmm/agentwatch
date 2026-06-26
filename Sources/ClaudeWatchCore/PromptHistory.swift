@@ -45,7 +45,107 @@ public enum PromptHistory {
         var out: [PromptRecord] = []
         out.append(contentsOf: loadProjectsPrompts(in: range, index: index))
         out.append(contentsOf: loadDesktopPrompts(in: range))
+        // v0.8.0: parity với Claude — Codex prompts cũng vào history cho pet XP +
+        // scoring + anomaly. Skip subagent rollouts (machine-injected, không phải
+        // user input thực).
+        out.append(contentsOf: loadCodexPrompts(in: range))
         return out.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    /// Scan Codex rollout JSONL → user_message events → PromptRecord.
+    /// Mirror logic CodexInventory.list nhưng load prompts thay session metadata.
+    private static func loadCodexPrompts(in range: ClosedRange<Date>) -> [PromptRecord] {
+        let root = NSHomeDirectory() + "/.codex/sessions"
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: root) else { return [] }
+        var out: [PromptRecord] = []
+        guard let years = try? fm.contentsOfDirectory(atPath: root) else { return [] }
+        for year in years {
+            let yearPath = root + "/" + year
+            guard let months = try? fm.contentsOfDirectory(atPath: yearPath) else { continue }
+            for month in months {
+                let monthPath = yearPath + "/" + month
+                guard let days = try? fm.contentsOfDirectory(atPath: monthPath) else { continue }
+                for day in days {
+                    let dayPath = monthPath + "/" + day
+                    guard let files = try? fm.contentsOfDirectory(
+                        at: URL(fileURLWithPath: dayPath),
+                        includingPropertiesForKeys: [.contentModificationDateKey]
+                    ) else { continue }
+                    for file in files where file.pathExtension == "jsonl" {
+                        let mt = ProjectPath.mtime(of: file)
+                        if mt < range.lowerBound { continue }
+                        out.append(contentsOf: extractCodexPrompts(from: file, range: range))
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    /// Parse 1 Codex rollout. Skip nếu thread_source == "subagent".
+    private static func extractCodexPrompts(from file: URL,
+                                            range: ClosedRange<Date>) -> [PromptRecord] {
+        guard let data = try? Data(contentsOf: file) else { return [] }
+        let raw = String(decoding: data, as: UTF8.self)
+        let sessionUuid = file.deletingPathExtension().lastPathComponent
+
+        // Parse session_meta line 1 để biết cwd + check subagent.
+        var isSubagent = false
+        var cwd: String = "(unknown)"
+        var sessionId: String? = nil
+
+        var records: [PromptRecord] = []
+        var lineIndex = 0
+        raw.enumerateLines { line, _ in
+            lineIndex += 1
+            guard !line.isEmpty,
+                  let lineData = line.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+            else { return }
+
+            let kind = obj["type"] as? String
+            let payload = obj["payload"] as? [String: Any] ?? [:]
+
+            if kind == "session_meta" {
+                if (payload["thread_source"] as? String) == "subagent" { isSubagent = true }
+                if let c = payload["cwd"] as? String { cwd = c }
+                if let id = payload["id"] as? String { sessionId = id }
+                return
+            }
+
+            // Skip prompts của subagent rollouts.
+            if isSubagent { return }
+
+            guard kind == "event_msg",
+                  (payload["type"] as? String) == "user_message" else { return }
+
+            // Codex timestamp ISO8601Z trên top-level.
+            guard let timestampStr = obj["timestamp"] as? String,
+                  let timestamp = parseISO(timestampStr),
+                  range.contains(timestamp) else { return }
+
+            // Codex user_message text trong payload.message hoặc payload.content.
+            let promptText: String = {
+                if let m = payload["message"] as? String { return m }
+                if let c = payload["content"] as? String { return c }
+                return ""
+            }()
+            let trimmed = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+
+            let displayProject = URL(fileURLWithPath: cwd).lastPathComponent
+            let id = "codex-\(sessionUuid)-\(lineIndex)"
+            let score = PromptScorer.score(trimmed)
+            records.append(PromptRecord(
+                id: id, timestamp: timestamp,
+                projectSlug: cwd, projectDisplay: displayProject,
+                sessionUuid: sessionId ?? sessionUuid,
+                text: trimmed, score: score,
+                source: .codex
+            ))
+        }
+        return records
     }
 
     private static func loadProjectsPrompts(in range: ClosedRange<Date>,

@@ -17,6 +17,7 @@ struct ClaudeWatchMacApp: App {
     @State private var sprites = SpriteStore()
     @State private var petSocketServer = PetSocketServer()
     @State private var petCollection = PetCollectionStore()
+    @State private var codexPoller = CodexLivePoller()
 
     // v0.6.0: opt-in toggle cho streak-risk notification (default OFF).
     @AppStorage("notif.streakRisk.enabled") private var streakRiskNotificationEnabled: Bool = false
@@ -34,11 +35,14 @@ struct ClaudeWatchMacApp: App {
                 .environment(floatingPet)
                 .environment(sprites)
                 .environment(petCollection)
+                .environment(codexPoller)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .onAppear {
                     // Bắt đầu thu thập MetricKit payloads — silent, không có UI.
                     MetricsCollector.shared.start()
                     startWatchingIfPossible()
+                    // v0.8.0: Codex poller cho Live tab.
+                    codexPoller.start()
                     petBroker.attach(floatingPet)
                     // Sync floating pet từ PetCollectionStore (nguồn sự thật mới).
                     floatingPet.characterName = petCollection.selectedId

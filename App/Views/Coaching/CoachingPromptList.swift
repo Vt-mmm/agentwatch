@@ -91,15 +91,25 @@ struct PromptRow: View {
 
     @ViewBuilder
     private var sourceBadge: some View {
-        let isCli = record.source == .cli
-        Text(isCli ? "⌨︎ CLI" : "🖥 Desktop")
+        // v0.8.0: 3 source — CLI/Desktop (Claude) + Codex.
+        let (fg, bg) = badgeColors(record.source)
+        return Text("\(record.source.emoji) \(record.source.shortLabel)")
             .font(ClaudeFont.mono(10))
             .fontWeight(.semibold)
-            .foregroundStyle(isCli ? Claude.Chip.infoFg : Claude.Chip.warningFg)
+            .foregroundStyle(fg)
             .padding(.horizontal, 6)
             .padding(.vertical, 1)
-            .background(isCli ? Claude.Chip.infoBg : Claude.Chip.warningBg)
+            .background(bg)
             .clipShape(Capsule())
+            .help(record.source.label)
+    }
+
+    private func badgeColors(_ src: SessionSource) -> (Color, Color) {
+        switch src {
+        case .cli:     return (Claude.Chip.infoFg, Claude.Chip.infoBg)
+        case .desktop: return (Claude.Chip.warningFg, Claude.Chip.warningBg)
+        case .codex:   return (.green, Color.green.opacity(0.15))
+        }
     }
 
     @ViewBuilder

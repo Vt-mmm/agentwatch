@@ -34,7 +34,7 @@ targets:
       properties:
         LSUIElement: false
         LSMinimumSystemVersion: "14.0"
-        CFBundleDisplayName: Claude Watch
+        CFBundleDisplayName: Agent Watch
         # Template substitution — xcodebuild replace at build time từ
         # MARKETING_VERSION / CURRENT_PROJECT_VERSION build settings dưới.
         # Tránh xcodegen ghi đè Info.plist bằng giá trị hardcoded mỗi lần generate.
@@ -46,8 +46,8 @@ targets:
         SUScheduledCheckInterval: 3600
         SUPublicEDKey: "ynaSo3Ac+GxZgbfaRN57FgCzf9mXsbUWeKPXUzg8msE="
     settings:
-      MARKETING_VERSION: "0.6.0"
-      CURRENT_PROJECT_VERSION: "00600"
+      MARKETING_VERSION: "0.6.1"
+      CURRENT_PROJECT_VERSION: "00601"
       GENERATE_INFOPLIST_FILE: NO
       ENABLE_HARDENED_RUNTIME: NO
       CODE_SIGN_STYLE: Automatic

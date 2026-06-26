@@ -23,7 +23,7 @@ struct ClaudeWatchMacApp: App {
     @AppStorage("notif.streakRisk.hour") private var streakRiskHour: Int = 18
 
     var body: some Scene {
-        WindowGroup("Claude Watch", id: "main") {
+        WindowGroup("Agent Watch", id: "main") {
             MainWindowView()
                 .environment(watcher)
                 .environment(projectStore)
@@ -88,7 +88,7 @@ struct ClaudeWatchMacApp: App {
         }
         .windowResizability(.contentMinSize)
         .commands {
-            // Chèn "Check for Updates…" ngay sau "About Claude Watch" trong app menu.
+            // Chèn "Check for Updates…" ngay sau "About Agent Watch" trong app menu.
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") { updater.checkForUpdates() }
             }

@@ -38,7 +38,7 @@ struct MenuBarSummaryView: View {
                     .foregroundStyle(Claude.orange)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text("Claude Watch")
+                Text("Agent Watch")
                     .font(ClaudeFont.heading(14))
                     .foregroundStyle(Claude.textPrimary)
                 Text(subtitle)

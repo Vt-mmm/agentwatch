@@ -115,7 +115,7 @@ struct ProjectPickerView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Watch"
-        panel.message = "Select a project folder to pin. Claude Watch will tail the latest session JSONL there."
+        panel.message = "Select a project folder to pin. Agent Watch will tail the latest session JSONL there."
         if panel.runModal() == .OK, let url = panel.url {
             projectStore.pinFolder(url)
             watcher.stop()

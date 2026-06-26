@@ -3,9 +3,9 @@
      xmlns:dc="http://purl.org/dc/elements/1.1/"
      version="2.0">
     <channel>
-        <title>Claude Watch</title>
+        <title>Agent Watch</title>
         <link>https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml</link>
-        <description>Most recent changes for Claude Watch macOS.</description>
+        <description>Most recent changes for Agent Watch macOS (formerly Claude Watch).</description>
         <language>en</language>
         <item>
             <title>Version 0.6.0</title>

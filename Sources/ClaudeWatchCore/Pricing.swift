@@ -17,7 +17,11 @@ public struct Price: Sendable, Equatable {
 }
 
 public enum ModelFamily: String, Sendable, CaseIterable {
-    case opus, sonnet, haiku, fable, unknown
+    case opus, sonnet, haiku, fable
+    /// v0.7.0: GPT family (Codex agent uses gpt-5/gpt-4o/etc.). Pricing = 0 vì
+    /// Codex là subscription, không bill per-token; UI vẫn show token count.
+    case gpt
+    case unknown
 
     public static func from(modelId: String?) -> ModelFamily {
         guard let m = modelId?.lowercased() else { return .unknown }

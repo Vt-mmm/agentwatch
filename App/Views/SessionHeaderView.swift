@@ -59,6 +59,7 @@ struct SessionHeaderView: View {
         case .sonnet:  return .blue
         case .haiku:   return Claude.live
         case .fable:   return .purple
+        case .gpt:     return .green
         case .unknown: return Claude.textMuted
         }
     }

@@ -42,6 +42,8 @@ struct CoachingReportView: View {
 
     enum SourceFilter: String, CaseIterable, Identifiable {
         case all = "Tất cả"
+        case claude = "Claude"
+        case codex = "Codex"
         case cli = "CLI"
         case desktop = "Desktop"
         var id: String { rawValue }
@@ -49,6 +51,8 @@ struct CoachingReportView: View {
         func matches(_ source: SessionSource) -> Bool {
             switch self {
             case .all:     return true
+            case .claude:  return source.vendor == .claude
+            case .codex:   return source.vendor == .codex
             case .cli:     return source == .cli
             case .desktop: return source == .desktop
             }
@@ -152,6 +156,7 @@ struct CoachingReportView: View {
                         outlierIds: outlierIds,
                         agentLoopIds: agentLoopIds
                     )
+                    VendorBreakdownCard(sessions: sessions)
                     summaryCard
                     anomalyCard
                     tokenCostCard

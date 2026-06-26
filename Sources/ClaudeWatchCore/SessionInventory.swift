@@ -92,9 +92,15 @@ public enum SessionInventory {
 
         out.append(contentsOf: listProjects(in: range, index: index))
         out.append(contentsOf: listDesktopAgent(in: range))
+        // v0.7.0: Codex sessions từ ~/.codex/sessions/.
+        out.append(contentsOf: CodexInventory.list(in: range))
 
-        // Sort theo cost giảm dần (top cost sessions lên đầu).
-        return out.sorted { $0.cost > $1.cost }
+        // Sort: cost > 0 first (Claude), then bằng totalTokens (Codex cost=0).
+        // Để Codex không bị xuống cuối vì cost=0, fallback secondary key.
+        return out.sorted { a, b in
+            if a.cost != b.cost { return a.cost > b.cost }
+            return a.totalTokens > b.totalTokens
+        }
     }
 
     /// Quick aggregate cho summary cards.

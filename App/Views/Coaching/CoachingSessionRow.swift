@@ -106,15 +106,25 @@ extension CoachingReportView {
     }
 
     func sessionSourcePill(_ src: SessionSource) -> some View {
-        let isCli = src == .cli
-        return Text(isCli ? "CLI" : "Desk")
+        // 3 source mapping: CLI/Desk = Claude vendor (blue/yellow), Codex = green.
+        let (fg, bg) = sourcePillColors(src)
+        return Text(src.shortLabel)
             .font(ClaudeFont.mono(9))
             .fontWeight(.bold)
-            .foregroundStyle(isCli ? Claude.Chip.infoFg : Claude.Chip.warningFg)
+            .foregroundStyle(fg)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(isCli ? Claude.Chip.infoBg : Claude.Chip.warningBg)
+            .background(bg)
             .clipShape(Capsule())
+            .help(src.label)
+    }
+
+    private func sourcePillColors(_ src: SessionSource) -> (Color, Color) {
+        switch src {
+        case .cli:     return (Claude.Chip.infoFg, Claude.Chip.infoBg)
+        case .desktop: return (Claude.Chip.warningFg, Claude.Chip.warningBg)
+        case .codex:   return (.green, Color.green.opacity(0.15))
+        }
     }
 
     // MARK: - Label helpers

@@ -150,13 +150,16 @@ struct CoachingReportView: View {
                 } else if isScopeEmpty {
                     coachingEmptyHero
                 } else {
+                    // v0.8.1: VendorBreakdownCard LÊN ĐẦU theo yêu cầu —
+                    // user thấy Total/Claude/Codex breakdown trước hết.
+                    VendorBreakdownCard(sessions: sessions)
+                    ProjectCostBreakdownCard(sessions: sessions)
                     DailyGoalCard(
                         records: records,
                         sessions: sessions,
                         outlierIds: outlierIds,
                         agentLoopIds: agentLoopIds
                     )
-                    VendorBreakdownCard(sessions: sessions)
                     summaryCard
                     anomalyCard
                     tokenCostCard

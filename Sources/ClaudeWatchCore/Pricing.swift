@@ -34,11 +34,18 @@ public enum ModelFamily: String, Sendable, CaseIterable {
 
 public enum Pricing {
     /// Anthropic public list prices per 1M tokens (Jan 2026 snapshot).
+    /// v0.8.1: thêm GPT-5 estimate cho Codex — pricing OpenAI public 2026,
+    /// approximate vì plan của user có thể là subscription (ChatGPT Pro)
+    /// hoặc API. UI cho phép tinh chỉnh sau qua Settings.
     public static let defaultPrices: [ModelFamily: Price] = [
         .opus:   Price(input: 15, output: 75, cacheRead: 1.50, cacheWrite: 18.75),
         .sonnet: Price(input: 3,  output: 15, cacheRead: 0.30, cacheWrite: 3.75),
         .haiku:  Price(input: 1,  output: 5,  cacheRead: 0.10, cacheWrite: 1.25),
         .fable:  Price(input: 3,  output: 15, cacheRead: 0.30, cacheWrite: 3.75),
+        // GPT-5 estimate: tier giữa Sonnet/Haiku, cache đáng kể.
+        // OpenAI 2026 list (~): input $2 / output $10 per 1M, cached $0.20.
+        // cacheWrite=0 vì Codex JSONL không log cache write events.
+        .gpt:    Price(input: 2,  output: 10, cacheRead: 0.20, cacheWrite: 0),
     ]
 
     public static func price(for family: ModelFamily) -> Price {

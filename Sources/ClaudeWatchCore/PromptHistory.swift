@@ -134,7 +134,8 @@ public enum PromptHistory {
             let trimmed = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
 
-            let displayProject = URL(fileURLWithPath: cwd).lastPathComponent
+            // v0.8.1: dùng full cwd path để merge project breakdown với Claude.
+            let displayProject = cwd
             let id = "codex-\(sessionUuid)-\(lineIndex)"
             let score = PromptScorer.score(trimmed)
             records.append(PromptRecord(

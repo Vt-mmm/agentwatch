@@ -157,21 +157,21 @@ struct MainWindowView: View {
     @ViewBuilder
     private var liveTab: some View {
         let codexSnapshot = codex.snapshot
+        // v0.8.1: Codex card LÊN ĐẦU theo yêu cầu user. Render trước Claude
+        // section nếu Codex đang active, hoặc nếu không có Claude live.
         if let s = watcher.stats {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    CodexLiveCard(snapshot: codexSnapshot)
                     SessionHeaderView(stats: s)
                     TokenStatsCard(stats: s)
                     LiveActivityCard(stats: s)
                     AgentTreeList(agents: s.agents)
-                    // v0.8.0: Codex live card — luôn render dưới Claude card.
-                    CodexLiveCard(snapshot: codexSnapshot)
                 }
                 .padding(20)
             }
             .background(Claude.backgroundGradient)
         } else if codexSnapshot.sessionCount > 0 {
-            // Không có Claude live nhưng có Codex → show standalone.
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     CodexLiveCard(snapshot: codexSnapshot)

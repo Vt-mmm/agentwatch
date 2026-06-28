@@ -155,14 +155,20 @@ public enum CodexJsonlParser {
         let id = sessionId
             ?? file.deletingPathExtension().lastPathComponent
 
-        // Project display: từ cwd basename. "/Users/.../Working/proj" → "proj".
-        // Nếu nil → "(unknown)".
-        let projectDisplay: String = {
-            guard let cwd, !cwd.isEmpty else { return "(unknown)" }
-            return URL(fileURLWithPath: cwd).lastPathComponent
-        }()
+        // v0.8.1: dùng full cwd path để merge với Claude's displayPath
+        // (Claude format: "/Users/x/Documents/proj"). Trước đây dùng lastPathComponent
+        // làm Codex/Claude lệch nhau nếu user có nhiều folder cùng tên.
+        let projectDisplay: String = cwd?.isEmpty == false ? cwd! : "(unknown)"
 
-        // Codex là subscription — cost = 0. Token vẫn track để hiện usage.
+        // v0.8.1: compute cost từ GPT-5 estimate pricing (Pricing.gpt).
+        let cost = Pricing.cost(
+            family: .gpt,
+            inputTokens: maxInputTokens,
+            outputTokens: maxOutputTokens,
+            cacheReadTokens: maxCacheReadTokens,
+            cacheWriteTokens: 0
+        )
+
         return SessionSummary(
             id: id,
             projectDisplay: projectDisplay,
@@ -173,7 +179,7 @@ public enum CodexJsonlParser {
             outputTokens: maxOutputTokens,
             cacheReadTokens: maxCacheReadTokens,
             cacheWriteTokens: 0,
-            cost: 0,
+            cost: cost,
             firstTimestamp: firstTs,
             lastTimestamp: lastTs,
             promptCount: promptCount,

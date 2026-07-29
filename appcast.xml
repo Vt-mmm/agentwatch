@@ -8,6 +8,14 @@
         <description>Most recent changes for Agent Watch macOS (formerly Claude Watch).</description>
         <language>en</language>
         <item>
+            <title>Version 0.9.2</title>
+            <sparkle:version>00902</sparkle:version>
+            <sparkle:shortVersionString>0.9.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>Wed, 29 Jul 2026 05:45:49 +0000</pubDate>
+            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.9.2/ClaudeWatchMac-0.9.2.zip" sparkle:edSignature="ciz1x8VdWrORjxqlyEGmoKGE3SLHvCPUZ0X1XJpneT9nZPJuyxBefeDqU4RVPaSMPZpVg083Q3/tCGKw1QjkAg==" length="4624610" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Version 0.9.1</title>
             <sparkle:version>00901</sparkle:version>
             <sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>

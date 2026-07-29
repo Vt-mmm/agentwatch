@@ -5,6 +5,7 @@ import ClaudeWatchCore
 
 @main
 struct ClaudeWatchMacApp: App {
+    @NSApplicationDelegateAdaptor(AgentWatchAppDelegate.self) private var appDelegate
     @State private var watcher = SessionWatcher()
     @State private var projectStore = ProjectStore()
     @State private var notifications = NotificationService()
@@ -19,6 +20,7 @@ struct ClaudeWatchMacApp: App {
     @State private var petCollection = PetCollectionStore()
     @State private var codexPoller = CodexLivePoller()
     @State private var piAgentPoller = PiAgentLivePoller()
+    @State private var supervisorLock = SupervisorLockStore.shared
 
     // v0.6.0: opt-in toggle cho streak-risk notification (default OFF).
     @AppStorage("notif.streakRisk.enabled") private var streakRiskNotificationEnabled: Bool = false
@@ -38,8 +40,10 @@ struct ClaudeWatchMacApp: App {
                 .environment(petCollection)
                 .environment(codexPoller)
                 .environment(piAgentPoller)
+                .environment(supervisorLock)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .onAppear {
+                    supervisorLock.start()
                     // Bắt đầu thu thập MetricKit payloads — silent, không có UI.
                     MetricsCollector.shared.start()
                     petBroker.attach(floatingPet)
@@ -106,6 +110,7 @@ struct ClaudeWatchMacApp: App {
                 .environment(coachingData)
                 .environment(codexPoller)
                 .environment(piAgentPoller)
+                .environment(supervisorLock)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)

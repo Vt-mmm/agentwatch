@@ -8,6 +8,7 @@ struct MenuBarSummaryView: View {
     @Environment(ProjectStore.self) private var projectStore
     @Environment(CodexLivePoller.self) private var codex
     @Environment(PiAgentLivePoller.self) private var piAgent
+    @Environment(SupervisorLockStore.self) private var supervisorLock
     @Environment(\.openWindow) private var openWindow
 
     private var hasAnySnapshot: Bool {
@@ -17,6 +18,8 @@ struct MenuBarSummaryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+            Divider().background(Claude.border)
+            lockBlock
             Divider().background(Claude.border)
             if hasAnySnapshot {
                 liveTotalsBlock
@@ -135,6 +138,23 @@ struct MenuBarSummaryView: View {
         }
     }
 
+    private var lockBlock: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(supervisorLock.isLocked ? Claude.orange : Claude.done)
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(supervisorLock.isLocked ? "Supervisor lock on" : "Enrollment required")
+                    .font(ClaudeFont.body(12))
+                    .foregroundStyle(Claude.textPrimary)
+                Text(supervisorLock.lockedByLabel ?? "Open window to enroll this machine")
+                    .font(ClaudeFont.mono(10))
+                    .foregroundStyle(Claude.textMuted)
+            }
+            Spacer()
+        }
+    }
+
     private var footer: some View {
         HStack {
             Button("Refresh") { refreshAuditSnapshots() }
@@ -147,7 +167,9 @@ struct MenuBarSummaryView: View {
                 .font(ClaudeFont.body(12))
                 .foregroundStyle(Claude.orange)
             Spacer()
-            Button("Quit") { NSApp.terminate(nil) }
+            Button("Quit…") {
+                supervisorLock.requestQuit(source: "menu bar")
+            }
                 .buttonStyle(.plain)
                 .font(ClaudeFont.body(12))
                 .foregroundStyle(Claude.textMuted)

@@ -122,18 +122,26 @@ extension CoachingReportView {
 
     func exportMarkdown() {
         let md = ReportGenerator.markdown(scope: currentScope, records: records, sessions: sessions)
+            + supervisorLock.markdownSection(scope: currentScope)
         save(content: md, defaultName: "coaching-\(slugify(currentScope.label)).md",
              types: ["md", "markdown"])
     }
 
     func exportHTML() {
         let html = ReportGenerator.html(scope: currentScope, records: records, sessions: sessions)
+            .replacingOccurrences(of: "</div></body></html>",
+                                  with: supervisorLock.htmlSection(scope: currentScope)
+                                      + "\n</div></body></html>")
         save(content: html, defaultName: "coaching-\(slugify(currentScope.label)).html",
              types: ["html", "htm"])
     }
 
     func exportCSV() {
-        let csv = ReportGenerator.csv(records: records, sessions: sessions)
+        var csv = ReportGenerator.csv(records: records, sessions: sessions)
+        let lockRows = supervisorLock.csvRows(scope: currentScope)
+        if !lockRows.isEmpty {
+            csv += lockRows + "\n"
+        }
         save(content: csv, defaultName: "coaching-\(slugify(currentScope.label)).csv",
              types: ["csv"])
     }

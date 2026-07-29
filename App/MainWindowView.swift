@@ -14,9 +14,11 @@ struct MainWindowView: View {
     @Environment(PetCollectionStore.self) private var petCollection
     @Environment(CodexLivePoller.self) private var codex
     @Environment(PiAgentLivePoller.self) private var piAgent
+    @Environment(SupervisorLockStore.self) private var supervisorLock
     @State private var tab: Tab = .live
     @State private var liveFilter: LiveAgentFilter = .all
     @State private var showPrivacy: Bool = false
+    @State private var showSupervisorLock: Bool = false
     // Sync với @AppStorage trong SpritePet — toggle áp dụng cho mọi pet instance.
     @AppStorage("PetFlippedHorizontally") private var petFlipped: Bool = true
     @AppStorage("notif.streakRisk.enabled") private var streakRiskNoti: Bool = false
@@ -46,9 +48,23 @@ struct MainWindowView: View {
         .background(Claude.backgroundGradient)
         .background(shortcutKeys)
         .sheet(isPresented: $showPrivacy) { PrivacyView() }
-        .onAppear { refreshAuditSnapshots() }
+        .sheet(isPresented: $showSupervisorLock) { SupervisorLockView() }
+        .onAppear {
+            refreshAuditSnapshots()
+            presentSupervisorLockIfNeeded()
+        }
         .onChange(of: tab) { _, newTab in
             if newTab == .live { refreshAuditSnapshots() }
+        }
+        .onChange(of: supervisorLock.isLocked) { _, locked in
+            if !locked { presentSupervisorLockIfNeeded() }
+        }
+    }
+
+    private func presentSupervisorLockIfNeeded() {
+        guard !supervisorLock.isLocked else { return }
+        DispatchQueue.main.async {
+            showSupervisorLock = true
         }
     }
 
@@ -97,6 +113,22 @@ struct MainWindowView: View {
             if tab == .coaching || tab == .pets {
                 HeaderPet()
             }
+            if supervisorLock.isLocked {
+                Button { showSupervisorLock = true } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Locked")
+                            .font(ClaudeFont.label(10))
+                    }
+                    .foregroundStyle(Claude.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Claude.orangeSoft, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(supervisorLock.statusLine)
+            }
             HStack(spacing: 4) {
                 themePicker
                 settingsMenu
@@ -116,6 +148,13 @@ struct MainWindowView: View {
             Toggle("Lật pet sang phải", isOn: $petFlipped)
             // v0.6.0: streak-risk notification opt-in (default OFF).
             Toggle("Nhắc khi streak sắp mất (sau 18h)", isOn: $streakRiskNoti)
+            Divider()
+            Button {
+                showSupervisorLock = true
+            } label: {
+                Label(supervisorLock.isLocked ? "Supervisor Lock: On" : "Supervisor Lock: Enroll…",
+                      systemImage: supervisorLock.isLocked ? "lock.fill" : "lock.open")
+            }
             Divider()
             Button {
                 updater.checkForUpdates()

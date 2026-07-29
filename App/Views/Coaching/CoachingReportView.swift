@@ -9,6 +9,7 @@ struct CoachingReportView: View {
     // Internal (not private) — cross-file extensions in Coaching/ need access.
     @Environment(BookmarkStore.self) var bookmarks
     @Environment(CoachingDataStore.self) var data
+    @Environment(SupervisorLockStore.self) var supervisorLock
     @FocusState var searchFocused: Bool
     @State var scope: ScopeKind = .day
     @State var anchor: Date = Date()
@@ -148,11 +149,15 @@ struct CoachingReportView: View {
     /// KHÔNG check `isLoading` ở đây — manual refresh vẫn có thể đang chạy
     /// nhưng dữ liệu cũ còn hợp lệ để giữ layout ổn định.
     var isScopeEmpty: Bool {
-        !hasNeverLoaded && allSessions.isEmpty && allRecords.isEmpty
+        !hasNeverLoaded && allSessions.isEmpty && allRecords.isEmpty && lockAuditEvents.isEmpty
     }
 
     var stats: ReportStats {
         ReportGenerator.stats(for: records)
+    }
+
+    var lockAuditEvents: [SupervisorLockAuditEvent] {
+        supervisorLock.events(in: currentScope)
     }
 
     // MARK: - Body
@@ -176,6 +181,7 @@ struct CoachingReportView: View {
                         agentLoopIds: agentLoopIds
                     )
                     summaryCard
+                    lockAuditCard
                     riskCard
                     anomalyCard
                     tokenCostCard

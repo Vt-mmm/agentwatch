@@ -29,7 +29,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml</string>
+	<string>https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>ynaSo3Ac+GxZgbfaRN57FgCzf9mXsbUWeKPXUzg8msE=</string>
 	<key>SUScheduledCheckInterval</key>

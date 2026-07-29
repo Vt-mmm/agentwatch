@@ -4,7 +4,7 @@
      version="2.0">
     <channel>
         <title>Agent Watch</title>
-        <link>https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml</link>
+        <link>https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/appcast.xml</link>
         <description>Most recent changes for Agent Watch macOS (formerly Claude Watch).</description>
         <language>en</language>
         <item>
@@ -13,7 +13,7 @@
             <sparkle:shortVersionString>0.9.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Wed, 29 Jul 2026 07:41:32 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.9.6/ClaudeWatchMac-0.9.6.zip" sparkle:edSignature="0O22ez+QHPn2yrCK0ILNw2gQATrQB2wD8GBxHOf8tBJcEsjQghetct6MMR2SHq8KK9tNOGq5fZSwXMUcUbEAAw==" length="4983062" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.9.6/ClaudeWatchMac-0.9.6.zip" sparkle:edSignature="0O22ez+QHPn2yrCK0ILNw2gQATrQB2wD8GBxHOf8tBJcEsjQghetct6MMR2SHq8KK9tNOGq5fZSwXMUcUbEAAw==" length="4983062" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.9.5</title>
@@ -21,7 +21,7 @@
             <sparkle:shortVersionString>0.9.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Wed, 29 Jul 2026 07:07:20 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.9.5/ClaudeWatchMac-0.9.5.zip" sparkle:edSignature="ObAqXNzTQX3pDd6Em/TYR+LVrZRhnbsqlq9GTTBgQ9CUf2Bqr7Gf6ayU4Y8BkDkakr5wDuJU5zMoXVolgeKfAQ==" length="4827049" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.9.5/ClaudeWatchMac-0.9.5.zip" sparkle:edSignature="ObAqXNzTQX3pDd6Em/TYR+LVrZRhnbsqlq9GTTBgQ9CUf2Bqr7Gf6ayU4Y8BkDkakr5wDuJU5zMoXVolgeKfAQ==" length="4827049" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.9.4</title>
@@ -29,7 +29,7 @@
             <sparkle:shortVersionString>0.9.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Wed, 29 Jul 2026 06:39:13 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.9.4/ClaudeWatchMac-0.9.4.zip" sparkle:edSignature="VDLyP/oN1BwaxL+gE2Zsao5McGGvtjnOHtsDEb0GjDou13Oqiwvl34gsjwBdQluqLFT3ZppZPZgri5U6ASfODg==" length="4812857" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.9.4/ClaudeWatchMac-0.9.4.zip" sparkle:edSignature="VDLyP/oN1BwaxL+gE2Zsao5McGGvtjnOHtsDEb0GjDou13Oqiwvl34gsjwBdQluqLFT3ZppZPZgri5U6ASfODg==" length="4812857" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.9.3</title>
@@ -37,7 +37,7 @@
             <sparkle:shortVersionString>0.9.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Wed, 29 Jul 2026 06:13:15 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.9.3/ClaudeWatchMac-0.9.3.zip" sparkle:edSignature="ACdVwexNW5f49YR1q180JFXyMp6crUFzYxgMGR0WasgZR3bdFlqRW2GDXdGWcT4la9o6ys2D6yvnok97aBb2CQ==" length="4792749" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.9.3/ClaudeWatchMac-0.9.3.zip" sparkle:edSignature="ACdVwexNW5f49YR1q180JFXyMp6crUFzYxgMGR0WasgZR3bdFlqRW2GDXdGWcT4la9o6ys2D6yvnok97aBb2CQ==" length="4792749" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.9.2</title>
@@ -45,7 +45,7 @@
             <sparkle:shortVersionString>0.9.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Wed, 29 Jul 2026 05:45:49 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.9.2/ClaudeWatchMac-0.9.2.zip" sparkle:edSignature="ciz1x8VdWrORjxqlyEGmoKGE3SLHvCPUZ0X1XJpneT9nZPJuyxBefeDqU4RVPaSMPZpVg083Q3/tCGKw1QjkAg==" length="4624610" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.9.2/ClaudeWatchMac-0.9.2.zip" sparkle:edSignature="ciz1x8VdWrORjxqlyEGmoKGE3SLHvCPUZ0X1XJpneT9nZPJuyxBefeDqU4RVPaSMPZpVg083Q3/tCGKw1QjkAg==" length="4624610" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.9.1</title>
@@ -53,7 +53,7 @@
             <sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Wed, 29 Jul 2026 04:59:02 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.9.1/ClaudeWatchMac-0.9.1.zip" sparkle:edSignature="YOwzoBUzEzsP0evM9+R9+R8Fg+3GH9bk6IpNMvgyqjiW8BX1akNlSXT28mJ8ZZHurRIU1i7ROf7ZKX7BCMWcBQ==" length="4537763" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.9.1/ClaudeWatchMac-0.9.1.zip" sparkle:edSignature="YOwzoBUzEzsP0evM9+R9+R8Fg+3GH9bk6IpNMvgyqjiW8BX1akNlSXT28mJ8ZZHurRIU1i7ROf7ZKX7BCMWcBQ==" length="4537763" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.8.1</title>
@@ -61,7 +61,7 @@
             <sparkle:shortVersionString>0.8.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Sun, 28 Jun 2026 15:18:19 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.8.1/ClaudeWatchMac-0.8.1.zip" sparkle:edSignature="72QTjtWbkWtfAOVsW0zHE2H6t/RJce3dtxJvkxMpCz+lCSmZRHucZU3d1PWDoCIqS36DN3+QdXK5CqXqlXIOCA==" length="4257919" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.8.1/ClaudeWatchMac-0.8.1.zip" sparkle:edSignature="72QTjtWbkWtfAOVsW0zHE2H6t/RJce3dtxJvkxMpCz+lCSmZRHucZU3d1PWDoCIqS36DN3+QdXK5CqXqlXIOCA==" length="4257919" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.8.0</title>
@@ -69,7 +69,7 @@
             <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 26 Jun 2026 03:10:10 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.8.0/ClaudeWatchMac-0.8.0.zip" sparkle:edSignature="2hf+cLt7QEquRS/zyrdJBZCQFi0Q6lSloUW1FCFRK8iqcKrM7amiWPWetR8Mev9/3+GyYy4N62QbpHrDoRiDDA==" length="4226077" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.8.0/ClaudeWatchMac-0.8.0.zip" sparkle:edSignature="2hf+cLt7QEquRS/zyrdJBZCQFi0Q6lSloUW1FCFRK8iqcKrM7amiWPWetR8Mev9/3+GyYy4N62QbpHrDoRiDDA==" length="4226077" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.7.0</title>
@@ -77,7 +77,7 @@
             <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 26 Jun 2026 02:28:05 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.7.0/ClaudeWatchMac-0.7.0.zip" sparkle:edSignature="AK7oO7bfHSArTQtxXjW8LT7/iy/Tw1JnnOLE2xfXr4gPBA/NNnSiag7WQqz1ShjvcoNT5wBtqUyYX2ySQYQ5CA==" length="4188023" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.7.0/ClaudeWatchMac-0.7.0.zip" sparkle:edSignature="AK7oO7bfHSArTQtxXjW8LT7/iy/Tw1JnnOLE2xfXr4gPBA/NNnSiag7WQqz1ShjvcoNT5wBtqUyYX2ySQYQ5CA==" length="4188023" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.6.1</title>
@@ -85,7 +85,7 @@
             <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 26 Jun 2026 02:20:16 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.6.1/ClaudeWatchMac-0.6.1.zip" sparkle:edSignature="PuA6q7SDVmE8TJUrREWdwtRQ9jFtfIMmrX4RE1VbtALDR+gqg4TcjNtXdvz7F8xXlki/Y+YPuXfUStrUXEqWCQ==" length="4138517" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.6.1/ClaudeWatchMac-0.6.1.zip" sparkle:edSignature="PuA6q7SDVmE8TJUrREWdwtRQ9jFtfIMmrX4RE1VbtALDR+gqg4TcjNtXdvz7F8xXlki/Y+YPuXfUStrUXEqWCQ==" length="4138517" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.6.0</title>
@@ -93,7 +93,7 @@
             <sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Mon, 22 Jun 2026 08:22:56 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.6.0/ClaudeWatchMac-0.6.0.zip" sparkle:edSignature="BBOGO7TV5n1tGIDsWV2GrcR518XRhNZJ1mZa1hDph9XUO3MSOR0HnO5BCwEtQNGQ8U4FCO9GY44teJEy7oxFAw==" length="4138521" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.6.0/ClaudeWatchMac-0.6.0.zip" sparkle:edSignature="BBOGO7TV5n1tGIDsWV2GrcR518XRhNZJ1mZa1hDph9XUO3MSOR0HnO5BCwEtQNGQ8U4FCO9GY44teJEy7oxFAw==" length="4138521" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.5.0</title>
@@ -101,7 +101,7 @@
             <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Mon, 22 Jun 2026 08:13:55 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.5.0/ClaudeWatchMac-0.5.0.zip" sparkle:edSignature="8Jlbn3DkZ8ZQEOoenQR3pi4aO8tG8y/NhH3dq1GG/95f9uD/pCJLKuSWQJ6pDtVWUzqpOB1zGp9mImK1TGtjDQ==" length="4046312" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.5.0/ClaudeWatchMac-0.5.0.zip" sparkle:edSignature="8Jlbn3DkZ8ZQEOoenQR3pi4aO8tG8y/NhH3dq1GG/95f9uD/pCJLKuSWQJ6pDtVWUzqpOB1zGp9mImK1TGtjDQ==" length="4046312" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.4.1</title>
@@ -109,7 +109,7 @@
             <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Mon, 22 Jun 2026 07:54:07 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.4.1/ClaudeWatchMac-0.4.1.zip" sparkle:edSignature="qC1M2ld6ANJbr7wDJNUKmIoJBmLh7g8T+xrao+X6SNOkXjGQPZF8Hv4tL15hsfZPYTAos74DALy8KTogyNNhAA==" length="3968395" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.4.1/ClaudeWatchMac-0.4.1.zip" sparkle:edSignature="qC1M2ld6ANJbr7wDJNUKmIoJBmLh7g8T+xrao+X6SNOkXjGQPZF8Hv4tL15hsfZPYTAos74DALy8KTogyNNhAA==" length="3968395" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.4.0</title>
@@ -117,7 +117,7 @@
             <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Mon, 22 Jun 2026 02:20:57 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.4.0/ClaudeWatchMac-0.4.0.zip" sparkle:edSignature="osffoMXPxHL3p2+wD2ld6+MB/2FmxcQ7y7AuDSZtiayEv2GqMmVMOUQg2HE+Fy6da1TS2vKzL/bPhI2csPr8CA==" length="3914647" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.4.0/ClaudeWatchMac-0.4.0.zip" sparkle:edSignature="osffoMXPxHL3p2+wD2ld6+MB/2FmxcQ7y7AuDSZtiayEv2GqMmVMOUQg2HE+Fy6da1TS2vKzL/bPhI2csPr8CA==" length="3914647" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.3.0</title>
@@ -125,7 +125,7 @@
             <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Wed, 17 Jun 2026 07:51:31 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.3.0/ClaudeWatchMac-0.3.0.zip" sparkle:edSignature="ukmwrn5yLqf3TRMJJygdNEvWs/YrKAHVblzBePK26qvnKOi+HbFQ+fHcjK4IUSnb/6MvuoTNuycimqRRHllBDw==" length="3870818" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.3.0/ClaudeWatchMac-0.3.0.zip" sparkle:edSignature="ukmwrn5yLqf3TRMJJygdNEvWs/YrKAHVblzBePK26qvnKOi+HbFQ+fHcjK4IUSnb/6MvuoTNuycimqRRHllBDw==" length="3870818" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.2.3</title>
@@ -133,7 +133,7 @@
             <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Wed, 17 Jun 2026 07:22:32 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.2.3/ClaudeWatchMac-0.2.3.zip" sparkle:edSignature="tpaCR/NKSHSMy4BxtxuatyBMKdwm0UYWaxx9ojY2jVCsOLXQ3jkfj9T3ZJke9+s8T+Up1PpXMzQ4yjrgXJNFCQ==" length="3805549" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.2.3/ClaudeWatchMac-0.2.3.zip" sparkle:edSignature="tpaCR/NKSHSMy4BxtxuatyBMKdwm0UYWaxx9ojY2jVCsOLXQ3jkfj9T3ZJke9+s8T+Up1PpXMzQ4yjrgXJNFCQ==" length="3805549" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.2.2</title>
@@ -141,7 +141,7 @@
             <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Mon, 15 Jun 2026 06:28:40 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.2.2/ClaudeWatchMac-0.2.2.zip" sparkle:edSignature="MZsnTu51KpOdmFW2MffnG7Y/yAqdnpahdU9duuDuJLRvOhEt2c0BWSGsYRyPgpTZ7rs2mLI0Q0PGx9Fii52ICg==" length="3801719" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.2.2/ClaudeWatchMac-0.2.2.zip" sparkle:edSignature="MZsnTu51KpOdmFW2MffnG7Y/yAqdnpahdU9duuDuJLRvOhEt2c0BWSGsYRyPgpTZ7rs2mLI0Q0PGx9Fii52ICg==" length="3801719" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.2.1</title>
@@ -149,7 +149,7 @@
             <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Mon, 15 Jun 2026 06:07:01 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.2.1/ClaudeWatchMac-0.2.1.zip" sparkle:edSignature="pNc4jSr6ppZt5hh3ThLCoFB+wrc9KIdISD9kUqGWPXj+249F7kvxkqKXSdp4wo0m79/z9YYCWI6k4eTvK8KKAg==" length="3799852" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.2.1/ClaudeWatchMac-0.2.1.zip" sparkle:edSignature="pNc4jSr6ppZt5hh3ThLCoFB+wrc9KIdISD9kUqGWPXj+249F7kvxkqKXSdp4wo0m79/z9YYCWI6k4eTvK8KKAg==" length="3799852" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.2.0</title>
@@ -157,7 +157,7 @@
             <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Mon, 15 Jun 2026 04:55:51 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.2.0/ClaudeWatchMac-0.2.0.zip" sparkle:edSignature="RLD87aaHH/Dp4F6nKFsgYnKlwBq1gNg+LXllUWHIfRkaJJP5q18MxNNYxfk2v6FDeJZog0uE9x+EuUUo7MdsBw==" length="3759382" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.2.0/ClaudeWatchMac-0.2.0.zip" sparkle:edSignature="RLD87aaHH/Dp4F6nKFsgYnKlwBq1gNg+LXllUWHIfRkaJJP5q18MxNNYxfk2v6FDeJZog0uE9x+EuUUo7MdsBw==" length="3759382" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.30</title>
@@ -165,7 +165,7 @@
             <sparkle:shortVersionString>0.1.30</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 17:11:52 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.30/ClaudeWatchMac-0.1.30.zip" sparkle:edSignature="yUYTVgHrayuFCqaUIa+dWDACFWUPz8b6UBXhkVBnhURlPMEsdThHVaKkwxX1z+XRRIiRmGpOsj1eSk2kDjT5BQ==" length="3658598" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.30/ClaudeWatchMac-0.1.30.zip" sparkle:edSignature="yUYTVgHrayuFCqaUIa+dWDACFWUPz8b6UBXhkVBnhURlPMEsdThHVaKkwxX1z+XRRIiRmGpOsj1eSk2kDjT5BQ==" length="3658598" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.29</title>
@@ -173,7 +173,7 @@
             <sparkle:shortVersionString>0.1.29</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 16:06:34 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.29/ClaudeWatchMac-0.1.29.zip" sparkle:edSignature="DFP9ZcOilxCv71QVzigULq2ayene34uPd+05Qmf9KqdR/Q0kxePN/5DcTtCeMKzqCPQ3tfYL1cY0o+BDm71LDA==" length="3653457" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.29/ClaudeWatchMac-0.1.29.zip" sparkle:edSignature="DFP9ZcOilxCv71QVzigULq2ayene34uPd+05Qmf9KqdR/Q0kxePN/5DcTtCeMKzqCPQ3tfYL1cY0o+BDm71LDA==" length="3653457" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.28</title>
@@ -181,7 +181,7 @@
             <sparkle:shortVersionString>0.1.28</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 13:29:30 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.28/ClaudeWatchMac-0.1.28.zip" sparkle:edSignature="t+IHw6p3T/5vxg+5KTCYNjwGf6WtXPOkPNvzcDVqOZre7PWkTuQacz41/HLGSfUwdZwxgRKE37r94GCt2d7SDQ==" length="3651224" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.28/ClaudeWatchMac-0.1.28.zip" sparkle:edSignature="t+IHw6p3T/5vxg+5KTCYNjwGf6WtXPOkPNvzcDVqOZre7PWkTuQacz41/HLGSfUwdZwxgRKE37r94GCt2d7SDQ==" length="3651224" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.27</title>
@@ -189,7 +189,7 @@
             <sparkle:shortVersionString>0.1.27</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 13:14:28 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.27/ClaudeWatchMac-0.1.27.zip" sparkle:edSignature="9eT2YkJPxVHSw7ny8gH1a11do4mooBDR+b8z3oWNhPqkp0QkZakDo/w5hoyBPOFRmIbfxbLVd8B9WAr024MJDg==" length="3650622" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.27/ClaudeWatchMac-0.1.27.zip" sparkle:edSignature="9eT2YkJPxVHSw7ny8gH1a11do4mooBDR+b8z3oWNhPqkp0QkZakDo/w5hoyBPOFRmIbfxbLVd8B9WAr024MJDg==" length="3650622" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.26</title>
@@ -197,7 +197,7 @@
             <sparkle:shortVersionString>0.1.26</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 10:34:22 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.26/ClaudeWatchMac-0.1.26.zip" sparkle:edSignature="zFAhHNfSjqNjxVnwZJPZOSmvJvqa0vVKVuzW8BOR/nlQIK1t/5GG2mSTw5TsxvUvYNMYTPrwMuqWIqiD/PA1DQ==" length="3647350" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.26/ClaudeWatchMac-0.1.26.zip" sparkle:edSignature="zFAhHNfSjqNjxVnwZJPZOSmvJvqa0vVKVuzW8BOR/nlQIK1t/5GG2mSTw5TsxvUvYNMYTPrwMuqWIqiD/PA1DQ==" length="3647350" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.25</title>
@@ -205,7 +205,7 @@
             <sparkle:shortVersionString>0.1.25</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 10:20:17 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.25/ClaudeWatchMac-0.1.25.zip" sparkle:edSignature="dD4hv3YnFEhFNoYPSWNzN2LnMsezsE8aQhFlomWG7jpOi6G3jx8tGTMQbCEa8EGcfCMzaydDcevfI6TPoLYoCw==" length="3645349" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.25/ClaudeWatchMac-0.1.25.zip" sparkle:edSignature="dD4hv3YnFEhFNoYPSWNzN2LnMsezsE8aQhFlomWG7jpOi6G3jx8tGTMQbCEa8EGcfCMzaydDcevfI6TPoLYoCw==" length="3645349" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.24</title>
@@ -213,7 +213,7 @@
             <sparkle:shortVersionString>0.1.24</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 10:13:05 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.24/ClaudeWatchMac-0.1.24.zip" sparkle:edSignature="auVgcH5uMHxZgyQ9IYu0PCA3ph5UObdJWqVH+CMzirUePJnSRhV7x3XGBT6NJwQOEhudW0TiBVXx+cqQknwZDA==" length="3632655" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.24/ClaudeWatchMac-0.1.24.zip" sparkle:edSignature="auVgcH5uMHxZgyQ9IYu0PCA3ph5UObdJWqVH+CMzirUePJnSRhV7x3XGBT6NJwQOEhudW0TiBVXx+cqQknwZDA==" length="3632655" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.23</title>
@@ -221,7 +221,7 @@
             <sparkle:shortVersionString>0.1.23</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 09:53:59 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.23/ClaudeWatchMac-0.1.23.zip" sparkle:edSignature="NycgleKy4bLsBxQ9vFGatfyutPC1JmBv/vTUZQ34H35hVL0WI5fzXLkuHE94dnWYn/YNM9XwJG21MB+PjWT/Dg==" length="3602530" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.23/ClaudeWatchMac-0.1.23.zip" sparkle:edSignature="NycgleKy4bLsBxQ9vFGatfyutPC1JmBv/vTUZQ34H35hVL0WI5fzXLkuHE94dnWYn/YNM9XwJG21MB+PjWT/Dg==" length="3602530" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.22</title>
@@ -229,7 +229,7 @@
             <sparkle:shortVersionString>0.1.22</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 09:47:15 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.22/ClaudeWatchMac-0.1.22.zip" sparkle:edSignature="lWs7U3UfPMpy0I/bHPzly1tB8zgt2lLjafDH/Hy2dj5WPy1McfCGFqrQCRlbfjuLEQCCzWvOXsWPK75QsIqeBg==" length="3608764" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.22/ClaudeWatchMac-0.1.22.zip" sparkle:edSignature="lWs7U3UfPMpy0I/bHPzly1tB8zgt2lLjafDH/Hy2dj5WPy1McfCGFqrQCRlbfjuLEQCCzWvOXsWPK75QsIqeBg==" length="3608764" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.21</title>
@@ -237,7 +237,7 @@
             <sparkle:shortVersionString>0.1.21</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 09:43:06 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.21/ClaudeWatchMac-0.1.21.zip" sparkle:edSignature="WRSDsUn2BwGB+ngpNWDFG0UJ9YUWeFQH+0tgoNl0BqsGbKGoUSgwJw5s6F/Z1R6LzlTvfCH7AwAWBLyH4nStDA==" length="3593043" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.21/ClaudeWatchMac-0.1.21.zip" sparkle:edSignature="WRSDsUn2BwGB+ngpNWDFG0UJ9YUWeFQH+0tgoNl0BqsGbKGoUSgwJw5s6F/Z1R6LzlTvfCH7AwAWBLyH4nStDA==" length="3593043" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.20</title>
@@ -245,7 +245,7 @@
             <sparkle:shortVersionString>0.1.20</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 09:39:07 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.20/ClaudeWatchMac-0.1.20.zip" sparkle:edSignature="cBZekjH+sK554qtvNCRtB4Iw95dGSAzp9BIeWb7l2r+j8kwPU1zGMYHQ8kwaOJmYX03pJ4dUYagjZg18QCytBA==" length="3585297" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.20/ClaudeWatchMac-0.1.20.zip" sparkle:edSignature="cBZekjH+sK554qtvNCRtB4Iw95dGSAzp9BIeWb7l2r+j8kwPU1zGMYHQ8kwaOJmYX03pJ4dUYagjZg18QCytBA==" length="3585297" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.19</title>
@@ -253,7 +253,7 @@
             <sparkle:shortVersionString>0.1.19</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 09:30:24 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.19/ClaudeWatchMac-0.1.19.zip" sparkle:edSignature="R39ucCMJnDuo8GSXHkvRTpThT4RXAMG39f5QV3oGagU6i8sX/w+q4diEilRQk6UPtlm2S6El0bJzCFwu13oFAQ==" length="3576407" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.19/ClaudeWatchMac-0.1.19.zip" sparkle:edSignature="R39ucCMJnDuo8GSXHkvRTpThT4RXAMG39f5QV3oGagU6i8sX/w+q4diEilRQk6UPtlm2S6El0bJzCFwu13oFAQ==" length="3576407" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.18</title>
@@ -261,7 +261,7 @@
             <sparkle:shortVersionString>0.1.18</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 09:24:02 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.18/ClaudeWatchMac-0.1.18.zip" sparkle:edSignature="nJSTjNA7yvWFtq70MPNLYxcbM08NF7LNG+UorxRteAa6Be3DC7CyyHRqymv6EvSFRMXIRGDqekatR87u+3oRAg==" length="3592494" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.18/ClaudeWatchMac-0.1.18.zip" sparkle:edSignature="nJSTjNA7yvWFtq70MPNLYxcbM08NF7LNG+UorxRteAa6Be3DC7CyyHRqymv6EvSFRMXIRGDqekatR87u+3oRAg==" length="3592494" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.17</title>
@@ -269,7 +269,7 @@
             <sparkle:shortVersionString>0.1.17</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 09:13:19 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.17/ClaudeWatchMac-0.1.17.zip" sparkle:edSignature="/psqM9zoR/I9BZ3eRPihVXn/4qXkqCz4/KJYY0iDOB8ASkOUCGnQJS3UiIFg6fCvgzdb0D/WTMMY2klRXtqYAw==" length="3543765" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.17/ClaudeWatchMac-0.1.17.zip" sparkle:edSignature="/psqM9zoR/I9BZ3eRPihVXn/4qXkqCz4/KJYY0iDOB8ASkOUCGnQJS3UiIFg6fCvgzdb0D/WTMMY2klRXtqYAw==" length="3543765" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.16</title>
@@ -277,7 +277,7 @@
             <sparkle:shortVersionString>0.1.16</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 09:04:39 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.16/ClaudeWatchMac-0.1.16.zip" sparkle:edSignature="T8wND2ibmiRZpRCrpcyJhm6goFCTT+3LdHSskFmqZKxINiXmkxUC7Umul9pLb9/yRrWoKtZN7fiWIzJRi10vBQ==" length="3543766" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.16/ClaudeWatchMac-0.1.16.zip" sparkle:edSignature="T8wND2ibmiRZpRCrpcyJhm6goFCTT+3LdHSskFmqZKxINiXmkxUC7Umul9pLb9/yRrWoKtZN7fiWIzJRi10vBQ==" length="3543766" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.15</title>
@@ -285,7 +285,7 @@
             <sparkle:shortVersionString>0.1.15</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 08:48:41 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.15/ClaudeWatchMac-0.1.15.zip" sparkle:edSignature="nA11PzoJIHiJeluqYrNhQt7iD5RQiQJGkMfwmYWLICBfAmrY11q6Sto4yMvLubAYyr4O7NbD5CFRpDqfiNhPDA==" length="3492889" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.15/ClaudeWatchMac-0.1.15.zip" sparkle:edSignature="nA11PzoJIHiJeluqYrNhQt7iD5RQiQJGkMfwmYWLICBfAmrY11q6Sto4yMvLubAYyr4O7NbD5CFRpDqfiNhPDA==" length="3492889" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.14</title>
@@ -293,7 +293,7 @@
             <sparkle:shortVersionString>0.1.14</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 08:35:18 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.14/ClaudeWatchMac-0.1.14.zip" sparkle:edSignature="P1ppZjXa8QgCQ+QOSCK69+L0uWfK01VAcSxKQLe8igxtHncUyUP+dDyvO7QIQxLhEwuILR6cAOpq8qDgfigoCQ==" length="3456755" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.14/ClaudeWatchMac-0.1.14.zip" sparkle:edSignature="P1ppZjXa8QgCQ+QOSCK69+L0uWfK01VAcSxKQLe8igxtHncUyUP+dDyvO7QIQxLhEwuILR6cAOpq8qDgfigoCQ==" length="3456755" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.13</title>
@@ -301,7 +301,7 @@
             <sparkle:shortVersionString>0.1.13</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 08:28:36 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.13/ClaudeWatchMac-0.1.13.zip" sparkle:edSignature="yDnbdWde8ZQxf548Kyh4To84/DC3cbhgVjvZJUagSOq5FnLgWxtA29ga7mrpX6n4lOqMieQhaM27mqCBpS+eAQ==" length="3456754" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.13/ClaudeWatchMac-0.1.13.zip" sparkle:edSignature="yDnbdWde8ZQxf548Kyh4To84/DC3cbhgVjvZJUagSOq5FnLgWxtA29ga7mrpX6n4lOqMieQhaM27mqCBpS+eAQ==" length="3456754" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.12</title>
@@ -309,7 +309,7 @@
             <sparkle:shortVersionString>0.1.12</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 08:18:06 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.12/ClaudeWatchMac-0.1.12.zip" sparkle:edSignature="/B7lHapK+TvMw9KwPyhooCxXi4XI5bcASY+Yfq0FZLajg6pGYSi1XJS2A6UkBmzy+c1nirTZGHjw6zfo9HZRDg==" length="3454836" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.12/ClaudeWatchMac-0.1.12.zip" sparkle:edSignature="/B7lHapK+TvMw9KwPyhooCxXi4XI5bcASY+Yfq0FZLajg6pGYSi1XJS2A6UkBmzy+c1nirTZGHjw6zfo9HZRDg==" length="3454836" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.11</title>
@@ -317,7 +317,7 @@
             <sparkle:shortVersionString>0.1.11</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 08:11:32 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.11/ClaudeWatchMac-0.1.11.zip" sparkle:edSignature="gCxuqog9zbD7oLn11fHjDxPzIG+oD7uyGOznGZEpAFkxla8qJ+mOzslGU15k+Vw9YhkZ/DUFPeoBCp/OJloTAA==" length="3450019" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.11/ClaudeWatchMac-0.1.11.zip" sparkle:edSignature="gCxuqog9zbD7oLn11fHjDxPzIG+oD7uyGOznGZEpAFkxla8qJ+mOzslGU15k+Vw9YhkZ/DUFPeoBCp/OJloTAA==" length="3450019" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.10</title>
@@ -325,7 +325,7 @@
             <sparkle:shortVersionString>0.1.10</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 07:59:45 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.10/ClaudeWatchMac-0.1.10.zip" sparkle:edSignature="K4gbsCCdUrKj8D4jO9VxIqLhQB1B2dFS+cHHcwUIzfg00TGlBiWv+rN8gecCeVCPN+VGh9Js1ZhYjJRUN+iUDQ==" length="3423078" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.10/ClaudeWatchMac-0.1.10.zip" sparkle:edSignature="K4gbsCCdUrKj8D4jO9VxIqLhQB1B2dFS+cHHcwUIzfg00TGlBiWv+rN8gecCeVCPN+VGh9Js1ZhYjJRUN+iUDQ==" length="3423078" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.9</title>
@@ -333,7 +333,7 @@
             <sparkle:shortVersionString>0.1.9</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 07:51:32 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.9/ClaudeWatchMac-0.1.9.zip" sparkle:edSignature="rnmNl8ROy7fX98qzlFuRXSF/uDdAA/aisTpDIHztyFmyQGLxR6XtB4ZJJmihH/k2L2ve8W9l9FKzdsrxsxKICA==" length="3415324" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.9/ClaudeWatchMac-0.1.9.zip" sparkle:edSignature="rnmNl8ROy7fX98qzlFuRXSF/uDdAA/aisTpDIHztyFmyQGLxR6XtB4ZJJmihH/k2L2ve8W9l9FKzdsrxsxKICA==" length="3415324" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.8</title>
@@ -341,7 +341,7 @@
             <sparkle:shortVersionString>0.1.8</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 07:38:29 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.8/ClaudeWatchMac-0.1.8.zip" sparkle:edSignature="QWcf5165722gsiHnnyOtb5PSijIDFlbrMy40L09siQihw1U5PljsI1lCZaUwgC0iP9jrpvnTyiztRHdhzfwmAg==" length="3365483" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.8/ClaudeWatchMac-0.1.8.zip" sparkle:edSignature="QWcf5165722gsiHnnyOtb5PSijIDFlbrMy40L09siQihw1U5PljsI1lCZaUwgC0iP9jrpvnTyiztRHdhzfwmAg==" length="3365483" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.7</title>
@@ -349,7 +349,7 @@
             <sparkle:shortVersionString>0.1.7</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 07:35:15 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.7/ClaudeWatchMac-0.1.7.zip" sparkle:edSignature="AbAvTEHVqHmqpi7yWXatD7aRCKvZDBUvzWUPnXOjWSa4jl1PxZUMfQGetVNVLI0V5emZoKmHFF2SvFKHh3HyBw==" length="3338280" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.7/ClaudeWatchMac-0.1.7.zip" sparkle:edSignature="AbAvTEHVqHmqpi7yWXatD7aRCKvZDBUvzWUPnXOjWSa4jl1PxZUMfQGetVNVLI0V5emZoKmHFF2SvFKHh3HyBw==" length="3338280" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.6</title>
@@ -357,7 +357,7 @@
             <sparkle:shortVersionString>0.1.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 06:51:49 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.6/ClaudeWatchMac-0.1.6.zip" sparkle:edSignature="kZDf4hDjUU6dzDobYWRqt7WtrooqWtE8lel+FmMoUe0YFY+woryVBd0tQN2nIOIpdXp1fI6aNka4lEQxDsT+DQ==" length="3336841" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.6/ClaudeWatchMac-0.1.6.zip" sparkle:edSignature="kZDf4hDjUU6dzDobYWRqt7WtrooqWtE8lel+FmMoUe0YFY+woryVBd0tQN2nIOIpdXp1fI6aNka4lEQxDsT+DQ==" length="3336841" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.5</title>
@@ -365,7 +365,7 @@
             <sparkle:shortVersionString>0.1.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 06:45:10 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.5/ClaudeWatchMac-0.1.5.zip" sparkle:edSignature="WmugogH7lHzdA8/F/4iDZ0XQxK15udXgvgnV3i2ownMxQsDm/cWogUo/zTBprGOesDty7q4zFhZI8V/di/csAw==" length="3287347" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.5/ClaudeWatchMac-0.1.5.zip" sparkle:edSignature="WmugogH7lHzdA8/F/4iDZ0XQxK15udXgvgnV3i2ownMxQsDm/cWogUo/zTBprGOesDty7q4zFhZI8V/di/csAw==" length="3287347" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.4</title>
@@ -373,7 +373,7 @@
             <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 06:40:47 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.4/ClaudeWatchMac-0.1.4.zip" sparkle:edSignature="fSQBaqYqHbF5hlJfNMpuQnqWrJs2LcHXf1g52b+K0e8scJHEXbMDwggSkjYbj8fW/02QxEymwHIqiysuC9ewBQ==" length="3194490" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.4/ClaudeWatchMac-0.1.4.zip" sparkle:edSignature="fSQBaqYqHbF5hlJfNMpuQnqWrJs2LcHXf1g52b+K0e8scJHEXbMDwggSkjYbj8fW/02QxEymwHIqiysuC9ewBQ==" length="3194490" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.3</title>
@@ -381,7 +381,7 @@
             <sparkle:shortVersionString>0.1.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 06:36:40 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.3/ClaudeWatchMac-0.1.3.zip" sparkle:edSignature="o4e0l17XN1mqaqipzq6dYs7qcJy8Bc7tKPIis3NmJquL/OMyKPRXAXg/iUJCSyBF4DX9utF+bJUYRFw4mPw/Ag==" length="3192648" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.3/ClaudeWatchMac-0.1.3.zip" sparkle:edSignature="o4e0l17XN1mqaqipzq6dYs7qcJy8Bc7tKPIis3NmJquL/OMyKPRXAXg/iUJCSyBF4DX9utF+bJUYRFw4mPw/Ag==" length="3192648" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.2</title>
@@ -389,7 +389,7 @@
             <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 06:28:14 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.2/ClaudeWatchMac-0.1.2.zip" sparkle:edSignature="H6lDgCs4McGdabe4yDibXL/MlNZNsKGCjLOjfiMmwvIfUpT/GF5dA9xDIn7jQBnTNel1WS08+ntx6PjrkhACAg==" length="3188985" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.2/ClaudeWatchMac-0.1.2.zip" sparkle:edSignature="H6lDgCs4McGdabe4yDibXL/MlNZNsKGCjLOjfiMmwvIfUpT/GF5dA9xDIn7jQBnTNel1WS08+ntx6PjrkhACAg==" length="3188985" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.1</title>
@@ -397,7 +397,7 @@
             <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 06:24:17 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.1/ClaudeWatchMac-0.1.1.zip" sparkle:edSignature="hLW4XuUdX1tyZbRh8Whz5jEnVsKhqhDUgz8fOrgtrMtqQIjTvekQ09YFcbhK4nzARVvcEB6EEH1ZTi+LNqkRCg==" length="3174804" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.1/ClaudeWatchMac-0.1.1.zip" sparkle:edSignature="hLW4XuUdX1tyZbRh8Whz5jEnVsKhqhDUgz8fOrgtrMtqQIjTvekQ09YFcbhK4nzARVvcEB6EEH1ZTi+LNqkRCg==" length="3174804" type="application/octet-stream"/>
         </item>
         <item>
             <title>Version 0.1.0</title>
@@ -405,7 +405,7 @@
             <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 12 Jun 2026 06:10:57 +0000</pubDate>
-            <enclosure url="https://github.com/Vt-mmm/claudewatch/releases/download/v0.1.0/ClaudeWatchMac-0.1.0.zip" sparkle:edSignature="k/EuASPuTg9W0yojtTXI4jsejFp7dlVZyWJxCZU/AwNRhzwIrQ/DtuITfi8ZfQefgg52XwxwNwqA4fyrmzLQAw==" length="3163848" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Vt-mmm/agentwatch/releases/download/v0.1.0/ClaudeWatchMac-0.1.0.zip" sparkle:edSignature="k/EuASPuTg9W0yojtTXI4jsejFp7dlVZyWJxCZU/AwNRhzwIrQ/DtuITfi8ZfQefgg52XwxwNwqA4fyrmzLQAw==" length="3163848" type="application/octet-stream"/>
         </item>
     </channel>
 </rss>

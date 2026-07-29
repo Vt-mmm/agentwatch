@@ -148,7 +148,7 @@ User chạy bản cũ sẽ thấy popup update trong ≤1h, hoặc dùng menu Ch
 
 ### User install bản đầu (chia cho team)
 
-1. Tải `.zip` từ https://github.com/Vt-mmm/claudewatch/releases/latest → unzip → kéo `ClaudeWatchMac.app` vô `/Applications`.
+1. Tải `.zip` từ https://github.com/Vt-mmm/agentwatch/releases/latest → unzip → kéo `ClaudeWatchMac.app` vô `/Applications`.
 2. **Bypass Gatekeeper lần đầu** (app ad-hoc signed, không có Developer ID):
    ```bash
    xattr -dr com.apple.quarantine /Applications/ClaudeWatchMac.app
@@ -176,10 +176,10 @@ Click **Settings (gear) → Privacy & Data Access…** để xem **danh sách fi
 
 | Khi nào | Tới đâu | Data sent |
 |---|---|---|
-| Mỗi 1h (Sparkle auto-check) | `https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml` | Chỉ request — **không** kèm user agent identifier, project info, prompt, cost… |
-| Khi user accept update | `https://github.com/Vt-mmm/claudewatch/releases/download/.../*.zip` | Chỉ request — verify bằng EdDSA pubkey hard-coded trong app |
+| Mỗi 1h (Sparkle auto-check) | `https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/appcast.xml` | Chỉ request — **không** kèm user agent identifier, project info, prompt, cost… |
+| Khi user accept update | `https://github.com/Vt-mmm/agentwatch/releases/download/.../*.zip` | Chỉ request — verify bằng EdDSA pubkey hard-coded trong app |
 
-**Không** có analytics, telemetry, error reporting, hay bất kỳ outbound call nào khác. Source code public tại https://github.com/Vt-mmm/claudewatch để team tự kiểm tra.
+**Không** có analytics, telemetry, error reporting, hay bất kỳ outbound call nào khác. Source code public tại https://github.com/Vt-mmm/agentwatch để team tự kiểm tra.
 
 ### Export
 

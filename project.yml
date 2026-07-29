@@ -41,7 +41,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSHumanReadableCopyright: "© 2026 vtamm"
-        SUFeedURL: "https://raw.githubusercontent.com/Vt-mmm/claudewatch/main/appcast.xml"
+        SUFeedURL: "https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/appcast.xml"
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 3600
         SUPublicEDKey: "ynaSo3Ac+GxZgbfaRN57FgCzf9mXsbUWeKPXUzg8msE="

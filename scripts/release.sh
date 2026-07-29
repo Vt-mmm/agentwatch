@@ -104,7 +104,7 @@ gh release create "$TAG" "$REL_DIR/$ZIP" "$REL_DIR/claudewatch" \
     --notes "Built from $TAG. Auto-update sẽ tự tải qua Sparkle. CLI binary có sẵn — chmod +x rồi copy vào /usr/local/bin/." \
     --latest
 
-URL="https://github.com/Vt-mmm/claudewatch/releases/download/$TAG/$ZIP"
+URL="https://github.com/Vt-mmm/agentwatch/releases/download/$TAG/$ZIP"
 DATE="$(date -u "+%a, %d %b %Y %H:%M:%S +0000")"
 
 echo "→ [7/7] Cập nhật appcast.xml"

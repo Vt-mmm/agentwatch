@@ -8,6 +8,12 @@
 //   - Claude Desktop "Computer Use" / Local Agent Mode
 //   - Format: JSONL audit log, `client_platform:"desktop_app"`, có `_audit_hmac`
 //   - File tên audit.jsonl, nằm trong nested folder organization
+//
+// Codex: ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
+//   - Codex CLI/Desktop rollout log
+//
+// PiAgent: ~/.pi/agent/sessions/**/*.jsonl
+//   - Pi agent local session log, gồm cả subagent runs
 
 import Foundation
 
@@ -16,12 +22,15 @@ public enum SessionSource: String, Sendable, CaseIterable {
     case desktop
     /// v0.7.0: Codex CLI/Desktop — JSONL ở ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl.
     case codex
+    /// v0.9.0: PiAgent local sessions — JSONL ở ~/.pi/agent/sessions/**.
+    case piagent
 
     public var label: String {
         switch self {
         case .cli:     return "Claude CLI"
         case .desktop: return "Claude Desktop"
         case .codex:   return "Codex"
+        case .piagent: return "PiAgent"
         }
     }
 
@@ -30,6 +39,7 @@ public enum SessionSource: String, Sendable, CaseIterable {
         case .cli:     return "CLI"
         case .desktop: return "Desk"
         case .codex:   return "Codex"
+        case .piagent: return "Pi"
         }
     }
 
@@ -38,15 +48,16 @@ public enum SessionSource: String, Sendable, CaseIterable {
         case .cli:     return "⌨︎"
         case .desktop: return "🖥"
         case .codex:   return "🤖"
+        case .piagent: return "π"
         }
     }
 
-    /// Agent vendor — Anthropic (Claude) hay OpenAI (Codex). Hữu ích cho stats
-    /// breakdown "Claude vs Codex" gộp CLI + Desktop về cùng vendor.
+    /// Agent vendor — Anthropic/OpenAI/PiAgent. Hữu ích cho stats breakdown.
     public var vendor: AgentVendor {
         switch self {
         case .cli, .desktop: return .claude
         case .codex:         return .codex
+        case .piagent:       return .piagent
         }
     }
 }
@@ -55,11 +66,13 @@ public enum SessionSource: String, Sendable, CaseIterable {
 public enum AgentVendor: String, Sendable, CaseIterable {
     case claude
     case codex
+    case piagent
 
     public var label: String {
         switch self {
         case .claude: return "Claude"
-        case .codex:  return "Codex"
+        case .codex: return "Codex"
+        case .piagent: return "PiAgent"
         }
     }
 }

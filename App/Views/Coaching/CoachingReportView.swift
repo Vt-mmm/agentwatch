@@ -44,6 +44,7 @@ struct CoachingReportView: View {
         case all = "Tất cả"
         case claude = "Claude"
         case codex = "Codex"
+        case piagent = "PiAgent"
         case cli = "CLI"
         case desktop = "Desktop"
         var id: String { rawValue }
@@ -53,6 +54,7 @@ struct CoachingReportView: View {
             case .all:     return true
             case .claude:  return source.vendor == .claude
             case .codex:   return source.vendor == .codex
+            case .piagent: return source.vendor == .piagent
             case .cli:     return source == .cli
             case .desktop: return source == .desktop
             }
@@ -150,8 +152,7 @@ struct CoachingReportView: View {
                 } else if isScopeEmpty {
                     coachingEmptyHero
                 } else {
-                    // v0.8.1: VendorBreakdownCard LÊN ĐẦU theo yêu cầu —
-                    // user thấy Total/Claude/Codex breakdown trước hết.
+                    // VendorBreakdownCard len dau de thay Total/Claude/Codex/PiAgent.
                     VendorBreakdownCard(sessions: sessions)
                     ProjectCostBreakdownCard(sessions: sessions)
                     DailyGoalCard(
@@ -161,6 +162,7 @@ struct CoachingReportView: View {
                         agentLoopIds: agentLoopIds
                     )
                     summaryCard
+                    riskCard
                     anomalyCard
                     tokenCostCard
                     trendCard

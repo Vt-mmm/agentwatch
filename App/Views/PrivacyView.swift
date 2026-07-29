@@ -3,15 +3,22 @@
 // danh sách file app sẽ đọc khi compute coaching stats.
 
 import SwiftUI
+import ClaudeWatchCore
 
 struct PrivacyView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var cliEntries: [FileEntry] = []
     @State private var desktopEntries: [FileEntry] = []
+    @State private var codexEntries: [FileEntry] = []
+    @State private var codexArchivedEntries: [FileEntry] = []
+    @State private var piAgentEntries: [FileEntry] = []
 
     private let cliRoot = NSHomeDirectory() + "/.claude/projects"
     private let desktopRoot = NSHomeDirectory() +
         "/Library/Application Support/Claude/local-agent-mode-sessions"
+    private let codexRoot = CodexInventory.defaultRoot
+    private let codexArchivedRoot = CodexInventory.defaultArchivedRoot
+    private let piAgentRoot = PiAgentInventory.defaultRoot
 
     struct FileEntry: Identifiable, Hashable {
         let id: String   // absolute path
@@ -31,6 +38,12 @@ struct PrivacyView: View {
                              path: cliRoot, entries: cliEntries)
                     pathCard(title: "Desktop computer-use sessions",
                              path: desktopRoot, entries: desktopEntries)
+                    pathCard(title: "Codex sessions",
+                             path: codexRoot, entries: codexEntries)
+                    pathCard(title: "Codex archived sessions",
+                             path: codexArchivedRoot, entries: codexArchivedEntries)
+                    pathCard(title: "PiAgent sessions",
+                             path: piAgentRoot, entries: piAgentEntries)
                     noUploadCard
                 }
                 .padding(20)
@@ -85,7 +98,7 @@ struct PrivacyView: View {
                     .font(ClaudeFont.heading(13))
                     .foregroundStyle(Claude.textPrimary)
             }
-            Text("Tất cả file ở 2 thư mục trên được parse ngay trong process app. Kết quả render local trên UI. Không có ổ đĩa cloud, không có server backend. Anh bấm Export MD/HTML/CSV → file save trực tiếp xuống máy anh chọn.")
+            Text("Tất cả file ở các thư mục agent trên được parse ngay trong process app. Kết quả render local trên UI. Không có ổ đĩa cloud, không có server backend. Anh bấm Export MD/HTML/CSV → file save trực tiếp xuống máy anh chọn.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
         }
@@ -148,15 +161,30 @@ struct PrivacyView: View {
         let desk = await Task.detached(priority: .userInitiated) {
             Self.enumerate(rootPath: Self.staticDesktopRoot, filename: "audit.jsonl")
         }.value
+        let codex = await Task.detached(priority: .userInitiated) {
+            Self.enumerate(rootPath: Self.staticCodexRoot, filename: nil)
+        }.value
+        let codexArchived = await Task.detached(priority: .userInitiated) {
+            Self.enumerate(rootPath: Self.staticCodexArchivedRoot, filename: nil)
+        }.value
+        let piAgent = await Task.detached(priority: .userInitiated) {
+            Self.enumerate(rootPath: Self.staticPiAgentRoot, filename: nil)
+        }.value
         await MainActor.run {
             self.cliEntries = cli
             self.desktopEntries = desk
+            self.codexEntries = codex
+            self.codexArchivedEntries = codexArchived
+            self.piAgentEntries = piAgent
         }
     }
 
     nonisolated static let staticCliRoot = NSHomeDirectory() + "/.claude/projects"
     nonisolated static let staticDesktopRoot = NSHomeDirectory() +
         "/Library/Application Support/Claude/local-agent-mode-sessions"
+    nonisolated static let staticCodexRoot = CodexInventory.defaultRoot
+    nonisolated static let staticCodexArchivedRoot = CodexInventory.defaultArchivedRoot
+    nonisolated static let staticPiAgentRoot = PiAgentInventory.defaultRoot
 
     /// `filename`: nếu nil → match `*.jsonl`. Nếu set → chỉ collect file đúng tên đó.
     nonisolated static func enumerate(rootPath: String, filename: String?) -> [FileEntry] {

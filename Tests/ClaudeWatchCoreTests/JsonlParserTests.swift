@@ -121,7 +121,7 @@ final class JsonlParserTests: XCTestCase {
         XCTAssertEqual(ModelFamily.from(modelId: "claude-haiku-4-5-20251001"), .haiku)
         XCTAssertEqual(ModelFamily.from(modelId: "claude-fable-5"), .fable)
         XCTAssertEqual(ModelFamily.from(modelId: nil), .unknown)
-        XCTAssertEqual(ModelFamily.from(modelId: "gpt-4"), .unknown)
+        XCTAssertEqual(ModelFamily.from(modelId: "gpt-4"), .gpt)
     }
 
     func testSkipsMalformedLines() throws {

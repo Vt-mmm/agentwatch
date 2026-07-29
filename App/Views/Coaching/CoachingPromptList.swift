@@ -1,4 +1,4 @@
-// Prompt list card + PromptRow — paginated list of session-opening prompts with bookmark toggle.
+// Prompt list card + PromptRow — paginated list of audit prompts with bookmark toggle.
 // Dependency direction: extension on CoachingReportView; PromptRow is internal (used here only).
 
 import SwiftUI
@@ -12,11 +12,11 @@ extension CoachingReportView {
         let info = Pagination.info(items: records, page: promptPage, pageSize: pageSize)
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                SectionLabel(text: "Prompts khởi đầu session (\(records.count))")
+                SectionLabel(text: "Prompts trong session (\(records.count))")
                 Spacer()
                 Paginator(page: info.page, totalPages: info.totalPages) { promptPage = $0 }
             }
-            Text("Chỉ ghi nhận message ĐẦU tiên của mỗi session — đánh giá cách user khởi đầu, định hướng agent. Follow-up trong session không tính.")
+            Text("Ghi nhận user prompts hợp lệ trong phiên để audit nội dung làm việc, task ngoài scope và dấu hiệu dùng agent chưa đúng.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
             if records.isEmpty {
@@ -30,7 +30,7 @@ extension CoachingReportView {
                     Button {
                         selectedRecord = r
                     } label: {
-                        PromptRow(record: r)
+                        PromptRow(record: r, risk: riskByPrompt[r.id])
                     }
                     .buttonStyle(.plain)
                 }
@@ -44,6 +44,7 @@ extension CoachingReportView {
 
 struct PromptRow: View {
     let record: PromptRecord
+    let risk: RiskFinding?
     @Environment(BookmarkStore.self) private var bookmarks
 
     var body: some View {
@@ -55,6 +56,9 @@ struct PromptRow: View {
                         .font(ClaudeFont.mono(11))
                         .foregroundStyle(Claude.textMuted)
                     sourceBadge
+                    if let risk {
+                        riskBadge(risk)
+                    }
                     Text(record.projectDisplay)
                         .font(ClaudeFont.body(11))
                         .foregroundStyle(Claude.textMuted)
@@ -91,7 +95,6 @@ struct PromptRow: View {
 
     @ViewBuilder
     private var sourceBadge: some View {
-        // v0.8.0: 3 source — CLI/Desktop (Claude) + Codex.
         let (fg, bg) = badgeColors(record.source)
         return Text("\(record.source.emoji) \(record.source.shortLabel)")
             .font(ClaudeFont.mono(10))
@@ -109,6 +112,28 @@ struct PromptRow: View {
         case .cli:     return (Claude.Chip.infoFg, Claude.Chip.infoBg)
         case .desktop: return (Claude.Chip.warningFg, Claude.Chip.warningBg)
         case .codex:   return (.green, Color.green.opacity(0.15))
+        case .piagent: return (.purple, Color.purple.opacity(0.15))
+        }
+    }
+
+    private func riskBadge(_ risk: RiskFinding) -> some View {
+        let color = riskColor(risk.severity)
+        return Text("\(risk.severity.shortLabel) \(risk.score)")
+            .font(ClaudeFont.mono(9, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.15))
+            .clipShape(Capsule())
+            .help("\(risk.category.label): \(risk.reason)")
+    }
+
+    private func riskColor(_ severity: RiskSeverity) -> Color {
+        switch severity {
+        case .low:      return Claude.textMuted
+        case .medium:   return .orange
+        case .high:     return .red
+        case .critical: return .purple
         }
     }
 

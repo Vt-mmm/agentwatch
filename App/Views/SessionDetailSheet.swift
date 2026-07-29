@@ -114,7 +114,14 @@ struct SessionDetailSheet: View {
             loading = false; return
         }
         let s = await Task.detached(priority: .userInitiated) {
-            JsonlParser.parseSession(at: url)
+            switch session.source {
+            case .cli, .desktop:
+                return JsonlParser.parseSession(at: url)
+            case .codex:
+                return CodexJsonlParser.parseSession(at: url)
+            case .piagent:
+                return PiAgentJsonlParser.parseSession(at: url)
+            }
         }.value
         await MainActor.run {
             self.stats = s
@@ -204,14 +211,23 @@ struct SessionDetailSheet: View {
     }
 
     private var sourcePill: some View {
-        let isCli = session.source == .cli
-        return Text(isCli ? "⌨︎ CLI" : "🖥 Desktop")
+        let (fg, bg) = sourcePillColors(session.source)
+        return Text("\(session.source.emoji) \(session.source.shortLabel)")
             .font(ClaudeFont.mono(10))
             .fontWeight(.bold)
-            .foregroundStyle(isCli ? Claude.Chip.infoFg : Claude.Chip.warningFg)
+            .foregroundStyle(fg)
             .padding(.horizontal, 8).padding(.vertical, 2)
-            .background(isCli ? Claude.Chip.infoBg : Claude.Chip.warningBg)
+            .background(bg)
             .clipShape(Capsule())
+    }
+
+    private func sourcePillColors(_ source: SessionSource) -> (Color, Color) {
+        switch source {
+        case .cli: return (Claude.Chip.infoFg, Claude.Chip.infoBg)
+        case .desktop: return (Claude.Chip.warningFg, Claude.Chip.warningBg)
+        case .codex: return (.green, Color.green.opacity(0.15))
+        case .piagent: return (.purple, Color.purple.opacity(0.15))
+        }
     }
 
     private var timeRangeFull: String {

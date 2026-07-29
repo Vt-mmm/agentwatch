@@ -1,5 +1,5 @@
-// Per-project cost breakdown — cost theo folder, gộp Claude + Codex.
-// Hiển thị Top N project (mặc định 8) với 3 cột: Total / Claude / Codex.
+// Per-project cost breakdown — cost theo folder, gộp Claude + Codex + PiAgent.
+// Hiển thị Top N project (mặc định 8) với cột Total / Claude / Codex / Pi.
 // Folder = projectDisplay (full cwd path, đã normalize ở v0.8.1).
 
 import SwiftUI
@@ -15,30 +15,39 @@ struct ProjectCostBreakdownCard: View {
         let totalCost: Double
         let claudeCost: Double
         let codexCost: Double
+        let piAgentCost: Double
         let claudeSessions: Int
         let codexSessions: Int
-        var totalSessions: Int { claudeSessions + codexSessions }
+        let piAgentSessions: Int
+        var totalSessions: Int { claudeSessions + codexSessions + piAgentSessions }
     }
 
     private var perProject: [ProjectCost] {
-        var byProj: [String: (claude: Double, codex: Double, cs: Int, xs: Int)] = [:]
+        var byProj: [String: (claude: Double, codex: Double, pi: Double, cs: Int, xs: Int, ps: Int)] = [:]
         for s in sessions {
-            var entry = byProj[s.projectDisplay] ?? (0, 0, 0, 0)
+            var entry = byProj[s.projectDisplay] ?? (0, 0, 0, 0, 0, 0)
             if s.source.vendor == .claude {
                 entry.claude += s.cost
                 entry.cs += 1
-            } else {
+            } else if s.source.vendor == .codex {
                 entry.codex += s.cost
                 entry.xs += 1
+            } else {
+                entry.pi += s.cost
+                entry.ps += 1
             }
             byProj[s.projectDisplay] = entry
         }
         return byProj
             .map { ProjectCost(
                 id: $0.key, project: $0.key,
-                totalCost: $0.value.claude + $0.value.codex,
-                claudeCost: $0.value.claude, codexCost: $0.value.codex,
-                claudeSessions: $0.value.cs, codexSessions: $0.value.xs
+                totalCost: $0.value.claude + $0.value.codex + $0.value.pi,
+                claudeCost: $0.value.claude,
+                codexCost: $0.value.codex,
+                piAgentCost: $0.value.pi,
+                claudeSessions: $0.value.cs,
+                codexSessions: $0.value.xs,
+                piAgentSessions: $0.value.ps
             ) }
             .sorted { $0.totalCost > $1.totalCost }
     }
@@ -80,11 +89,13 @@ struct ProjectCostBreakdownCard: View {
         HStack(spacing: 8) {
             Text("Folder")
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text("Total").frame(width: 70, alignment: .trailing)
-            Text("Claude").frame(width: 70, alignment: .trailing)
+            Text("Total").frame(width: 62, alignment: .trailing)
+            Text("Claude").frame(width: 62, alignment: .trailing)
                 .foregroundStyle(Claude.orange)
-            Text("Codex").frame(width: 70, alignment: .trailing)
+            Text("Codex").frame(width: 62, alignment: .trailing)
                 .foregroundStyle(.green)
+            Text("Pi").frame(width: 62, alignment: .trailing)
+                .foregroundStyle(.purple)
         }
         .font(ClaudeFont.label(10))
         .foregroundStyle(Claude.textMuted)
@@ -103,23 +114,27 @@ struct ProjectCostBreakdownCard: View {
                     .foregroundStyle(Claude.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text("\(p.totalSessions) session · C:\(p.claudeSessions) X:\(p.codexSessions)")
+                Text("\(p.totalSessions) session · C:\(p.claudeSessions) X:\(p.codexSessions) Pi:\(p.piAgentSessions)")
                     .font(ClaudeFont.mono(9))
                     .foregroundStyle(Claude.textMuted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(TokenFormatter.usd(p.totalCost))
-                .frame(width: 70, alignment: .trailing)
+                .frame(width: 62, alignment: .trailing)
                 .foregroundStyle(Claude.textPrimary)
 
             Text(p.claudeCost > 0 ? TokenFormatter.usd(p.claudeCost) : "—")
-                .frame(width: 70, alignment: .trailing)
+                .frame(width: 62, alignment: .trailing)
                 .foregroundStyle(p.claudeCost > 0 ? Claude.orange : Claude.textMuted)
 
             Text(p.codexCost > 0 ? TokenFormatter.usd(p.codexCost) : "—")
-                .frame(width: 70, alignment: .trailing)
+                .frame(width: 62, alignment: .trailing)
                 .foregroundStyle(p.codexCost > 0 ? .green : Claude.textMuted)
+
+            Text(p.piAgentCost > 0 ? TokenFormatter.usd(p.piAgentCost) : "—")
+                .frame(width: 62, alignment: .trailing)
+                .foregroundStyle(p.piAgentCost > 0 ? .purple : Claude.textMuted)
         }
         .font(ClaudeFont.mono(11, weight: .semibold))
         .padding(.vertical, 3)

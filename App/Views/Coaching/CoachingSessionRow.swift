@@ -30,6 +30,7 @@ extension CoachingReportView {
     func sessionRow(_ s: SessionSummary) -> some View {
         let isOutlier = outlierIds.contains(s.id)
         let isAgentLoop = agentLoopIds.contains(s.id)
+        let topRisk = riskBySession[s.id]
         let intent = sessionIntents[s.id] ?? .general
         let alias = SessionAliasStore.shared.alias(for: s.id)
         return HStack(spacing: 10) {
@@ -56,6 +57,11 @@ extension CoachingReportView {
                     if isAgentLoop {
                         badge("⚠️ \(s.agentCount) agents", color: .orange,
                               help: "Spawn ≥10 Agent — coi chừng loop tốn token")
+                    }
+                    if let topRisk {
+                        badge("\(topRisk.severity.shortLabel) \(topRisk.score)",
+                              color: riskColor(topRisk.severity),
+                              help: "\(topRisk.category.label): \(topRisk.reason)")
                     }
                 }
                 Text(sessionTimeRange(s))
@@ -106,7 +112,6 @@ extension CoachingReportView {
     }
 
     func sessionSourcePill(_ src: SessionSource) -> some View {
-        // 3 source mapping: CLI/Desk = Claude vendor (blue/yellow), Codex = green.
         let (fg, bg) = sourcePillColors(src)
         return Text(src.shortLabel)
             .font(ClaudeFont.mono(9))
@@ -124,6 +129,7 @@ extension CoachingReportView {
         case .cli:     return (Claude.Chip.infoFg, Claude.Chip.infoBg)
         case .desktop: return (Claude.Chip.warningFg, Claude.Chip.warningBg)
         case .codex:   return (.green, Color.green.opacity(0.15))
+        case .piagent: return (.purple, Color.purple.opacity(0.15))
         }
     }
 

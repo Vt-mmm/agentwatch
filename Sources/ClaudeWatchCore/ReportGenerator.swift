@@ -30,7 +30,7 @@ public struct ReportStats: Sendable, Equatable {
     public let starCounts: [Int: Int]          // 0★→count, … 5★→count
     public let topMissingSections: [(SpecSection, Int)]
     public let projectBreakdown: [(project: String, count: Int, avgStars: Double)]
-    public let sourceBreakdown: [SessionSource: Int]   // cli/desktop count
+    public let sourceBreakdown: [SessionSource: Int]
 
     public init(totalPrompts: Int, taskPrompts: Int, followUpPrompts: Int,
                 avgStars: Double, starCounts: [Int: Int],
@@ -112,15 +112,20 @@ public enum ReportGenerator {
     }
 
     /// Render daily/weekly report ra Markdown theo template mục 12.
-    public static func markdown(scope: ReportScope, records: [PromptRecord]) -> String {
+    public static func markdown(scope: ReportScope,
+                                records: [PromptRecord],
+                                sessions: [SessionSummary] = []) -> String {
         let s = stats(for: records)
+        let usage = SessionInventory.aggregate(sessions)
+        let risks = RiskScorer.evaluate(records: records, sessions: sessions, limit: 500)
+        let riskSummary = RiskScorer.summary(for: risks)
         var md = "# DAILY/WEEKLY REPORT — AI Coding theo SDD/VSDD\n\n"
         md += "**Phạm vi:** \(scope.label)\n"
         md += "**Tổng prompts:** \(s.totalPrompts) (task: \(s.taskPrompts), follow-up: \(s.followUpPrompts))\n"
+        md += "**Sessions:** \(usage.sessionCount) · tokens \(usage.totalTokens) · cost \(String(format: "$%.4f", usage.totalCost))\n"
+        md += "**Risk findings:** \(riskSummary.totalFindings) · high/critical \(riskSummary.highOrCriticalCount) · affected sessions \(riskSummary.affectedSessions)\n"
         md += "**Avg score (task prompts):** \(starString(s.avgStars))\n"
-        let cli = s.sourceBreakdown[.cli] ?? 0
-        let desk = s.sourceBreakdown[.desktop] ?? 0
-        md += "**Nguồn:** CLI \(cli) · Desktop \(desk)\n\n"
+        md += "**Nguồn prompt:** \(sourceBreakdownLine(s.sourceBreakdown))\n\n"
 
         md += "## 1. Phân bổ chất lượng prompt\n"
         for star in (0...5).reversed() {
@@ -150,7 +155,31 @@ public enum ReportGenerator {
             md += "\n"
         }
 
-        md += "## 4. Prompts chi tiết\n"
+        md += "## 4. Risk audit\n"
+        if risks.isEmpty {
+            md += "_Không có risk finding nào trong khoảng này._\n\n"
+        } else {
+            md += "| Severity | Score | Category | Source | Project | Session | Reason |\n"
+            md += "|---|---:|---|---|---|---|---|\n"
+            for risk in risks.prefix(50) {
+                md += "| \(risk.severity.label) | \(risk.score) | \(risk.category.label) | \(risk.source.label) | \(risk.projectDisplay) | \(risk.sessionId) | \(risk.reason) |\n"
+            }
+            md += "\n"
+        }
+
+        md += "## 5. Top usage sessions\n"
+        if sessions.isEmpty {
+            md += "_Không có session nào._\n\n"
+        } else {
+            md += "| Source | Project | Model | Prompts | Tools | Tokens | Cost |\n"
+            md += "|---|---|---|---:|---:|---:|---:|\n"
+            for session in sessions.prefix(30) {
+                md += "| \(session.source.label) | \(session.projectDisplay) | \(session.model) | \(session.promptCount) | \(session.toolCallCount) | \(session.totalTokens) | \(String(format: "$%.4f", session.cost)) |\n"
+            }
+            md += "\n"
+        }
+
+        md += "## 6. Prompts chi tiết\n"
         if records.isEmpty {
             md += "_Không có prompt nào._\n"
             return md
@@ -171,8 +200,13 @@ public enum ReportGenerator {
     }
 
     /// Render thành HTML self-contained, in được PDF.
-    public static func html(scope: ReportScope, records: [PromptRecord]) -> String {
+    public static func html(scope: ReportScope,
+                            records: [PromptRecord],
+                            sessions: [SessionSummary] = []) -> String {
         let s = stats(for: records)
+        let usage = SessionInventory.aggregate(sessions)
+        let risks = RiskScorer.evaluate(records: records, sessions: sessions, limit: 500)
+        let riskSummary = RiskScorer.summary(for: risks)
         var rows = ""
         for star in (0...5).reversed() {
             let c = s.starCounts[star] ?? 0
@@ -187,6 +221,26 @@ public enum ReportGenerator {
             projects += "<tr><td>\(htmlEscape(p.project))</td>"
                 + "<td>\(p.count)</td>"
                 + "<td>\(String(format: "%.1f", p.avgStars))★</td></tr>"
+        }
+        var sessionRows = ""
+        for session in sessions.prefix(30) {
+            sessionRows += "<tr><td>\(htmlEscape(session.source.label))</td>"
+                + "<td>\(htmlEscape(session.projectDisplay))</td>"
+                + "<td>\(htmlEscape(session.model))</td>"
+                + "<td>\(session.promptCount)</td>"
+                + "<td>\(session.toolCallCount)</td>"
+                + "<td>\(session.totalTokens)</td>"
+                + "<td>\(String(format: "$%.4f", session.cost))</td></tr>"
+        }
+        var riskRows = ""
+        for risk in risks.prefix(50) {
+            riskRows += "<tr><td>\(htmlEscape(risk.severity.label))</td>"
+                + "<td>\(risk.score)</td>"
+                + "<td>\(htmlEscape(risk.category.label))</td>"
+                + "<td>\(htmlEscape(risk.source.label))</td>"
+                + "<td>\(htmlEscape(risk.projectDisplay))</td>"
+                + "<td>\(htmlEscape(risk.sessionId))</td>"
+                + "<td>\(htmlEscape(risk.reason))</td></tr>"
         }
         var details = ""
         for r in records.prefix(50) {
@@ -229,6 +283,9 @@ public enum ReportGenerator {
         <div class="muted">\(htmlEscape(scope.label)) · SDD/VSDD/CoDD rubric</div>
         <div style="margin-top:20px">
           <span class="stat"><b>\(s.totalPrompts)</b>Tổng prompts</span>
+          <span class="stat"><b>\(usage.sessionCount)</b>Sessions</span>
+          <span class="stat"><b>\(usage.totalTokens)</b>Tokens</span>
+          <span class="stat"><b>\(riskSummary.highOrCriticalCount)</b>High risks</span>
           <span class="stat"><b>\(s.taskPrompts)</b>Task prompts</span>
           <span class="stat"><b>\(String(format: "%.1f", s.avgStars))★</b>Avg score</span>
         </div>
@@ -238,24 +295,115 @@ public enum ReportGenerator {
         <ul>\(missing.isEmpty ? "<li class=muted>Không có data.</li>" : missing)</ul>
         <h2>Breakdown theo project</h2>
         <table><thead><tr><th>Project</th><th>Task prompts</th><th>Avg score</th></tr></thead><tbody>\(projects)</tbody></table>
+        <h2>Risk audit</h2>
+        <table><thead><tr><th>Severity</th><th>Score</th><th>Category</th><th>Source</th><th>Project</th><th>Session</th><th>Reason</th></tr></thead><tbody>\(riskRows.isEmpty ? "<tr><td colspan=7 class=muted>Không có risk finding nào.</td></tr>" : riskRows)</tbody></table>
+        <h2>Top usage sessions</h2>
+        <table><thead><tr><th>Source</th><th>Project</th><th>Model</th><th>Prompts</th><th>Tools</th><th>Tokens</th><th>Cost</th></tr></thead><tbody>\(sessionRows.isEmpty ? "<tr><td colspan=7 class=muted>Không có session nào.</td></tr>" : sessionRows)</tbody></table>
         <h2>Prompts chi tiết</h2>
         \(details.isEmpty ? "<p class=muted>Không có prompt nào.</p>" : details)
         </div></body></html>
         """
     }
 
-    /// Render CSV: 1 hàng / prompt. Columns: timestamp, source, project,
-    /// session_uuid, is_task, stars, char_count, sections_present, sections_missing,
-    /// text (escaped). Dùng cho phân tích trong Sheet/Excel.
-    public static func csv(records: [PromptRecord]) -> String {
-        let header = "timestamp,source,project,session_uuid,is_task,stars,char_count,sections_present,sections_missing,text"
+    /// Render CSV: session rows first, prompt rows after. Dung cho Sheet/Excel.
+    public static func csv(records: [PromptRecord],
+                           sessions: [SessionSummary] = []) -> String {
+        let risks = RiskScorer.evaluate(records: records, sessions: sessions, limit: 500)
+        let riskBySession = RiskScorer.highestBySession(risks)
+        let riskByPrompt = RiskScorer.highestByPrompt(risks)
+        let sessionsById = bestSessionsById(sessions)
+        let header = "record_type,timestamp,source,project,session_uuid,model,cost_usd,total_tokens,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,prompt_count,tool_count,agent_count,risk_score,risk_severity,risk_category,risk_title,risk_reason,risk_recommendation,is_task,stars,char_count,sections_present,sections_missing,text"
         var out = header + "\n"
-        for r in records {
+        for risk in risks {
+            let session = sessionsById[risk.sessionId]
             let cols: [String] = [
+                "risk",
+                isoLabel.string(from: risk.timestamp ?? session?.lastTimestamp ?? session?.firstTimestamp ?? Date.distantPast),
+                risk.source.rawValue,
+                csvEscape(risk.projectDisplay),
+                risk.sessionId,
+                csvEscape(session?.model ?? ""),
+                session.map { String(format: "%.6f", $0.cost) } ?? "",
+                session.map { "\($0.totalTokens)" } ?? "",
+                session.map { "\($0.inputTokens)" } ?? "",
+                session.map { "\($0.outputTokens)" } ?? "",
+                session.map { "\($0.cacheReadTokens)" } ?? "",
+                session.map { "\($0.cacheWriteTokens)" } ?? "",
+                session.map { "\($0.promptCount)" } ?? "",
+                session.map { "\($0.toolCallCount)" } ?? "",
+                session.map { "\($0.agentCount)" } ?? "",
+                "\(risk.score)",
+                risk.severity.label,
+                risk.category.rawValue,
+                csvEscape(risk.title),
+                csvEscape(risk.reason),
+                csvEscape(risk.recommendation),
+                "",
+                "",
+                "",
+                "",
+                "",
+                csvEscape(risk.evidence)
+            ]
+            out += cols.joined(separator: ",") + "\n"
+        }
+        for s in sessions {
+            let risk = riskBySession[s.id]
+            let cols: [String] = [
+                "session",
+                isoLabel.string(from: s.lastTimestamp ?? s.firstTimestamp ?? Date.distantPast),
+                s.source.rawValue,
+                csvEscape(s.projectDisplay),
+                s.id,
+                csvEscape(s.model),
+                String(format: "%.6f", s.cost),
+                "\(s.totalTokens)",
+                "\(s.inputTokens)",
+                "\(s.outputTokens)",
+                "\(s.cacheReadTokens)",
+                "\(s.cacheWriteTokens)",
+                "\(s.promptCount)",
+                "\(s.toolCallCount)",
+                "\(s.agentCount)",
+                risk.map { "\($0.score)" } ?? "",
+                risk?.severity.label ?? "",
+                risk?.category.rawValue ?? "",
+                csvEscape(risk?.title ?? ""),
+                csvEscape(risk?.reason ?? ""),
+                csvEscape(risk?.recommendation ?? ""),
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+            ]
+            out += cols.joined(separator: ",") + "\n"
+        }
+        for r in records {
+            let risk = riskByPrompt[r.id]
+            let cols: [String] = [
+                "prompt",
                 isoLabel.string(from: r.timestamp),
                 r.source.rawValue,
                 csvEscape(r.projectDisplay),
                 r.sessionUuid,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                risk.map { "\($0.score)" } ?? "",
+                risk?.severity.label ?? "",
+                risk?.category.rawValue ?? "",
+                csvEscape(risk?.title ?? ""),
+                csvEscape(risk?.reason ?? ""),
+                csvEscape(risk?.recommendation ?? ""),
                 r.score.isTaskPrompt ? "1" : "0",
                 "\(r.score.stars)",
                 "\(r.score.charCount)",
@@ -264,6 +412,27 @@ public enum ReportGenerator {
                 csvEscape(r.text)
             ]
             out += cols.joined(separator: ",") + "\n"
+        }
+        return out
+    }
+
+    private static func sourceBreakdownLine(_ breakdown: [SessionSource: Int]) -> String {
+        SessionSource.allCases
+            .map { "\($0.shortLabel) \(breakdown[$0] ?? 0)" }
+            .joined(separator: " · ")
+    }
+
+    private static func bestSessionsById(_ sessions: [SessionSummary]) -> [String: SessionSummary] {
+        var out: [String: SessionSummary] = [:]
+        for session in sessions {
+            guard let current = out[session.id] else {
+                out[session.id] = session
+                continue
+            }
+            if session.cost > current.cost
+                || (session.cost == current.cost && session.totalTokens > current.totalTokens) {
+                out[session.id] = session
+            }
         }
         return out
     }

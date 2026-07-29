@@ -93,7 +93,7 @@ extension CoachingReportView {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 220)
+                .frame(width: 320)
                 Spacer()
                 Text(filterCountLabel)
                     .font(ClaudeFont.mono(11))
@@ -215,7 +215,8 @@ extension CoachingReportView {
     /// Đếm hiển thị bên phải segmented, ngắn gọn.
     var filterCountLabel: String {
         let s = sessions.count, p = records.count
-        return "\(s) session · \(p) khởi đầu"
+        let r = riskSummary.totalFindings
+        return "\(s) session · \(p) prompt · \(r) risk"
     }
 
 }

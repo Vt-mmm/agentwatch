@@ -42,6 +42,8 @@ extension CoachingReportView {
                   delta: 0),
                 ("Avg ★",    String(format: "%.1f", stats.avgStars),
                   delta: stats.avgStars - previousAvgStars),
+                ("High risk", "\(riskSummary.highOrCriticalCount)",
+                  delta: 0),
             ])
         }
         .claudeCard()

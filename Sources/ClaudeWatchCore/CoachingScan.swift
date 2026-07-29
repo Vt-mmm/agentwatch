@@ -85,7 +85,10 @@ public enum CoachingScan {
             if let s = r.summary { sessions.append(s) }
         }
         prompts.sort { $0.timestamp < $1.timestamp }
-        sessions.sort { $0.cost > $1.cost }
+        sessions.sort {
+            if $0.cost != $1.cost { return $0.cost > $1.cost }
+            return $0.totalTokens > $1.totalTokens
+        }
         return CoachingScanResult(prompts: prompts, sessions: sessions)
     }
 
@@ -95,16 +98,15 @@ public enum CoachingScan {
         let url: URL
         let slug: String
         let display: String
-        let isDesktopFolder: Bool  // true = local-agent-mode audit, false = projects/
+        let fixedSource: SessionSource?
         func source(via index: DesktopOriginIndex) -> SessionSource {
-            if isDesktopFolder { return .desktop }
+            if let fixedSource { return fixedSource }
             let uuid = url.deletingPathExtension().lastPathComponent
             return index.classify(uuid: uuid)
         }
     }
 
-    /// Liệt kê file có mtime ≥ range.lowerBound, từ cả CLI projects/ lẫn
-    /// Desktop local-agent-mode-sessions/.
+    /// Liệt kê file có mtime >= range.lowerBound, từ Claude/Codex/PiAgent local stores.
     private static func collectCandidateFiles(in range: ClosedRange<Date>) -> [Candidate] {
         var out: [Candidate] = []
         let fm = FileManager.default
@@ -122,7 +124,7 @@ public enum CoachingScan {
                 for file in files where file.pathExtension == "jsonl" {
                     if ProjectPath.mtime(of: file) < range.lowerBound { continue }
                     out.append(Candidate(url: file, slug: slug, display: display,
-                                         isDesktopFolder: false))
+                                         fixedSource: nil))
                 }
             }
         }
@@ -139,10 +141,55 @@ public enum CoachingScan {
                 let slug = parent.lastPathComponent
                 let display = "Desktop · " + parent.deletingLastPathComponent().lastPathComponent
                 out.append(Candidate(url: url, slug: slug, display: display,
-                                     isDesktopFolder: true))
+                                     fixedSource: .desktop))
             }
         }
+
+        collectRecursiveJsonl(
+            root: CodexInventory.defaultRoot,
+            source: .codex,
+            slug: "codex",
+            display: "Codex",
+            range: range,
+            into: &out
+        )
+        collectRecursiveJsonl(
+            root: CodexInventory.defaultArchivedRoot,
+            source: .codex,
+            slug: "codex-archived",
+            display: "Codex archived",
+            range: range,
+            into: &out
+        )
+        collectRecursiveJsonl(
+            root: PiAgentInventory.defaultRoot,
+            source: .piagent,
+            slug: "piagent",
+            display: "PiAgent",
+            range: range,
+            into: &out
+        )
         return out
+    }
+
+    private static func collectRecursiveJsonl(root: String,
+                                              source: SessionSource,
+                                              slug: String,
+                                              display: String,
+                                              range: ClosedRange<Date>,
+                                              into out: inout [Candidate]) {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: root),
+              let enumerator = fm.enumerator(
+                at: URL(fileURLWithPath: root),
+                includingPropertiesForKeys: [.contentModificationDateKey]
+              ) else {
+            return
+        }
+        for case let url as URL in enumerator where url.pathExtension == "jsonl" {
+            if ProjectPath.mtime(of: url) < range.lowerBound { continue }
+            out.append(Candidate(url: url, slug: slug, display: display, fixedSource: source))
+        }
     }
 
     // MARK: - Per-file parse
@@ -159,6 +206,19 @@ public enum CoachingScan {
     private static func parseOne(file: URL, slug: String, display: String,
                                  source: SessionSource,
                                  range: ClosedRange<Date>) async -> ScanOne? {
+        if source == .codex {
+            let summary = CodexJsonlParser.summarize(file: file, range: range)
+            let prompts = CodexJsonlParser.extractPrompts(from: file, range: range)
+            if summary == nil && prompts.isEmpty { return nil }
+            return ScanOne(prompts: prompts, summary: summary)
+        }
+        if source == .piagent {
+            let summary = PiAgentJsonlParser.summarize(file: file, range: range)
+            let prompts = PiAgentJsonlParser.extractPrompts(from: file, range: range)
+            if summary == nil && prompts.isEmpty { return nil }
+            return ScanOne(prompts: prompts, summary: summary)
+        }
+
         let stats = await cachedParseSession(at: file)
         let mtime = ProjectPath.mtime(of: file)
         let firstTs = parseISO(stats.startedAt) ?? mtime
@@ -217,14 +277,8 @@ public enum CoachingScan {
         return stats
     }
 
-    /// Extract CHỈ prompt ĐẦU TIÊN của session (earliest user message). Đánh giá
-    /// coaching dựa trên cách user khởi đầu session — định hướng agent tốt hay
-    /// chưa, có Spec/criteria không. Follow-up messages trong session không tính.
-    ///
-    /// Logic:
-    /// 1. Quét MỌI user message trong file (full session, không filter range)
-    /// 2. Lấy message có timestamp sớm nhất
-    /// 3. Nếu timestamp đó rơi vào `range` → emit 1 PromptRecord; ngược lại bỏ qua
+    /// Extract moi user prompts hop le trong range. Agent Watch audit can xem
+    /// tung prompt cua nhan vien, khong chi prompt dau session.
     private static func extractPromptsInRange(file: URL, slug: String, display: String,
                                               source: SessionSource,
                                               range: ClosedRange<Date>) -> [PromptRecord] {
@@ -259,20 +313,20 @@ public enum CoachingScan {
             msgs.append(UserMsg(ts: ts, text: text, lineIndex: lineIndex))
         }
 
-        // Skip auto-injected continuation prompts (Claude Code khi resume/compact
-        // chèn tin ngắn như ".", ",", "Continue", <command-name>, <system-reminder>,
-        // hoặc compaction summary). Lấy first message THỰC SỰ user gõ.
-        let realMsgs = msgs.filter { !isLikelySystemInjection($0.text) }
-        guard let first = realMsgs.min(by: { $0.ts < $1.ts }),
-              range.contains(first.ts) else { return [] }
-
-        return [PromptRecord(
-            id: "\(sessionUuid)-\(first.lineIndex)",
-            timestamp: first.ts, projectSlug: slug, projectDisplay: display,
-            sessionUuid: sessionUuid, text: first.text,
-            score: PromptScorer.score(first.text),
-            source: source
-        )]
+        return msgs
+            .filter { range.contains($0.ts) && !isLikelySystemInjection($0.text) }
+            .map { msg in
+                PromptRecord(
+                    id: "\(sessionUuid)-\(msg.lineIndex)",
+                    timestamp: msg.ts,
+                    projectSlug: slug,
+                    projectDisplay: display,
+                    sessionUuid: sessionUuid,
+                    text: msg.text,
+                    score: PromptScorer.score(msg.text),
+                    source: source
+                )
+            }
     }
 
     /// True nếu text trông giống auto-injected message của Claude Code thay vì

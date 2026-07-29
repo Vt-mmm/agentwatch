@@ -94,9 +94,11 @@ public enum SessionInventory {
         out.append(contentsOf: listDesktopAgent(in: range))
         // v0.7.0: Codex sessions từ ~/.codex/sessions/.
         out.append(contentsOf: CodexInventory.list(in: range))
+        // v0.9.0: PiAgent sessions từ ~/.pi/agent/sessions/, gồm subagent runs.
+        out.append(contentsOf: PiAgentInventory.list(in: range))
 
-        // Sort: cost > 0 first (Claude), then bằng totalTokens (Codex cost=0).
-        // Để Codex không bị xuống cuối vì cost=0, fallback secondary key.
+        // Sort cost first, then totalTokens so subscription/zero-cost agent logs
+        // still surface when they burn many tokens.
         return out.sorted { a, b in
             if a.cost != b.cost { return a.cost > b.cost }
             return a.totalTokens > b.totalTokens

@@ -1,6 +1,4 @@
-// Vendor breakdown — 3-column stats card: Total / Claude / Codex.
-// Per-vendor: session count, prompt count, total tokens, total cost.
-// Cost cho Codex = 0 (subscription), nhưng vẫn show "—" để rõ semantic.
+// Vendor breakdown: Total / Claude / Codex / PiAgent.
 
 import SwiftUI
 import ClaudeWatchCore
@@ -16,6 +14,10 @@ struct VendorBreakdownCard: View {
         sessions.filter { $0.source.vendor == .codex }
     }
 
+    private var piAgentSessions: [SessionSummary] {
+        sessions.filter { $0.source.vendor == .piagent }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
@@ -28,7 +30,6 @@ struct VendorBreakdownCard: View {
                     .foregroundStyle(Claude.textMuted)
             }
 
-            // 3 cột grid
             HStack(spacing: 8) {
                 column(
                     title: "Total",
@@ -46,6 +47,12 @@ struct VendorBreakdownCard: View {
                     title: "Codex",
                     color: .green,
                     sessions: codexSessions
+                )
+                Divider().frame(maxHeight: 80)
+                column(
+                    title: "PiAgent",
+                    color: .purple,
+                    sessions: piAgentSessions
                 )
             }
         }

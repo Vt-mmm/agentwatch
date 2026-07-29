@@ -376,18 +376,32 @@ func renderSessions(_ sessions: [SessionSummary], limit: Int) {
     print(colorize("[Top sessions theo cost]", Ansi.cyan))
     for (i, s) in top.enumerated() {
         let cost = fmtUsd(s.cost)
-        let proj = s.projectDisplay
+        let proj = pad(truncateMiddle(s.projectDisplay, max: 32), to: 32)
         let model = s.model.isEmpty ? "?" : s.model
-        let row = String(format: "  %2d. %-10s  %-32s  %@",
-                         i + 1, cost, proj, model)
-        print(row)
+        let idx = String(format: "%2d", i + 1)
+        print("  \(idx). \(pad(cost, to: 10))  \(proj)  \(model)")
     }
+}
+
+func pad(_ value: String, to width: Int) -> String {
+    if value.count >= width { return value }
+    return value + String(repeating: " ", count: width - value.count)
+}
+
+func truncateMiddle(_ value: String, max width: Int) -> String {
+    guard value.count > width, width > 3 else { return value }
+    let keep = width - 1
+    let prefixCount = keep / 2
+    let suffixCount = keep - prefixCount
+    return value.prefix(prefixCount) + "…" + value.suffix(suffixCount)
 }
 
 func renderInsights(_ sessions: [SessionSummary]) {
     let outliers = CoachingInsights.outlierSessions(sessions)
     let loops = CoachingInsights.agentLoopSessions(sessions)
-    guard !outliers.isEmpty || !loops.isEmpty else { return }
+    let risks = RiskScorer.evaluate(records: [], sessions: sessions, limit: 10)
+    let riskSummary = RiskScorer.summary(for: risks)
+    guard !outliers.isEmpty || !loops.isEmpty || riskSummary.highOrCriticalCount > 0 else { return }
     print()
     print(colorize("[Cảnh báo]", Ansi.yellow))
     if !outliers.isEmpty {
@@ -397,6 +411,13 @@ func renderInsights(_ sessions: [SessionSummary]) {
     if !loops.isEmpty {
         print(colorize("  ⚠️  \(loops.count) session có agent loop", Ansi.yellow) +
               " (≥\(CoachingInsights.agentLoopThreshold) Agent)")
+    }
+    if riskSummary.highOrCriticalCount > 0 {
+        print(colorize("  Risk high/critical: \(riskSummary.highOrCriticalCount)", Ansi.red) +
+              " (max score \(riskSummary.maxScore))")
+        for risk in risks.prefix(3) where risk.severity >= .high {
+            print("    - \(risk.severity.shortLabel) \(risk.score) · \(risk.category.label) · \(truncateMiddle(risk.projectDisplay, max: 28))")
+        }
     }
 }
 

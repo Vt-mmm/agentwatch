@@ -43,7 +43,7 @@ extension CoachingReportView {
                 Text("Chưa có session nào")
                     .font(ClaudeFont.display(20))
                     .foregroundStyle(Claude.textPrimary)
-                Text("Khoảng \(scopeRangeLabel) chưa có hoạt động Claude Code.\nMở 1 phiên `claude` để pet bắt đầu theo dõi.")
+                Text("Khoảng \(scopeRangeLabel) chưa có hoạt động agent nào.\nMở Claude, Codex hoặc PiAgent để Agent Watch bắt đầu theo dõi.")
                     .font(ClaudeFont.body(13))
                     .foregroundStyle(Claude.textMuted)
                     .multilineTextAlignment(.center)

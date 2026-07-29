@@ -96,7 +96,10 @@ final class CoachingDataStore {
                 // await MainActor.run, vẫn bỏ qua.
                 guard self.activeFingerprint == fingerprint else { return }
                 self.allRecords = curP
-                self.allSessions = curS.sorted { $0.cost > $1.cost }
+                self.allSessions = curS.sorted {
+                    if $0.cost != $1.cost { return $0.cost > $1.cost }
+                    return $0.totalTokens > $1.totalTokens
+                }
                 self.previousAggregate = prevAgg
                 self.previousAvgStars = prevStats.avgStars
                 self.previousPromptCount = prevStats.totalPrompts

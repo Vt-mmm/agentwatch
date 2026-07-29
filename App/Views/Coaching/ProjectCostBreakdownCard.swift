@@ -1,6 +1,5 @@
-// Per-project cost breakdown — cost theo folder, gộp Claude + Codex + PiAgent.
-// Hiển thị Top N project (mặc định 8) với cột Total / Claude / Codex / Pi.
-// Folder = projectDisplay (full cwd path, đã normalize ở v0.8.1).
+// Per-task/folder cost breakdown — PiAgent group theo session title, còn
+// Claude/Codex group theo folder vì chưa có task title ổn định như Pi.
 
 import SwiftUI
 import ClaudeWatchCore
@@ -8,9 +7,9 @@ import ClaudeWatchCore
 struct ProjectCostBreakdownCard: View {
     let sessions: [SessionSummary]
 
-    /// Aggregate cost per project per vendor.
+    /// Aggregate cost per task/folder per vendor.
     private struct ProjectCost: Identifiable {
-        let id: String              // == projectDisplay
+        let id: String
         let project: String
         let totalCost: Double
         let claudeCost: Double
@@ -25,7 +24,8 @@ struct ProjectCostBreakdownCard: View {
     private var perProject: [ProjectCost] {
         var byProj: [String: (claude: Double, codex: Double, pi: Double, cs: Int, xs: Int, ps: Int)] = [:]
         for s in sessions {
-            var entry = byProj[s.projectDisplay] ?? (0, 0, 0, 0, 0, 0)
+            let key = s.source == .piagent ? s.displayTitle : s.projectDisplay
+            var entry = byProj[key] ?? (0, 0, 0, 0, 0, 0)
             if s.source.vendor == .claude {
                 entry.claude += s.cost
                 entry.cs += 1
@@ -36,7 +36,7 @@ struct ProjectCostBreakdownCard: View {
                 entry.pi += s.cost
                 entry.ps += 1
             }
-            byProj[s.projectDisplay] = entry
+            byProj[key] = entry
         }
         return byProj
             .map { ProjectCost(
@@ -57,9 +57,9 @@ struct ProjectCostBreakdownCard: View {
             HStack(spacing: 6) {
                 Image(systemName: "folder.fill.badge.gearshape")
                     .foregroundStyle(Claude.orange)
-                SectionLabel(text: "Cost theo folder (gộp agents)")
+                SectionLabel(text: "Cost theo task/folder")
                 Spacer()
-                Text("\(perProject.count) folder")
+                Text("\(perProject.count) nhóm")
                     .font(ClaudeFont.mono(10))
                     .foregroundStyle(Claude.textMuted)
             }
@@ -74,7 +74,7 @@ struct ProjectCostBreakdownCard: View {
                     row(p)
                 }
                 if perProject.count > 8 {
-                    Text("… và \(perProject.count - 8) folder khác")
+                    Text("… và \(perProject.count - 8) nhóm khác")
                         .font(ClaudeFont.body(10))
                         .foregroundStyle(Claude.textMuted)
                         .padding(.top, 2)
@@ -87,7 +87,7 @@ struct ProjectCostBreakdownCard: View {
     @ViewBuilder
     private var headerRow: some View {
         HStack(spacing: 8) {
-            Text("Folder")
+            Text("Task/folder")
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("Total").frame(width: 62, alignment: .trailing)
             Text("Claude").frame(width: 62, alignment: .trailing)

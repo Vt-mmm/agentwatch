@@ -167,14 +167,14 @@ public enum ReportGenerator {
             md += "\n"
         }
 
-        md += "## 5. Top usage sessions\n"
+        md += "## 5. Top usage sessions theo task/session\n"
         if sessions.isEmpty {
             md += "_Không có session nào._\n\n"
         } else {
-            md += "| Source | Project | Model | Prompts | Tools | Tokens | Cost |\n"
-            md += "|---|---|---|---:|---:|---:|---:|\n"
+            md += "| Source | Task/session | Project | Model | Thinking | Prompts | Tools | Tokens | Reasoning | Cost |\n"
+            md += "|---|---|---|---|---|---:|---:|---:|---:|---:|\n"
             for session in sessions.prefix(30) {
-                md += "| \(session.source.label) | \(session.projectDisplay) | \(session.model) | \(session.promptCount) | \(session.toolCallCount) | \(session.totalTokens) | \(String(format: "$%.4f", session.cost)) |\n"
+                md += "| \(session.source.label) | \(session.displayTitle) | \(session.projectDisplay) | \(session.model) | \(session.thinkingLevel ?? "") | \(session.promptCount) | \(session.toolCallCount) | \(session.totalTokens) | \(session.reasoningTokens) | \(String(format: "$%.4f", session.cost)) |\n"
             }
             md += "\n"
         }
@@ -187,7 +187,11 @@ public enum ReportGenerator {
         for r in records.prefix(50) {
             let tag = r.score.isTaskPrompt ? "\(r.score.stars)★" : "follow-up"
             md += "\n### \(timeLabel.string(from: r.timestamp)) · \(tag) · \(r.source.label)\n"
-            md += "_\(r.projectDisplay)_\n\n"
+            md += "_\(r.displayTitle)_"
+            if r.displayTitle != r.projectDisplay {
+                md += " · `\(r.projectDisplay)`"
+            }
+            md += "\n\n"
             if r.score.isTaskPrompt && !r.score.sectionsMissing.isEmpty {
                 md += "Thiếu: " + r.score.sectionsMissing.map(\.label).joined(separator: ", ") + "\n\n"
             }
@@ -225,11 +229,14 @@ public enum ReportGenerator {
         var sessionRows = ""
         for session in sessions.prefix(30) {
             sessionRows += "<tr><td>\(htmlEscape(session.source.label))</td>"
+                + "<td>\(htmlEscape(session.displayTitle))</td>"
                 + "<td>\(htmlEscape(session.projectDisplay))</td>"
                 + "<td>\(htmlEscape(session.model))</td>"
+                + "<td>\(htmlEscape(session.thinkingLevel ?? ""))</td>"
                 + "<td>\(session.promptCount)</td>"
                 + "<td>\(session.toolCallCount)</td>"
                 + "<td>\(session.totalTokens)</td>"
+                + "<td>\(session.reasoningTokens)</td>"
                 + "<td>\(String(format: "$%.4f", session.cost))</td></tr>"
         }
         var riskRows = ""
@@ -251,7 +258,7 @@ public enum ReportGenerator {
             details += """
             <div class="prompt">
               <div class="ptime">\(timeLabel.string(from: r.timestamp)) · <span class="tag">\(tag)</span></div>
-              <div class="proj">\(htmlEscape(r.projectDisplay))</div>
+              <div class="proj">\(htmlEscape(r.displayTitle))\(r.displayTitle == r.projectDisplay ? "" : " · \(htmlEscape(r.projectDisplay))")</div>
               \(miss)
               <pre>\(htmlEscape(String(r.text.prefix(800))))\(r.text.count > 800 ? "\n…[truncated]" : "")</pre>
             </div>
@@ -297,8 +304,8 @@ public enum ReportGenerator {
         <table><thead><tr><th>Project</th><th>Task prompts</th><th>Avg score</th></tr></thead><tbody>\(projects)</tbody></table>
         <h2>Risk audit</h2>
         <table><thead><tr><th>Severity</th><th>Score</th><th>Category</th><th>Source</th><th>Project</th><th>Session</th><th>Reason</th></tr></thead><tbody>\(riskRows.isEmpty ? "<tr><td colspan=7 class=muted>Không có risk finding nào.</td></tr>" : riskRows)</tbody></table>
-        <h2>Top usage sessions</h2>
-        <table><thead><tr><th>Source</th><th>Project</th><th>Model</th><th>Prompts</th><th>Tools</th><th>Tokens</th><th>Cost</th></tr></thead><tbody>\(sessionRows.isEmpty ? "<tr><td colspan=7 class=muted>Không có session nào.</td></tr>" : sessionRows)</tbody></table>
+        <h2>Top usage sessions theo task/session</h2>
+        <table><thead><tr><th>Source</th><th>Task/session</th><th>Project</th><th>Model</th><th>Thinking</th><th>Prompts</th><th>Tools</th><th>Tokens</th><th>Reasoning</th><th>Cost</th></tr></thead><tbody>\(sessionRows.isEmpty ? "<tr><td colspan=10 class=muted>Không có session nào.</td></tr>" : sessionRows)</tbody></table>
         <h2>Prompts chi tiết</h2>
         \(details.isEmpty ? "<p class=muted>Không có prompt nào.</p>" : details)
         </div></body></html>
@@ -312,7 +319,7 @@ public enum ReportGenerator {
         let riskBySession = RiskScorer.highestBySession(risks)
         let riskByPrompt = RiskScorer.highestByPrompt(risks)
         let sessionsById = bestSessionsById(sessions)
-        let header = "record_type,timestamp,source,project,session_uuid,model,cost_usd,total_tokens,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,prompt_count,tool_count,agent_count,risk_score,risk_severity,risk_category,risk_title,risk_reason,risk_recommendation,is_task,stars,char_count,sections_present,sections_missing,text"
+        let header = "record_type,timestamp,source,project,session_uuid,session_title,model,thinking_level,cost_usd,total_tokens,input_tokens,output_tokens,reasoning_tokens,cache_read_tokens,cache_write_tokens,prompt_count,tool_count,agent_count,risk_score,risk_severity,risk_category,risk_title,risk_reason,risk_recommendation,is_task,stars,char_count,sections_present,sections_missing,text"
         var out = header + "\n"
         for risk in risks {
             let session = sessionsById[risk.sessionId]
@@ -322,11 +329,14 @@ public enum ReportGenerator {
                 risk.source.rawValue,
                 csvEscape(risk.projectDisplay),
                 risk.sessionId,
+                csvEscape(session?.sessionTitle ?? ""),
                 csvEscape(session?.model ?? ""),
+                csvEscape(session?.thinkingLevel ?? ""),
                 session.map { String(format: "%.6f", $0.cost) } ?? "",
                 session.map { "\($0.totalTokens)" } ?? "",
                 session.map { "\($0.inputTokens)" } ?? "",
                 session.map { "\($0.outputTokens)" } ?? "",
+                session.map { "\($0.reasoningTokens)" } ?? "",
                 session.map { "\($0.cacheReadTokens)" } ?? "",
                 session.map { "\($0.cacheWriteTokens)" } ?? "",
                 session.map { "\($0.promptCount)" } ?? "",
@@ -355,11 +365,14 @@ public enum ReportGenerator {
                 s.source.rawValue,
                 csvEscape(s.projectDisplay),
                 s.id,
+                csvEscape(s.sessionTitle ?? ""),
                 csvEscape(s.model),
+                csvEscape(s.thinkingLevel ?? ""),
                 String(format: "%.6f", s.cost),
                 "\(s.totalTokens)",
                 "\(s.inputTokens)",
                 "\(s.outputTokens)",
+                "\(s.reasoningTokens)",
                 "\(s.cacheReadTokens)",
                 "\(s.cacheWriteTokens)",
                 "\(s.promptCount)",
@@ -388,6 +401,9 @@ public enum ReportGenerator {
                 r.source.rawValue,
                 csvEscape(r.projectDisplay),
                 r.sessionUuid,
+                csvEscape(r.sessionTitle ?? ""),
+                "",
+                "",
                 "",
                 "",
                 "",

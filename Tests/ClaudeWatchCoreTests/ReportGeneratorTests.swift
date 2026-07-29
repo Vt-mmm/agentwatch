@@ -4,6 +4,7 @@ import XCTest
 final class ReportGeneratorTests: XCTestCase {
 
     private func makeRecord(text: String, project: String = "ws/api",
+                            sessionTitle: String? = nil,
                             offsetSeconds: TimeInterval = 0) -> PromptRecord {
         let score = PromptScorer.score(text)
         return PromptRecord(
@@ -11,6 +12,7 @@ final class ReportGeneratorTests: XCTestCase {
             timestamp: Date(timeIntervalSinceReferenceDate: 700_000_000 + offsetSeconds),
             projectSlug: "-Users-tam-Documents-\(project.replacingOccurrences(of: "/", with: "-"))",
             projectDisplay: "/Users/tam/Documents/\(project)",
+            sessionTitle: sessionTitle,
             sessionUuid: "abc",
             text: text, score: score
         )
@@ -69,5 +71,47 @@ final class ReportGeneratorTests: XCTestCase {
         XCTAssertEqual(s.avgStars, 0)
         let md = ReportGenerator.markdown(scope: .day(Date()), records: [])
         XCTAssertTrue(md.contains("Không có prompt"))
+    }
+
+    func testCSVIncludesTaskThinkingAndReasoningColumns() {
+        let record = makeRecord(
+            text: "Implement payment audit",
+            sessionTitle: "PAY-742 Payment audit"
+        )
+        let session = SessionSummary(
+            id: "abc",
+            sessionTitle: "PAY-742 Payment audit",
+            projectDisplay: "/Users/tam/Documents/ws/api",
+            source: .piagent,
+            model: "gpt-5",
+            modelFamily: .gpt,
+            inputTokens: 100,
+            outputTokens: 20,
+            reasoningTokens: 30,
+            cacheReadTokens: 40,
+            cacheWriteTokens: 10,
+            cost: 0.12,
+            firstTimestamp: record.timestamp,
+            lastTimestamp: record.timestamp,
+            promptCount: 1,
+            toolCallCount: 2,
+            thinkingLevel: "max"
+        )
+
+        let csv = ReportGenerator.csv(records: [record], sessions: [session])
+        let lines = csv.split(separator: "\n").map(String.init)
+        let expectedColumns = lines[0].split(separator: ",", omittingEmptySubsequences: false).count
+
+        XCTAssertTrue(lines[0].contains("session_title"))
+        XCTAssertTrue(lines[0].contains("thinking_level"))
+        XCTAssertTrue(lines[0].contains("reasoning_tokens"))
+        XCTAssertTrue(csv.contains("PAY-742 Payment audit"))
+        XCTAssertTrue(csv.contains("max"))
+        for line in lines {
+            XCTAssertEqual(
+                line.split(separator: ",", omittingEmptySubsequences: false).count,
+                expectedColumns
+            )
+        }
     }
 }

@@ -148,7 +148,7 @@ extension CoachingReportView {
     /// Project picker: Menu button thay vì Picker để có style match theme.
     var projectPicker: some View {
         Menu {
-            Button("Mọi project") { projectFilter = "" }
+            Button("Mọi task/project") { projectFilter = "" }
             Divider()
             ForEach(projectOptions, id: \.self) { p in
                 Button(p) { projectFilter = p }
@@ -158,7 +158,7 @@ extension CoachingReportView {
                 Image(systemName: "folder")
                     .font(.system(size: 10))
                     .foregroundStyle(Claude.textMuted)
-                Text(projectFilter.isEmpty ? "Mọi project" : truncateMid(projectFilter, max: 28))
+                Text(projectFilter.isEmpty ? "Mọi task/project" : truncateMid(projectFilter, max: 28))
                     .font(ClaudeFont.body(12))
                     .foregroundStyle(Claude.textPrimary)
                 Image(systemName: "chevron.down")

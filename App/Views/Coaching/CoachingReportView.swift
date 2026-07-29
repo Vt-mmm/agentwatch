@@ -14,7 +14,7 @@ struct CoachingReportView: View {
     @State var anchor: Date = Date()
     @State var sourceFilter: SourceFilter = .all
     @State var searchQuery: String = ""
-    @State var projectFilter: String = ""    // "" = all projects
+    @State var projectFilter: String = ""    // "" = all task/session titles + projects
     @State var modelFilter: String = ""      // "" = all models
     @State var viewMode: ViewMode = .all
     @State var sessionSort: SessionSort = .recent
@@ -92,7 +92,7 @@ struct CoachingReportView: View {
         let q = searchQuery.lowercased()
         let filtered = base.filter { r in
             guard sourceFilter.matches(r.source) else { return false }
-            if !projectFilter.isEmpty && r.projectDisplay != projectFilter { return false }
+            if !projectFilter.isEmpty && !matchesTaskOrProject(r, projectFilter) { return false }
             if !q.isEmpty && !r.text.lowercased().contains(q) { return false }
             return true
         }
@@ -102,7 +102,7 @@ struct CoachingReportView: View {
     var filteredSessions: [SessionSummary] {
         allSessions.filter { s in
             guard sourceFilter.matches(s.source) else { return false }
-            if !projectFilter.isEmpty && s.projectDisplay != projectFilter { return false }
+            if !projectFilter.isEmpty && !matchesTaskOrProject(s, projectFilter) { return false }
             if !modelFilter.isEmpty && s.model != modelFilter { return false }
             return true
         }
@@ -115,7 +115,9 @@ struct CoachingReportView: View {
     /// List unique project names cho project filter dropdown.
     var projectOptions: [String] {
         let names = Set(allRecords.map(\.projectDisplay))
+            .union(Set(allRecords.map(\.displayTitle)))
             .union(Set(allSessions.map(\.projectDisplay)))
+            .union(Set(allSessions.map(\.displayTitle)))
         return names.sorted()
     }
 
@@ -285,5 +287,13 @@ struct CoachingReportView: View {
             .joined(separator: " ")
             .lowercased()
         return String(compact.prefix(800))
+    }
+
+    private func matchesTaskOrProject(_ record: PromptRecord, _ filter: String) -> Bool {
+        record.projectDisplay == filter || record.displayTitle == filter || record.sessionTitle == filter
+    }
+
+    private func matchesTaskOrProject(_ session: SessionSummary, _ filter: String) -> Bool {
+        session.projectDisplay == filter || session.displayTitle == filter || session.sessionTitle == filter
     }
 }

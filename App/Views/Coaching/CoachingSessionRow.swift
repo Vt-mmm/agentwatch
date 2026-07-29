@@ -33,22 +33,25 @@ extension CoachingReportView {
         let topRisk = riskBySession[s.id]
         let intent = sessionIntents[s.id] ?? .general
         let alias = SessionAliasStore.shared.alias(for: s.id)
+        let title = alias ?? s.displayTitle
         return HStack(spacing: 10) {
             sessionSourcePill(s.source)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     intentBadge(intent)
-                    Text(alias ?? s.projectDisplay)
+                    Text(title)
                         .font(ClaudeFont.body(12))
                         .fontWeight(.medium)
                         .foregroundStyle(Claude.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    if alias != nil {
-                        Text(s.projectDisplay)
-                            .font(ClaudeFont.mono(9))
+                    if alias != nil || s.sessionTitle != nil {
+                        Text(alias != nil ? "alias" : "task")
+                            .font(ClaudeFont.mono(9, weight: .semibold))
                             .foregroundStyle(Claude.textMuted)
-                            .lineLimit(1)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Claude.surfaceAlt, in: Capsule())
                     }
                     if isOutlier {
                         badge("🚨 outlier", color: .red,
@@ -68,6 +71,13 @@ extension CoachingReportView {
                     .font(ClaudeFont.mono(10))
                     .foregroundStyle(Claude.textPrimary.opacity(0.75))
                     .lineLimit(1)
+                if title != s.projectDisplay {
+                    Text(s.projectDisplay)
+                        .font(ClaudeFont.mono(10))
+                        .foregroundStyle(Claude.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 Text(sessionMetaLabel(s))
                     .font(ClaudeFont.mono(10))
                     .foregroundStyle(Claude.textMuted)
@@ -138,9 +148,13 @@ extension CoachingReportView {
     /// Phụ đề row: model · tokens · tools · cache hit%.
     func sessionMetaLabel(_ s: SessionSummary) -> String {
         let modelStr = s.model.isEmpty ? "?" : s.model
+        let thinking = s.thinkingLevel.map { " · thinking \($0)" } ?? ""
+        let reasoning = s.reasoningTokens > 0
+            ? " · reasoning \(TokenFormatter.compact(s.reasoningTokens))"
+            : ""
         let cache = s.cacheHitRate
         let cacheStr = cache > 0 ? " · cache \(Int(cache * 100))%" : ""
-        return "\(modelStr) · \(TokenFormatter.compact(s.totalTokens)) tok · \(s.toolCallCount) tools\(cacheStr)"
+        return "\(modelStr)\(thinking) · \(TokenFormatter.compact(s.totalTokens)) tok\(reasoning) · \(s.toolCallCount) tools\(cacheStr)"
     }
 
     /// Format: nếu cùng 1 ngày → "12/06 10:23 → 14:55", khác ngày → "12/06 10:23 → 13/06 14:55".

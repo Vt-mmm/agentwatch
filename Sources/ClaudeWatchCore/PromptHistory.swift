@@ -12,23 +12,51 @@ public struct PromptRecord: Identifiable, Sendable, Equatable {
     public let timestamp: Date
     public let projectSlug: String  // tên thư mục dưới ~/.claude/projects/
     public let projectDisplay: String   // path đã decode lại
+    /// Human task/session title when the source exposes it.
+    public let sessionTitle: String?
     public let sessionUuid: String  // file uuid.jsonl
     public let text: String         // full prompt
     public let score: PromptScore
     public let source: SessionSource  // CLI hay Desktop
 
     public init(id: String, timestamp: Date, projectSlug: String,
-                projectDisplay: String, sessionUuid: String,
+                projectDisplay: String, sessionTitle: String? = nil,
+                sessionUuid: String,
                 text: String, score: PromptScore,
                 source: SessionSource = .cli) {
         self.id = id
         self.timestamp = timestamp
         self.projectSlug = projectSlug
         self.projectDisplay = projectDisplay
+        self.sessionTitle = Self.cleanTitle(sessionTitle)
         self.sessionUuid = sessionUuid
         self.text = text
         self.score = score
         self.source = source
+    }
+
+    public var displayTitle: String {
+        sessionTitle ?? projectDisplay
+    }
+
+    public func withSessionTitle(_ title: String?) -> PromptRecord {
+        PromptRecord(
+            id: id,
+            timestamp: timestamp,
+            projectSlug: projectSlug,
+            projectDisplay: projectDisplay,
+            sessionTitle: title,
+            sessionUuid: sessionUuid,
+            text: text,
+            score: score,
+            source: source
+        )
+    }
+
+    private static func cleanTitle(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

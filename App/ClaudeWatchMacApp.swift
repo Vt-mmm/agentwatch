@@ -13,11 +13,13 @@ struct ClaudeWatchMacApp: App {
     @State private var coachingData = CoachingDataStore()
     @State private var updater = UpdaterController()
     @State private var floatingPet = FloatingPetController()
+    @State private var usageSidebar = FloatingUsageSidebarController()
     @State private var petBroker = PetTalkBroker()
     @State private var sprites = SpriteStore()
     @State private var petSocketServer = PetSocketServer()
     @State private var petCollection = PetCollectionStore()
     @State private var codexPoller = CodexLivePoller()
+    @State private var piAgentPoller = PiAgentLivePoller()
 
     // v0.6.0: opt-in toggle cho streak-risk notification (default OFF).
     @AppStorage("notif.streakRisk.enabled") private var streakRiskNotificationEnabled: Bool = false
@@ -33,9 +35,11 @@ struct ClaudeWatchMacApp: App {
                 .environment(coachingData)
                 .environment(updater)
                 .environment(floatingPet)
+                .environment(usageSidebar)
                 .environment(sprites)
                 .environment(petCollection)
                 .environment(codexPoller)
+                .environment(piAgentPoller)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .onAppear {
                     // Bắt đầu thu thập MetricKit payloads — silent, không có UI.
@@ -43,6 +47,8 @@ struct ClaudeWatchMacApp: App {
                     startWatchingIfPossible()
                     // v0.8.0: Codex poller cho Live tab.
                     codexPoller.start()
+                    piAgentPoller.start()
+                    refreshUsageSidebar()
                     petBroker.attach(floatingPet)
                     // Sync floating pet từ PetCollectionStore (nguồn sự thật mới).
                     floatingPet.characterName = petCollection.selectedId
@@ -73,6 +79,13 @@ struct ClaudeWatchMacApp: App {
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)
                     petBroker.observeLive(stats: new)
+                    refreshUsageSidebar()
+                }
+                .onChange(of: codexPoller.snapshot) { _, _ in
+                    refreshUsageSidebar()
+                }
+                .onChange(of: piAgentPoller.snapshot) { _, _ in
+                    refreshUsageSidebar()
                 }
                 .onChange(of: coachingData.petState) { _, s in
                     floatingPet.state = s
@@ -105,8 +118,14 @@ struct ClaudeWatchMacApp: App {
                 .environment(appearance)
                 .environment(bookmarks)
                 .environment(coachingData)
+                .environment(codexPoller)
+                .environment(piAgentPoller)
                 .preferredColorScheme(appearance.mode.colorScheme)
-                .onAppear { startWatchingIfPossible() }
+                .onAppear {
+                    startWatchingIfPossible()
+                    codexPoller.start()
+                    piAgentPoller.start()
+                }
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)
                 }
@@ -121,8 +140,11 @@ struct ClaudeWatchMacApp: App {
     }
 
     private var menuBarLabel: String {
-        if let s = watcher.stats {
-            return "$\(String(format: "%.2f", s.cost))"
+        let total = (watcher.stats?.cost ?? 0)
+            + codexPoller.snapshot.totalCost
+            + piAgentPoller.snapshot.totalCost
+        if total > 0 {
+            return "$\(String(format: "%.2f", total))"
         }
         return ""
     }
@@ -134,5 +156,13 @@ struct ClaudeWatchMacApp: App {
         } else if let folder = projectStore.pinnedFolder {
             watcher.startPinned(folder: folder)
         }
+    }
+
+    private func refreshUsageSidebar() {
+        usageSidebar.update(
+            claude: watcher.stats,
+            codex: codexPoller.snapshot,
+            piAgent: piAgentPoller.snapshot
+        )
     }
 }

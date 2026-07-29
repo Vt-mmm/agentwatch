@@ -10,9 +10,11 @@ struct MainWindowView: View {
     @Environment(UpdaterController.self) private var updater
     @Environment(CoachingDataStore.self) private var coaching
     @Environment(FloatingPetController.self) private var pet
+    @Environment(FloatingUsageSidebarController.self) private var usageSidebar
     @Environment(SpriteStore.self) private var sprites
     @Environment(PetCollectionStore.self) private var petCollection
     @Environment(CodexLivePoller.self) private var codex
+    @Environment(PiAgentLivePoller.self) private var piAgent
     @State private var tab: Tab = .live
     @State private var liveFilter: LiveAgentFilter = .all
     @State private var showPrivacy: Bool = false
@@ -95,9 +97,11 @@ struct MainWindowView: View {
     /// Settings menu: bật cập nhật, mở trang Releases, hiển thị version hiện tại.
     private var settingsMenu: some View {
         @Bindable var petBinding = pet
+        @Bindable var usageBinding = usageSidebar
         return Menu {
             // Floating pet toggle — top of menu, most-used setting.
             Toggle("Floating pet trên desktop", isOn: $petBinding.isVisible)
+            Toggle("Usage sidebar góc phải", isOn: $usageBinding.isVisible)
             Toggle("Lật pet sang phải", isOn: $petFlipped)
             // v0.6.0: streak-risk notification opt-in (default OFF).
             Toggle("Nhắc khi streak sắp mất (sau 18h)", isOn: $streakRiskNoti)
@@ -158,18 +162,25 @@ struct MainWindowView: View {
     @ViewBuilder
     private var liveTab: some View {
         let codexSnapshot = codex.snapshot
+        let piSnapshot = piAgent.snapshot
         let claudeStats = watcher.stats
         let hasClaude = claudeStats != nil
         let hasCodex = codexSnapshot.sessionCount > 0
-        if hasClaude || hasCodex {
+        let hasPiAgent = piSnapshot.sessionCount > 0
+        if hasClaude || hasCodex || hasPiAgent {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     LiveOverviewCard(
                         claudeStats: claudeStats,
                         codexSnapshot: codexSnapshot,
+                        piSnapshot: piSnapshot,
                         filter: $liveFilter
                     )
-                    liveAgentSections(claudeStats: claudeStats, codexSnapshot: codexSnapshot)
+                    liveAgentSections(
+                        claudeStats: claudeStats,
+                        codexSnapshot: codexSnapshot,
+                        piSnapshot: piSnapshot
+                    )
                 }
                 .padding(20)
             }
@@ -181,15 +192,23 @@ struct MainWindowView: View {
 
     @ViewBuilder
     private func liveAgentSections(claudeStats: SessionStats?,
-                                   codexSnapshot: CodexLiveSnapshot) -> some View {
+                                   codexSnapshot: CodexLiveSnapshot,
+                                   piSnapshot: PiAgentLiveSnapshot) -> some View {
         switch liveFilter {
         case .all:
-            if shouldShowCodexFirst(claudeStats: claudeStats, codexSnapshot: codexSnapshot) {
-                if codexSnapshot.sessionCount > 0 { CodexLiveCard(snapshot: codexSnapshot) }
-                if let stats = claudeStats { claudeLiveSection(stats) }
-            } else {
-                if let stats = claudeStats { claudeLiveSection(stats) }
-                if codexSnapshot.sessionCount > 0 { CodexLiveCard(snapshot: codexSnapshot) }
+            ForEach(liveAgentOrder(claudeStats: claudeStats,
+                                   codexSnapshot: codexSnapshot,
+                                   piSnapshot: piSnapshot)) { item in
+                switch item.kind {
+                case .all:
+                    EmptyView()
+                case .claude:
+                    if let stats = claudeStats { claudeLiveSection(stats) }
+                case .codex:
+                    if codexSnapshot.sessionCount > 0 { CodexLiveCard(snapshot: codexSnapshot) }
+                case .piagent:
+                    if piSnapshot.sessionCount > 0 { PiAgentLiveCard(snapshot: piSnapshot) }
+                }
             }
         case .claude:
             if let stats = claudeStats {
@@ -203,6 +222,8 @@ struct MainWindowView: View {
             }
         case .codex:
             CodexLiveCard(snapshot: codexSnapshot)
+        case .piagent:
+            PiAgentLiveCard(snapshot: piSnapshot)
         }
     }
 
@@ -215,11 +236,16 @@ struct MainWindowView: View {
         }
     }
 
-    private func shouldShowCodexFirst(claudeStats: SessionStats?,
-                                      codexSnapshot: CodexLiveSnapshot) -> Bool {
-        let codexDate = codexSnapshot.latestSession?.lastTimestamp ?? .distantPast
-        let claudeDate = claudeStats?.mtime ?? .distantPast
-        return codexDate > claudeDate
+    private func liveAgentOrder(claudeStats: SessionStats?,
+                                codexSnapshot: CodexLiveSnapshot,
+                                piSnapshot: PiAgentLiveSnapshot) -> [LiveAgentOrderItem] {
+        [
+            LiveAgentOrderItem(kind: .claude, date: claudeStats?.mtime ?? .distantPast),
+            LiveAgentOrderItem(kind: .codex, date: codexSnapshot.latestSession?.lastTimestamp ?? .distantPast),
+            LiveAgentOrderItem(kind: .piagent, date: piSnapshot.latestSession?.lastTimestamp ?? .distantPast)
+        ]
+        .filter { $0.date > .distantPast }
+        .sorted { $0.date > $1.date }
     }
 
     private var placeholder: some View {
@@ -252,7 +278,7 @@ struct MainWindowView: View {
 
     private var placeholderText: String {
         if projectStore.followLatest {
-            return "Đang scan session agent local…\nMở Claude Code hoặc Codex để bắt đầu."
+            return "Đang scan session agent local…\nMở Claude Code, Codex hoặc PiAgent để bắt đầu."
         }
         if let folder = projectStore.pinnedFolder {
             return "Đợi hoạt động trong \(folder.lastPathComponent)…"
@@ -265,29 +291,37 @@ enum LiveAgentFilter: String, CaseIterable, Identifiable {
     case all = "Tất cả"
     case claude = "Claude"
     case codex = "Codex"
+    case piagent = "PiAgent"
 
     var id: String { rawValue }
+}
+
+private struct LiveAgentOrderItem: Identifiable {
+    let kind: LiveAgentFilter
+    let date: Date
+    var id: LiveAgentFilter { kind }
 }
 
 private struct LiveOverviewCard: View {
     let claudeStats: SessionStats?
     let codexSnapshot: CodexLiveSnapshot
+    let piSnapshot: PiAgentLiveSnapshot
     @Binding var filter: LiveAgentFilter
 
     private var activeSessions: Int {
-        (claudeStats == nil ? 0 : 1) + codexSnapshot.sessionCount
+        (claudeStats == nil ? 0 : 1) + codexSnapshot.sessionCount + piSnapshot.sessionCount
     }
 
     private var totalCost: Double {
-        (claudeStats?.cost ?? 0) + codexSnapshot.totalCost
+        (claudeStats?.cost ?? 0) + codexSnapshot.totalCost + piSnapshot.totalCost
     }
 
     private var totalTokens: Int {
-        (claudeStats?.totalTokens ?? 0) + codexSnapshot.totalTokens
+        (claudeStats?.totalTokens ?? 0) + codexSnapshot.totalTokens + piSnapshot.totalTokens
     }
 
     private var totalTools: Int {
-        (claudeStats?.toolCalls ?? 0) + codexSnapshot.totalToolCalls
+        (claudeStats?.toolCalls ?? 0) + codexSnapshot.totalToolCalls + piSnapshot.totalToolCalls
     }
 
     var body: some View {
@@ -331,6 +365,13 @@ private struct LiveOverviewCard: View {
                     tint: .green,
                     target: .codex
                 )
+                agentButton(
+                    name: "PiAgent",
+                    active: piSnapshot.sessionCount > 0,
+                    detail: piDetail,
+                    tint: .purple,
+                    target: .piagent
+                )
             }
         }
         .claudeCard()
@@ -344,6 +385,11 @@ private struct LiveOverviewCard: View {
     private var codexDetail: String {
         guard codexSnapshot.sessionCount > 0 else { return "idle" }
         return "\(codexSnapshot.sessionCount) sessions · \(TokenFormatter.compact(codexSnapshot.totalTokens)) tok"
+    }
+
+    private var piDetail: String {
+        guard piSnapshot.sessionCount > 0 else { return "idle" }
+        return "\(piSnapshot.namedTaskCount)/\(piSnapshot.sessionCount) named · \(TokenFormatter.compact(piSnapshot.totalTokens)) tok"
     }
 
     private func metric(_ label: String, _ value: String) -> some View {

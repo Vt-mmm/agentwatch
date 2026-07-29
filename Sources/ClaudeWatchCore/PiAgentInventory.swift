@@ -36,19 +36,21 @@ public enum PiAgentJsonlParser {
         let estimatedCost = Pricing.cost(
             family: family,
             inputTokens: parsed.inputTokens,
-            outputTokens: parsed.outputTokens,
+            outputTokens: parsed.outputTokens + parsed.reasoningTokens,
             cacheReadTokens: parsed.cacheReadTokens,
             cacheWriteTokens: parsed.cacheWriteTokens
         )
 
         return SessionSummary(
             id: parsed.sessionId,
+            sessionTitle: parsed.sessionTitle,
             projectDisplay: parsed.projectDisplay,
             source: .piagent,
             model: parsed.model,
             modelFamily: family,
             inputTokens: parsed.inputTokens,
             outputTokens: parsed.outputTokens,
+            reasoningTokens: parsed.reasoningTokens,
             cacheReadTokens: parsed.cacheReadTokens,
             cacheWriteTokens: parsed.cacheWriteTokens,
             cost: parsed.exactCost > 0 ? parsed.exactCost : estimatedCost,
@@ -57,7 +59,8 @@ public enum PiAgentJsonlParser {
             promptCount: parsed.promptCount,
             toolCallCount: parsed.toolCalls,
             fileURL: file,
-            agentCount: parsed.agentCount
+            agentCount: parsed.agentCount,
+            thinkingLevel: parsed.thinkingLevel
         )
     }
 
@@ -68,12 +71,15 @@ public enum PiAgentJsonlParser {
             projectSlug: parsed.projectSlug,
             filePath: file
         )
+        stats.sessionName = parsed.sessionTitle
         stats.model = parsed.model
+        stats.thinkingLevel = parsed.thinkingLevel
         stats.startedAt = parsed.firstTimestampString
         stats.lastEventAt = parsed.lastTimestampString
         stats.messageCount = parsed.messageCount
         stats.inputTokens = parsed.inputTokens
         stats.outputTokens = parsed.outputTokens
+        stats.reasoningTokens = parsed.reasoningTokens
         stats.cacheReadTokens = parsed.cacheReadTokens
         stats.cacheWriteTokens = parsed.cacheWriteTokens
         stats.toolCalls = parsed.toolCalls
@@ -93,9 +99,11 @@ public enum PiAgentJsonlParser {
 
     private struct Parsed {
         var sessionId: String
+        var sessionTitle: String?
         var projectSlug: String
         var projectDisplay: String
         var model: String
+        var thinkingLevel: String?
         var firstTimestamp: Date?
         var lastTimestamp: Date?
         var firstTimestampString: String
@@ -103,6 +111,7 @@ public enum PiAgentJsonlParser {
         var messageCount: Int
         var inputTokens: Int
         var outputTokens: Int
+        var reasoningTokens: Int
         var cacheReadTokens: Int
         var cacheWriteTokens: Int
         var exactCost: Double
@@ -116,9 +125,11 @@ public enum PiAgentJsonlParser {
     private static func parse(file: URL, includeEvents: Bool) -> Parsed {
         let fallbackId = file.deletingPathExtension().lastPathComponent
         var sessionId = fallbackId
+        var sessionTitle: String?
         var cwd: String?
         var projectName: String?
         var model = ""
+        var thinkingLevel: String?
         var firstTimestamp: Date?
         var lastTimestamp: Date?
         var firstTimestampString = ""
@@ -126,6 +137,7 @@ public enum PiAgentJsonlParser {
         var messageCount = 0
         var inputTokens = 0
         var outputTokens = 0
+        var reasoningTokens = 0
         var cacheReadTokens = 0
         var cacheWriteTokens = 0
         var exactCost = 0.0
@@ -164,8 +176,14 @@ public enum PiAgentJsonlParser {
             case "model_change":
                 if let m = obj["modelId"] as? String, !m.isEmpty { model = m }
 
+            case "thinking_level_change":
+                if let level = obj["thinkingLevel"] as? String, !level.isEmpty {
+                    thinkingLevel = level
+                }
+
             case "session_info":
                 if let name = obj["name"] as? String, !name.isEmpty {
+                    sessionTitle = normalizedSessionTitle(name)
                     if name.hasPrefix("pi:") {
                         projectName = String(name.dropFirst(3))
                     } else if name.hasPrefix("subagent-") {
@@ -204,6 +222,7 @@ public enum PiAgentJsonlParser {
                             timestamp: ts,
                             projectSlug: cwd ?? projectName ?? file.deletingLastPathComponent().lastPathComponent,
                             projectDisplay: displayProject(cwd: cwd, projectName: projectName),
+                            sessionTitle: sessionTitle,
                             sessionUuid: sessionId,
                             text: trimmed,
                             score: PromptScorer.score(trimmed),
@@ -216,6 +235,7 @@ public enum PiAgentJsonlParser {
                     if let usage = msg["usage"] as? [String: Any] {
                         inputTokens += intValue(usage["input"])
                         outputTokens += intValue(usage["output"])
+                        reasoningTokens += intValue(usage["reasoning"])
                         cacheReadTokens += intValue(usage["cacheRead"])
                         cacheWriteTokens += intValue(usage["cacheWrite"])
                         if let cost = usage["cost"] as? [String: Any] {
@@ -253,9 +273,11 @@ public enum PiAgentJsonlParser {
 
         return Parsed(
             sessionId: sessionId,
+            sessionTitle: sessionTitle,
             projectSlug: cwd ?? projectName ?? file.deletingLastPathComponent().lastPathComponent,
             projectDisplay: displayProject(cwd: cwd, projectName: projectName),
             model: model,
+            thinkingLevel: thinkingLevel,
             firstTimestamp: firstTimestamp,
             lastTimestamp: lastTimestamp,
             firstTimestampString: firstTimestampString,
@@ -263,6 +285,7 @@ public enum PiAgentJsonlParser {
             messageCount: messageCount,
             inputTokens: inputTokens,
             outputTokens: outputTokens,
+            reasoningTokens: reasoningTokens,
             cacheReadTokens: cacheReadTokens,
             cacheWriteTokens: cacheWriteTokens,
             exactCost: exactCost,
@@ -270,8 +293,17 @@ public enum PiAgentJsonlParser {
             toolCalls: toolCalls,
             agentCount: agentCount,
             events: events,
-            prompts: prompts
+            prompts: prompts.map { $0.withSessionTitle(sessionTitle) }
         )
+    }
+
+    private static func normalizedSessionTitle(_ raw: String) -> String? {
+        var name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.hasPrefix("pi:") {
+            name = String(name.dropFirst(3))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return name.isEmpty ? nil : name
     }
 
     private static func applyAssistantContent(_ raw: Any?,

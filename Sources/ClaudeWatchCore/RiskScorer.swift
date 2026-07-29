@@ -43,6 +43,7 @@ public enum RiskCategory: String, Sendable, CaseIterable, Equatable {
     case policyBypass
     case destructiveAction
     case nonCompanyWorkspace
+    case sessionNaming
 
     public var label: String {
         switch self {
@@ -56,6 +57,7 @@ public enum RiskCategory: String, Sendable, CaseIterable, Equatable {
         case .policyBypass:        return "Policy bypass"
         case .destructiveAction:   return "Destructive action"
         case .nonCompanyWorkspace: return "Non-company workspace"
+        case .sessionNaming:       return "Session naming"
         }
     }
 
@@ -71,6 +73,7 @@ public enum RiskCategory: String, Sendable, CaseIterable, Equatable {
         case .policyBypass:        return "shield.slash.fill"
         case .destructiveAction:   return "trash.circle.fill"
         case .nonCompanyWorkspace: return "folder.badge.questionmark"
+        case .sessionNaming:       return "tag.slash.fill"
         }
     }
 }
@@ -267,6 +270,21 @@ public enum RiskScorer {
                 reason: "Cost session vượt mean + 2σ trong tập đang xem, nên cần mở timeline để xem agent đã làm gì.",
                 evidence: sessionEvidence(s),
                 recommendation: "Review prompt đầu phiên, tool calls và subagent. Nếu task đúng nhưng tốn thật, đánh dấu thành baseline mới cho project đó.",
+                timestamp: ts
+            ))
+        }
+
+        if needsClearPiTaskName(s) {
+            let severity: RiskSeverity = s.totalTokens >= thresholds.highTokenSession
+                || s.cost >= thresholds.highCostSession ? .high : .medium
+            out.append(sessionFinding(
+                s, category: .sessionNaming,
+                severity: severity,
+                score: min(90, 62 + s.totalTokens / 25_000 + Int(s.cost * 4)),
+                title: "Pi session chưa có tên task rõ",
+                reason: "Phiên PiAgent đang dùng tên mặc định hoặc thiếu tên session/task. Report vẫn ghi được prompt/token, nhưng khó đối chiếu task được giao.",
+                evidence: "session name: \(s.sessionTitle ?? "(missing)") · project: \(s.projectDisplay)",
+                recommendation: "Yêu cầu member đổi tên Pi session theo chuẩn task nội bộ ngay khi bắt đầu phiên, rồi dùng cùng tên đó khi export report tuần.",
                 timestamp: ts
             ))
         }
@@ -496,9 +514,25 @@ public enum RiskScorer {
     }
 
     private static func sessionEvidence(_ s: SessionSummary) -> String {
-        "\(s.source.label) · \(s.model.isEmpty ? "unknown model" : s.model) · "
+        let title = s.sessionTitle.map { " · task \($0)" } ?? ""
+        let thinking = s.thinkingLevel.map { " · thinking \($0)" } ?? ""
+        return "\(s.source.label)\(title) · \(s.model.isEmpty ? "unknown model" : s.model)\(thinking) · "
             + "\(s.totalTokens) tokens · \(String(format: "$%.4f", s.cost)) · "
             + "\(s.promptCount) prompts · \(s.toolCallCount) tools · \(s.agentCount) agents"
+    }
+
+    private static func needsClearPiTaskName(_ s: SessionSummary) -> Bool {
+        guard s.source == .piagent, !isPiSubagentRun(s) else { return false }
+        return !s.hasTaskSessionTitle
+    }
+
+    private static func isPiSubagentRun(_ s: SessionSummary) -> Bool {
+        if s.fileURL?.pathComponents.contains("subagent") == true { return true }
+        if let title = s.sessionTitle,
+           title.hasPrefix("subagent-") {
+            return true
+        }
+        return false
     }
 
     private static func ranksAbove(_ lhs: RiskFinding, _ rhs: RiskFinding) -> Bool {

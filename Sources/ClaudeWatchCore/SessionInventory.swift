@@ -8,12 +8,16 @@ import Foundation
 /// Snapshot 1 session để hiển thị trong dashboard.
 public struct SessionSummary: Identifiable, Sendable, Equatable {
     public let id: String                  // session uuid
+    /// Human task/session title set by the operator inside the agent UI.
+    /// For PiAgent this is the canonical task axis used by Agent Watch reports.
+    public let sessionTitle: String?
     public let projectDisplay: String
     public let source: SessionSource
     public let model: String
     public let modelFamily: ModelFamily
     public let inputTokens: Int
     public let outputTokens: Int
+    public let reasoningTokens: Int
     public let cacheReadTokens: Int
     public let cacheWriteTokens: Int
     public let cost: Double
@@ -26,29 +30,46 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
     /// Số lần invoke tool "Agent" (spawn subagent) — heuristic phát hiện
     /// session bị subagent loop tốn token.
     public let agentCount: Int
+    /// Agent thinking/reasoning mode when the source exposes it.
+    public let thinkingLevel: String?
 
-    public init(id: String, projectDisplay: String, source: SessionSource,
+    public init(id: String, sessionTitle: String? = nil,
+                projectDisplay: String, source: SessionSource,
                 model: String, modelFamily: ModelFamily,
-                inputTokens: Int, outputTokens: Int,
+                inputTokens: Int, outputTokens: Int, reasoningTokens: Int = 0,
                 cacheReadTokens: Int, cacheWriteTokens: Int,
                 cost: Double,
                 firstTimestamp: Date?, lastTimestamp: Date?,
                 promptCount: Int, toolCallCount: Int,
                 fileURL: URL? = nil,
-                agentCount: Int = 0) {
-        self.id = id; self.projectDisplay = projectDisplay; self.source = source
+                agentCount: Int = 0,
+                thinkingLevel: String? = nil) {
+        self.id = id
+        self.sessionTitle = Self.cleanTitle(sessionTitle)
+        self.projectDisplay = projectDisplay; self.source = source
         self.model = model; self.modelFamily = modelFamily
         self.inputTokens = inputTokens; self.outputTokens = outputTokens
+        self.reasoningTokens = reasoningTokens
         self.cacheReadTokens = cacheReadTokens; self.cacheWriteTokens = cacheWriteTokens
         self.cost = cost
         self.firstTimestamp = firstTimestamp; self.lastTimestamp = lastTimestamp
         self.promptCount = promptCount; self.toolCallCount = toolCallCount
         self.fileURL = fileURL
         self.agentCount = agentCount
+        self.thinkingLevel = Self.cleanTitle(thinkingLevel)
     }
 
     public var totalTokens: Int {
-        inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+        inputTokens + outputTokens + reasoningTokens + cacheReadTokens + cacheWriteTokens
+    }
+
+    public var displayTitle: String {
+        sessionTitle ?? projectDisplay
+    }
+
+    public var hasTaskSessionTitle: Bool {
+        guard let sessionTitle else { return false }
+        return !Self.isGenericTaskTitle(sessionTitle)
     }
 
     /// Cache hit rate = cacheRead / (input + cacheRead). High ratio = healthy
@@ -63,6 +84,25 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
     public var costPerPrompt: Double {
         promptCount > 0 ? cost / Double(promptCount) : cost
     }
+
+    private static func cleanTitle(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func isGenericTaskTitle(_ raw: String) -> Bool {
+        let compact = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+        if compact.count < 4 { return true }
+        let generic: Set<String> = [
+            "session", "new session", "untitled", "working", "work",
+            "task", "default", "pi", "piagent", "pi agent"
+        ]
+        return generic.contains(compact)
+    }
 }
 
 /// Aggregate metrics cho dashboard.
@@ -72,13 +112,14 @@ public struct InventoryAggregate: Sendable, Equatable {
     public let totalTokens: Int
     public let inputTokens: Int
     public let outputTokens: Int
+    public let reasoningTokens: Int
     public let cacheReadTokens: Int
     public let cacheWriteTokens: Int
     public let totalToolCalls: Int
 
     public static let zero = InventoryAggregate(
         sessionCount: 0, totalCost: 0, totalTokens: 0,
-        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
+        inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheReadTokens: 0,
         cacheWriteTokens: 0, totalToolCalls: 0)
 }
 
@@ -108,10 +149,11 @@ public enum SessionInventory {
     /// Quick aggregate cho summary cards.
     public static func aggregate(_ sessions: [SessionSummary]) -> InventoryAggregate {
         var agg = InventoryAggregate.zero
-        var input = 0, output = 0, cr = 0, cw = 0, tools = 0, cost = 0.0
+        var input = 0, output = 0, reasoning = 0, cr = 0, cw = 0, tools = 0, cost = 0.0
         for s in sessions {
             input  += s.inputTokens
             output += s.outputTokens
+            reasoning += s.reasoningTokens
             cr     += s.cacheReadTokens
             cw     += s.cacheWriteTokens
             tools  += s.toolCallCount
@@ -120,8 +162,8 @@ public enum SessionInventory {
         agg = InventoryAggregate(
             sessionCount: sessions.count,
             totalCost: cost,
-            totalTokens: input + output + cr + cw,
-            inputTokens: input, outputTokens: output,
+            totalTokens: input + output + reasoning + cr + cw,
+            inputTokens: input, outputTokens: output, reasoningTokens: reasoning,
             cacheReadTokens: cr, cacheWriteTokens: cw,
             totalToolCalls: tools
         )

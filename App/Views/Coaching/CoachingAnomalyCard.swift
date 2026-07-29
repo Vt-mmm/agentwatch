@@ -85,6 +85,8 @@ extension CoachingReportView {
 
     @ViewBuilder
     private func riskRow(_ finding: RiskFinding) -> some View {
+        let session = allSessions.first { $0.id == finding.sessionId }
+        let title = session?.displayTitle ?? finding.projectDisplay
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: finding.category.icon)
                 .font(.system(size: 15, weight: .semibold))
@@ -116,9 +118,17 @@ extension CoachingReportView {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
-                    Text(truncateMid(finding.projectDisplay, max: 48))
+                    Text(truncateMid(title, max: 48))
                         .font(ClaudeFont.mono(10))
                         .foregroundStyle(Claude.textMuted.opacity(0.9))
+                    if let session, session.displayTitle != session.projectDisplay {
+                        Text("task")
+                            .font(ClaudeFont.mono(9, weight: .semibold))
+                            .foregroundStyle(Claude.textMuted)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Claude.surfaceAlt)
+                            .clipShape(Capsule())
+                    }
                     if finding.isPromptLevel {
                         Text("prompt")
                             .font(ClaudeFont.mono(9, weight: .semibold))

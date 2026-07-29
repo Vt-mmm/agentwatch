@@ -22,6 +22,7 @@ final class RiskScorerTests: XCTestCase {
     }
 
     private func makeSession(id: String = "s-risk",
+                             sessionTitle: String? = nil,
                              project: String = "/Users/team/company/app",
                              source: SessionSource = .codex,
                              input: Int = 0,
@@ -34,6 +35,7 @@ final class RiskScorerTests: XCTestCase {
                              agentCount: Int = 0) -> SessionSummary {
         SessionSummary(
             id: id,
+            sessionTitle: sessionTitle,
             projectDisplay: project,
             source: source,
             model: "gpt-5",
@@ -110,6 +112,34 @@ final class RiskScorerTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(summary.highOrCriticalCount, 1)
         XCTAssertNotNil(bySession["s-risk"])
         XCTAssertNotNil(byPrompt["secret"])
+    }
+
+    func testPiSessionNamingRiskUsesTaskNameOnly() {
+        let unnamed = makeSession(
+            id: "pi-unnamed",
+            sessionTitle: "Working",
+            source: .piagent,
+            input: 20_000,
+            output: 5_000,
+            promptCount: 2
+        )
+        let named = makeSession(
+            id: "pi-named",
+            sessionTitle: "PAY-742 Payment audit",
+            source: .piagent,
+            input: 20_000,
+            output: 5_000,
+            promptCount: 2
+        )
+
+        let findings = RiskScorer.evaluate(records: [], sessions: [unnamed, named], limit: 20)
+
+        XCTAssertTrue(findings.contains {
+            $0.sessionId == "pi-unnamed" && $0.category == .sessionNaming
+        })
+        XCTAssertFalse(findings.contains {
+            $0.sessionId == "pi-named" && $0.category == .sessionNaming
+        })
     }
 
     func testDuplicateSessionIdsDoNotCrashRiskOrCsvExport() {

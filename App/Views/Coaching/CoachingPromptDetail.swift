@@ -45,17 +45,27 @@ struct PromptDetailSheet: View {
                 } else {
                     chip("Follow-up", Claude.Chip.infoBg, Claude.Chip.infoFg)
                 }
+                if let title = record.sessionTitle {
+                    chip(title, Claude.Chip.infoBg, Claude.Chip.infoFg)
+                }
                 chip("\(record.score.charCount) chars", Claude.Chip.infoBg, Claude.Chip.infoFg)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(fullTimestamp(record.timestamp))
                         .font(ClaudeFont.mono(11, weight: .semibold))
                         .foregroundStyle(Claude.textPrimary)
-                    Text(record.projectDisplay)
+                    Text(record.displayTitle)
                         .font(ClaudeFont.mono(10))
                         .foregroundStyle(Claude.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    if record.displayTitle != record.projectDisplay {
+                        Text(record.projectDisplay)
+                            .font(ClaudeFont.mono(9))
+                            .foregroundStyle(Claude.textMuted.opacity(0.8))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
             }
 

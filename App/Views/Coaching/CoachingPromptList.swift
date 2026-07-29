@@ -99,8 +99,11 @@ struct PromptRow: View {
                         riskBadge(risk)
                     }
                     metaChip("\(record.score.charCount) chars")
+                    if let title = record.sessionTitle {
+                        metaChip(truncateMid(title, max: 22))
+                    }
                     metaChip(String(record.sessionUuid.prefix(8)))
-                    Text(record.projectDisplay)
+                    Text(record.displayTitle)
                         .font(ClaudeFont.body(11))
                         .foregroundStyle(Claude.textMuted)
                         .lineLimit(1)
@@ -176,6 +179,13 @@ struct PromptRow: View {
             .padding(.vertical, 1)
             .background(Claude.surface)
             .clipShape(Capsule())
+    }
+
+    private func truncateMid(_ s: String, max: Int) -> String {
+        guard s.count > max, max > 6 else { return s }
+        let head = max / 2
+        let tail = max - head - 1
+        return String(s.prefix(head)) + "…" + String(s.suffix(tail))
     }
 
     private func riskColor(_ severity: RiskSeverity) -> Color {

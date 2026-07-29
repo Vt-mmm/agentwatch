@@ -7,13 +7,16 @@ public struct SessionStats: Sendable, Equatable {
     public let projectSlug: String     // parent directory name under ~/.claude/projects
     public let filePath: URL
 
+    public var sessionName: String?
     public var model: String = ""
+    public var thinkingLevel: String?
     public var startedAt: String = ""
     public var lastEventAt: String = ""
 
     public var messageCount: Int = 0
     public var inputTokens: Int = 0
     public var outputTokens: Int = 0
+    public var reasoningTokens: Int = 0
     public var cacheReadTokens: Int = 0
     public var cacheWriteTokens: Int = 0
     public var toolCalls: Int = 0
@@ -30,7 +33,7 @@ public struct SessionStats: Sendable, Equatable {
     }
 
     public var totalTokens: Int {
-        inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+        inputTokens + outputTokens + reasoningTokens + cacheReadTokens + cacheWriteTokens
     }
 
     public var modelFamily: ModelFamily {

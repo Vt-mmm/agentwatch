@@ -172,7 +172,7 @@ struct SessionDetailSheet: View {
                 .foregroundStyle(Claude.orange)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(SessionAliasStore.shared.alias(for: session.id) ?? session.projectDisplay)
+                    Text(SessionAliasStore.shared.alias(for: session.id) ?? session.displayTitle)
                         .font(ClaudeFont.heading())
                         .foregroundStyle(Claude.textPrimary)
                         .lineLimit(1)
@@ -186,6 +186,13 @@ struct SessionDetailSheet: View {
                     }
                     .buttonStyle(.plain)
                     .help("Đổi tên session")
+                }
+                if session.displayTitle != session.projectDisplay {
+                    Text(session.projectDisplay)
+                        .font(ClaudeFont.mono(10))
+                        .foregroundStyle(Claude.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 Text(session.id)
                     .font(ClaudeFont.mono(10))
@@ -218,9 +225,20 @@ struct SessionDetailSheet: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
                     sourcePill
+                    if let title = session.sessionTitle {
+                        Text("Task/session: \(title)")
+                            .font(ClaudeFont.body(12))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Claude.textPrimary)
+                    }
                     Text(session.model.isEmpty ? "Unknown model" : session.model)
                         .font(ClaudeFont.mono(12, weight: .semibold))
                         .foregroundStyle(Claude.textPrimary)
+                    if let thinking = session.thinkingLevel ?? stats?.thinkingLevel {
+                        Text("Thinking: \(thinking)")
+                            .font(ClaudeFont.mono(11, weight: .semibold))
+                            .foregroundStyle(.purple)
+                    }
                     Text(timeRangeFull)
                         .font(ClaudeFont.mono(11))
                         .foregroundStyle(Claude.textMuted)
@@ -236,7 +254,7 @@ struct SessionDetailSheet: View {
                     Text("\(session.promptCount) prompt · \(session.toolCallCount) tool · \(session.agentCount) agent")
                         .font(ClaudeFont.mono(11))
                         .foregroundStyle(Claude.textMuted)
-                    Text("cache \(Int(session.cacheHitRate * 100))% hit · \(TokenFormatter.usd(session.costPerPrompt))/prompt")
+                    Text("cache \(Int(session.cacheHitRate * 100))% hit · reasoning \(TokenFormatter.compact(session.reasoningTokens)) · \(TokenFormatter.usd(session.costPerPrompt))/prompt")
                         .font(ClaudeFont.mono(10))
                         .foregroundStyle(Claude.textMuted)
                 }
@@ -294,6 +312,10 @@ struct SessionDetailSheet: View {
             SectionLabel(text: "Breakdown chi phí token")
             tokenRow("Input",       session.inputTokens,      inCost,  Color.blue)
             tokenRow("Output",      session.outputTokens,     outCost, Color.green)
+            if session.reasoningTokens > 0 {
+                let reasonCost = Double(session.reasoningTokens) / 1_000_000 * price.output
+                tokenRow("Reasoning", session.reasoningTokens, reasonCost, Color.purple)
+            }
             tokenRow("Cache read",  session.cacheReadTokens,  crCost,  Color.purple)
             tokenRow("Cache write", session.cacheWriteTokens, cwCost,  Color.orange)
             Divider().background(Claude.border)

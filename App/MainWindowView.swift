@@ -214,7 +214,7 @@ struct MainWindowView: View {
 
     private var placeholderText: String {
         if projectStore.followLatest {
-            return "Đang scan ~/.claude/projects tìm session mới nhất…\nMở 1 phiên `claude` trong terminal để bắt đầu."
+            return "Đang scan session agent local…\nMở Claude Code hoặc Codex để bắt đầu."
         }
         if let folder = projectStore.pinnedFolder {
             return "Đợi hoạt động trong \(folder.lastPathComponent)…"

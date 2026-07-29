@@ -19,6 +19,7 @@ struct CoachingReportView: View {
     @State var viewMode: ViewMode = .all
     @State var selectedRecord: PromptRecord?
     @State var selectedSession: SessionSummary?
+    @State var promptPageSize: Int = 25
 
     // Pagination — 15 mỗi trang đủ rộng để xem mà không cuộn quá dài.
     @State var sessionPage: Int = 0
@@ -209,6 +210,7 @@ struct CoachingReportView: View {
         .onChange(of: projectFilter) { _, _ in resetPages() }
         .onChange(of: modelFilter) { _, _ in resetPages() }
         .onChange(of: viewMode) { _, _ in resetPages() }
+        .onChange(of: promptPageSize) { _, _ in promptPage = 0 }
         .sheet(item: $selectedRecord) { record in
             PromptDetailSheet(record: record)
         }

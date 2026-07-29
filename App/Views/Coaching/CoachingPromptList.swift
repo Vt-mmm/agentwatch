@@ -9,11 +9,17 @@ extension CoachingReportView {
     // MARK: - Prompt list card
 
     var promptListCard: some View {
-        let info = Pagination.info(items: records, page: promptPage, pageSize: pageSize)
+        let info = Pagination.info(items: records, page: promptPage, pageSize: promptPageSize)
         return VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            HStack(spacing: 10) {
                 SectionLabel(text: "Prompts trong session (\(records.count))")
                 Spacer()
+                if !records.isEmpty {
+                    Text(promptRangeLabel(info))
+                        .font(ClaudeFont.mono(10))
+                        .foregroundStyle(Claude.textMuted)
+                }
+                promptPageSizeMenu
                 Paginator(page: info.page, totalPages: info.totalPages) { promptPage = $0 }
             }
             Text("Ghi nhận user prompts hợp lệ trong phiên để audit nội dung làm việc, task ngoài scope và dấu hiệu dùng agent chưa đúng.")
@@ -37,6 +43,39 @@ extension CoachingReportView {
             }
         }
         .claudeCard()
+    }
+
+    private var promptPageSizeMenu: some View {
+        Menu {
+            ForEach([25, 50, 100], id: \.self) { size in
+                Button("\(size) / trang") { promptPageSize = size }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "list.number")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("\(promptPageSize)")
+                    .font(ClaudeFont.mono(10, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .foregroundStyle(Claude.textMuted)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Claude.surfaceAlt)
+            .clipShape(Capsule())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Số prompt render mỗi trang")
+    }
+
+    private func promptRangeLabel(_ info: (slice: ArraySlice<PromptRecord>, page: Int, totalPages: Int)) -> String {
+        guard !records.isEmpty else { return "0 / 0" }
+        let start = info.page * promptPageSize + 1
+        let end = min(start + info.slice.count - 1, records.count)
+        return "\(start)-\(end) / \(records.count)"
     }
 }
 
@@ -65,10 +104,10 @@ struct PromptRow: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-                Text(record.text.prefix(140))
+                Text(record.text.prefix(260))
                     .font(ClaudeFont.body(13))
                     .foregroundStyle(Claude.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(4)
                 if record.score.isTaskPrompt && !record.score.sectionsMissing.isEmpty {
                     Text("Thiếu: " + record.score.sectionsMissing.prefix(4).map(\.label).joined(separator: ", "))
                         .font(ClaudeFont.body(11))

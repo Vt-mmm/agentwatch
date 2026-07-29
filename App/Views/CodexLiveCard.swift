@@ -1,90 +1,238 @@
-// Live Codex activity card — render trong Live tab dưới Claude session card.
-// Show count + latest project + token usage trong 5 phút gần đây.
+// Live Codex activity card for the Live tab.
+// Keep it lightweight: render aggregate metrics + a capped recent-session list.
 
 import SwiftUI
 import ClaudeWatchCore
 
 struct CodexLiveCard: View {
     let snapshot: CodexLiveSnapshot
+    @State private var selectedSession: SessionSummary?
 
-    private var isActive: Bool {
-        snapshot.sessionCount > 0
-    }
+    private var isActive: Bool { snapshot.sessionCount > 0 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "person.crop.circle.badge.checkmark")
-                    .foregroundStyle(isActive ? .green : Claude.textMuted)
-                SectionLabel(text: "Codex live (5 phút)")
-                Spacer()
-                if isActive {
-                    HStack(spacing: 4) {
-                        Circle().fill(Color.green).frame(width: 6, height: 6)
-                        Text("\(snapshot.sessionCount) active")
-                            .font(ClaudeFont.mono(10, weight: .semibold))
-                            .foregroundStyle(.green)
-                    }
-                } else {
-                    Text("idle")
-                        .font(ClaudeFont.mono(10))
-                        .foregroundStyle(Claude.textMuted)
-                }
-            }
-
+        VStack(alignment: .leading, spacing: 14) {
+            header
             if isActive {
-                if let latest = snapshot.latestSession {
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Latest")
-                                .font(ClaudeFont.label(10))
-                                .foregroundStyle(Claude.textMuted)
-                            Text(latest.projectDisplay)
-                                .font(ClaudeFont.body(12))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Claude.textPrimary)
-                            if let last = latest.lastTimestamp {
-                                Text(relative(last))
-                                    .font(ClaudeFont.mono(10))
-                                    .foregroundStyle(Claude.textMuted)
-                            }
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                HStack(spacing: 14) {
-                    metric(label: "Sessions", value: "\(snapshot.sessionCount)")
-                    metric(label: "Tools",    value: "\(snapshot.totalToolCalls)")
-                    metric(label: "Input",    value: TokenFormatter.compact(snapshot.totalInputTokens))
-                    metric(label: "Output",   value: TokenFormatter.compact(snapshot.totalOutputTokens))
-                }
+                latestBlock
+                metricGrid
+                recentSessions
             } else {
-                Text("Chưa có Codex session nào hoạt động trong 5 phút.")
-                    .font(ClaudeFont.body(11))
-                    .foregroundStyle(Claude.textMuted)
+                idleBlock
             }
         }
         .claudeCard()
-    }
-
-    @ViewBuilder
-    private func metric(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label)
-                .font(ClaudeFont.label(9))
-                .foregroundStyle(Claude.textMuted)
-            Text(value)
-                .font(ClaudeFont.mono(12, weight: .semibold))
-                .foregroundStyle(Claude.textPrimary)
+        .sheet(item: $selectedSession) { session in
+            SessionDetailSheet(session: session)
         }
     }
 
-    private func relative(_ d: Date) -> String {
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "sparkles.rectangle.stack.fill")
+                .foregroundStyle(isActive ? .green : Claude.textMuted)
+            Text("Codex live")
+                .font(ClaudeFont.heading())
+                .foregroundStyle(Claude.textPrimary)
+            Text("5 phút")
+                .font(ClaudeFont.mono(10, weight: .semibold))
+                .foregroundStyle(Claude.textMuted)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Claude.surfaceAlt, in: Capsule())
+            Spacer()
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(TokenFormatter.usd(snapshot.totalCost))
+                    .font(ClaudeFont.display(24).monospacedDigit())
+                    .foregroundStyle(isActive ? .green : Claude.textMuted)
+                    .contentTransition(.numericText())
+                Text(isActive ? "\(snapshot.sessionCount) active" : "idle")
+                    .font(ClaudeFont.label(10))
+                    .foregroundStyle(isActive ? .green : Claude.textMuted)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var latestBlock: some View {
+        if let latest = snapshot.latestSession {
+            Button {
+                selectedSession = latest
+            } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    liveBadge(for: latest)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text("Latest")
+                                .font(ClaudeFont.label(10))
+                                .foregroundStyle(Claude.textMuted)
+                            Text(latest.model.isEmpty ? "openai" : latest.model)
+                                .font(ClaudeFont.mono(10, weight: .semibold))
+                                .foregroundStyle(.green)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.green.opacity(0.13), in: Capsule())
+                        }
+                        Text(latest.projectDisplay)
+                            .font(ClaudeFont.body(13))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Claude.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text(latestMeta(latest))
+                            .font(ClaudeFont.mono(10))
+                            .foregroundStyle(Claude.textMuted)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Claude.textMuted)
+                        .padding(.top, 18)
+                }
+                .padding(10)
+                .background(Color.green.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var metricGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)],
+                  alignment: .leading, spacing: 10) {
+            metric("Sessions", "\(snapshot.sessionCount)")
+            metric("Total tok", TokenFormatter.compact(snapshot.totalTokens))
+            metric("Input", TokenFormatter.compact(snapshot.totalInputTokens))
+            metric("Output", TokenFormatter.compact(snapshot.totalOutputTokens))
+            metric("Cache R", TokenFormatter.compact(snapshot.totalCacheReadTokens))
+            metric("Cache W", TokenFormatter.compact(snapshot.totalCacheWriteTokens))
+            metric("Tools", "\(snapshot.totalToolCalls)")
+        }
+    }
+
+    @ViewBuilder
+    private var recentSessions: some View {
+        if !snapshot.sessions.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    SectionLabel(text: "Recent Codex sessions")
+                    Spacer()
+                    Text("\(min(snapshot.sessions.count, 4)) / \(snapshot.sessions.count)")
+                        .font(ClaudeFont.mono(10))
+                        .foregroundStyle(Claude.textMuted)
+                }
+                .padding(.bottom, 4)
+
+                ForEach(Array(snapshot.sessions.prefix(4).enumerated()), id: \.offset) { idx, session in
+                    Button {
+                        selectedSession = session
+                    } label: {
+                        codexSessionRow(session)
+                    }
+                    .buttonStyle(.plain)
+                    if idx < min(snapshot.sessions.count, 4) - 1 {
+                        Divider().background(Claude.border).padding(.leading, 34)
+                    }
+                }
+            }
+        }
+    }
+
+    private var idleBlock: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle().fill(Claude.surfaceAlt).frame(width: 34, height: 34)
+                Image(systemName: "moon.zzz.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Claude.textMuted)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Chưa có Codex session đang hoạt động")
+                    .font(ClaudeFont.body(13))
+                    .fontWeight(.medium)
+                    .foregroundStyle(Claude.textPrimary)
+                Text("Codex sẽ hiện ở đây khi rollout log mới cập nhật.")
+                    .font(ClaudeFont.body(11))
+                    .foregroundStyle(Claude.textMuted)
+            }
+            Spacer()
+        }
+        .padding(10)
+        .background(Claude.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func metric(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SectionLabel(text: label)
+            Text(value)
+                .font(ClaudeFont.mono(16, weight: .semibold))
+                .foregroundStyle(Claude.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(9)
+        .background(Claude.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func codexSessionRow(_ session: SessionSummary) -> some View {
+        HStack(spacing: 9) {
+            liveBadge(for: session)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(session.projectDisplay)
+                        .font(ClaudeFont.body(12))
+                        .fontWeight(.medium)
+                        .foregroundStyle(Claude.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(session.model.isEmpty ? "openai" : session.model)
+                        .font(ClaudeFont.mono(9, weight: .semibold))
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.green.opacity(0.13), in: Capsule())
+                }
+                Text(latestMeta(session))
+                    .font(ClaudeFont.mono(10))
+                    .foregroundStyle(Claude.textMuted)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Text(TokenFormatter.usd(session.cost))
+                .font(ClaudeFont.mono(12, weight: .semibold))
+                .foregroundStyle(.green)
+        }
+        .padding(.vertical, 7)
+        .padding(.horizontal, 4)
+        .contentShape(Rectangle())
+    }
+
+    private func liveBadge(for session: SessionSummary) -> some View {
+        let fresh = Date().timeIntervalSince(session.lastTimestamp ?? .distantPast) < 60
+        return ZStack {
+            RoundedRectangle(cornerRadius: 7)
+                .fill((fresh ? Color.green : Claude.textMuted).opacity(0.16))
+            Circle()
+                .fill(fresh ? Color.green : Claude.textMuted)
+                .frame(width: 8, height: 8)
+        }
+        .frame(width: 28, height: 28)
+    }
+
+    private func latestMeta(_ session: SessionSummary) -> String {
+        let last = session.lastTimestamp.map(relative) ?? "unknown"
+        let tokens = TokenFormatter.compact(session.totalTokens)
+        return "\(last) · \(tokens) tok · \(session.toolCallCount) tools · \(session.promptCount) prompts"
+    }
+
+    private func relative(_ date: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
         f.locale = Locale(identifier: "vi_VN")
-        return f.localizedString(for: d, relativeTo: Date())
+        return f.localizedString(for: date, relativeTo: Date())
     }
 }

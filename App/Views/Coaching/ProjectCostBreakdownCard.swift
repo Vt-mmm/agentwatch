@@ -18,14 +18,22 @@ struct ProjectCostBreakdownCard: View {
         let claudeSessions: Int
         let codexSessions: Int
         let piAgentSessions: Int
+        let reasoningTokens: Int
+        let thinkingSummary: String
         var totalSessions: Int { claudeSessions + codexSessions + piAgentSessions }
     }
 
     private var perProject: [ProjectCost] {
-        var byProj: [String: (claude: Double, codex: Double, pi: Double, cs: Int, xs: Int, ps: Int)] = [:]
+        var byProj: [
+            String: (
+                claude: Double, codex: Double, pi: Double,
+                cs: Int, xs: Int, ps: Int,
+                reasoning: Int, thinking: [String: Int]
+            )
+        ] = [:]
         for s in sessions {
             let key = s.source == .piagent ? s.displayTitle : s.projectDisplay
-            var entry = byProj[key] ?? (0, 0, 0, 0, 0, 0)
+            var entry = byProj[key] ?? (0, 0, 0, 0, 0, 0, 0, [:])
             if s.source.vendor == .claude {
                 entry.claude += s.cost
                 entry.cs += 1
@@ -35,6 +43,11 @@ struct ProjectCostBreakdownCard: View {
             } else {
                 entry.pi += s.cost
                 entry.ps += 1
+            }
+            entry.reasoning += s.reasoningTokens
+            if let level = s.thinkingLevel?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !level.isEmpty {
+                entry.thinking[level, default: 0] += 1
             }
             byProj[key] = entry
         }
@@ -47,7 +60,9 @@ struct ProjectCostBreakdownCard: View {
                 piAgentCost: $0.value.pi,
                 claudeSessions: $0.value.cs,
                 codexSessions: $0.value.xs,
-                piAgentSessions: $0.value.ps
+                piAgentSessions: $0.value.ps,
+                reasoningTokens: $0.value.reasoning,
+                thinkingSummary: thinkingBreakdown($0.value.thinking)
             ) }
             .sorted { $0.totalCost > $1.totalCost }
     }
@@ -114,9 +129,11 @@ struct ProjectCostBreakdownCard: View {
                     .foregroundStyle(Claude.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text("\(p.totalSessions) session · C:\(p.claudeSessions) X:\(p.codexSessions) Pi:\(p.piAgentSessions)")
+                Text(projectMeta(p))
                     .font(ClaudeFont.mono(9))
                     .foregroundStyle(Claude.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -145,5 +162,26 @@ struct ProjectCostBreakdownCard: View {
         guard raw.contains("/") else { return raw }
         let parts = raw.split(separator: "/").suffix(2)
         return parts.joined(separator: "/")
+    }
+
+    private func projectMeta(_ p: ProjectCost) -> String {
+        var parts = ["\(p.totalSessions) session · C:\(p.claudeSessions) X:\(p.codexSessions) Pi:\(p.piAgentSessions)"]
+        if p.reasoningTokens > 0 {
+            parts.append("reason \(TokenFormatter.compact(p.reasoningTokens))")
+        }
+        if !p.thinkingSummary.isEmpty {
+            parts.append("think \(p.thinkingSummary)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func thinkingBreakdown(_ counts: [String: Int]) -> String {
+        counts.sorted {
+            if $0.value != $1.value { return $0.value > $1.value }
+            return $0.key < $1.key
+        }
+        .prefix(2)
+        .map { $0.value > 1 ? "\($0.key) x\($0.value)" : $0.key }
+        .joined(separator: ", ")
     }
 }

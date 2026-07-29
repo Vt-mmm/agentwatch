@@ -10,7 +10,6 @@ struct MainWindowView: View {
     @Environment(UpdaterController.self) private var updater
     @Environment(CoachingDataStore.self) private var coaching
     @Environment(FloatingPetController.self) private var pet
-    @Environment(FloatingUsageSidebarController.self) private var usageSidebar
     @Environment(SpriteStore.self) private var sprites
     @Environment(PetCollectionStore.self) private var petCollection
     @Environment(CodexLivePoller.self) private var codex
@@ -97,11 +96,9 @@ struct MainWindowView: View {
     /// Settings menu: bật cập nhật, mở trang Releases, hiển thị version hiện tại.
     private var settingsMenu: some View {
         @Bindable var petBinding = pet
-        @Bindable var usageBinding = usageSidebar
         return Menu {
             // Floating pet toggle — top of menu, most-used setting.
             Toggle("Floating pet trên desktop", isOn: $petBinding.isVisible)
-            Toggle("Usage sidebar góc phải", isOn: $usageBinding.isVisible)
             Toggle("Lật pet sang phải", isOn: $petFlipped)
             // v0.6.0: streak-risk notification opt-in (default OFF).
             Toggle("Nhắc khi streak sắp mất (sau 18h)", isOn: $streakRiskNoti)
@@ -320,8 +317,22 @@ private struct LiveOverviewCard: View {
         (claudeStats?.totalTokens ?? 0) + codexSnapshot.totalTokens + piSnapshot.totalTokens
     }
 
+    private var totalReasoningTokens: Int {
+        (claudeStats?.reasoningTokens ?? 0)
+            + codexSnapshot.totalReasoningTokens
+            + piSnapshot.totalReasoningTokens
+    }
+
     private var totalTools: Int {
         (claudeStats?.toolCalls ?? 0) + codexSnapshot.totalToolCalls + piSnapshot.totalToolCalls
+    }
+
+    private var thinkingSummary: String {
+        var levels: [String] = []
+        if let level = claudeStats?.thinkingLevel { levels.append(level) }
+        levels.append(contentsOf: codexSnapshot.sessions.compactMap(\.thinkingLevel))
+        levels.append(contentsOf: piSnapshot.sessions.compactMap(\.thinkingLevel))
+        return compactBreakdown(levels)
     }
 
     var body: some View {
@@ -347,6 +358,12 @@ private struct LiveOverviewCard: View {
                 metric("Sessions", "\(activeSessions)")
                 metric("Cost", TokenFormatter.usd(totalCost))
                 metric("Tokens", TokenFormatter.compact(totalTokens))
+                if totalReasoningTokens > 0 {
+                    metric("Reasoning", TokenFormatter.compact(totalReasoningTokens))
+                }
+                if !thinkingSummary.isEmpty {
+                    metric("Thinking", thinkingSummary)
+                }
                 metric("Tools", "\(totalTools)")
             }
 
@@ -379,17 +396,32 @@ private struct LiveOverviewCard: View {
 
     private var claudeDetail: String {
         guard let s = claudeStats else { return "idle" }
-        return "\(TokenFormatter.compact(s.totalTokens)) tok · \(s.toolCalls) tools"
+        let thinking = s.thinkingLevel.map { " · think \($0)" } ?? ""
+        let reasoning = s.reasoningTokens > 0 ? " · reason \(TokenFormatter.compact(s.reasoningTokens))" : ""
+        return "\(TokenFormatter.compact(s.totalTokens)) tok\(reasoning)\(thinking) · \(s.toolCalls) tools"
     }
 
     private var codexDetail: String {
         guard codexSnapshot.sessionCount > 0 else { return "idle" }
-        return "\(codexSnapshot.sessionCount) sessions · \(TokenFormatter.compact(codexSnapshot.totalTokens)) tok"
+        let reasoning = codexSnapshot.totalReasoningTokens > 0
+            ? " · reason \(TokenFormatter.compact(codexSnapshot.totalReasoningTokens))"
+            : ""
+        let modelSuffix: String
+        if let model = codexSnapshot.latestSession?.model, !model.isEmpty {
+            modelSuffix = " · \(model)"
+        } else {
+            modelSuffix = ""
+        }
+        return "\(codexSnapshot.sessionCount) sessions · \(TokenFormatter.compact(codexSnapshot.totalTokens)) tok\(reasoning)\(modelSuffix)"
     }
 
     private var piDetail: String {
         guard piSnapshot.sessionCount > 0 else { return "idle" }
-        return "\(piSnapshot.namedTaskCount)/\(piSnapshot.sessionCount) named · \(TokenFormatter.compact(piSnapshot.totalTokens)) tok"
+        let thinking = piSnapshot.latestSession?.thinkingLevel.map { " · think \($0)" } ?? ""
+        let reasoning = piSnapshot.totalReasoningTokens > 0
+            ? " · reason \(TokenFormatter.compact(piSnapshot.totalReasoningTokens))"
+            : ""
+        return "\(piSnapshot.namedTaskCount)/\(piSnapshot.sessionCount) named · \(TokenFormatter.compact(piSnapshot.totalTokens)) tok\(reasoning)\(thinking)"
     }
 
     private func metric(_ label: String, _ value: String) -> some View {
@@ -441,6 +473,22 @@ private struct LiveOverviewCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+    }
+
+    private func compactBreakdown(_ values: [String]) -> String {
+        var counts: [String: Int] = [:]
+        for value in values {
+            let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { continue }
+            counts[cleaned, default: 0] += 1
+        }
+        let ranked = counts.sorted {
+            if $0.value != $1.value { return $0.value > $1.value }
+            return $0.key < $1.key
+        }
+        return ranked.prefix(2)
+            .map { $0.value > 1 ? "\($0.key) x\($0.value)" : $0.key }
+            .joined(separator: ", ")
     }
 }
 

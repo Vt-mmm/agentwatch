@@ -144,8 +144,8 @@ struct CoachingReportView: View {
     var hasNeverLoaded: Bool { lastRefreshAt == .distantPast }
 
     /// True khi scope hiện tại empty SAU KHI đã load xong ít nhất 1 lần.
-    /// KHÔNG check `isLoading` ở đây — auto-refresh tick set isLoading=true
-    /// trong vài ms gây flash UI giữa "cards 0" và "empty hero".
+    /// KHÔNG check `isLoading` ở đây — manual refresh vẫn có thể đang chạy
+    /// nhưng dữ liệu cũ còn hợp lệ để giữ layout ổn định.
     var isScopeEmpty: Bool {
         !hasNeverLoaded && allSessions.isEmpty && allRecords.isEmpty
     }

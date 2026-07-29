@@ -13,7 +13,6 @@ struct ClaudeWatchMacApp: App {
     @State private var coachingData = CoachingDataStore()
     @State private var updater = UpdaterController()
     @State private var floatingPet = FloatingPetController()
-    @State private var usageSidebar = FloatingUsageSidebarController()
     @State private var petBroker = PetTalkBroker()
     @State private var sprites = SpriteStore()
     @State private var petSocketServer = PetSocketServer()
@@ -35,7 +34,6 @@ struct ClaudeWatchMacApp: App {
                 .environment(coachingData)
                 .environment(updater)
                 .environment(floatingPet)
-                .environment(usageSidebar)
                 .environment(sprites)
                 .environment(petCollection)
                 .environment(codexPoller)
@@ -48,7 +46,6 @@ struct ClaudeWatchMacApp: App {
                     // v0.8.0: Codex poller cho Live tab.
                     codexPoller.start()
                     piAgentPoller.start()
-                    refreshUsageSidebar()
                     petBroker.attach(floatingPet)
                     // Sync floating pet từ PetCollectionStore (nguồn sự thật mới).
                     floatingPet.characterName = petCollection.selectedId
@@ -79,13 +76,6 @@ struct ClaudeWatchMacApp: App {
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)
                     petBroker.observeLive(stats: new)
-                    refreshUsageSidebar()
-                }
-                .onChange(of: codexPoller.snapshot) { _, _ in
-                    refreshUsageSidebar()
-                }
-                .onChange(of: piAgentPoller.snapshot) { _, _ in
-                    refreshUsageSidebar()
                 }
                 .onChange(of: coachingData.petState) { _, s in
                     floatingPet.state = s
@@ -156,13 +146,5 @@ struct ClaudeWatchMacApp: App {
         } else if let folder = projectStore.pinnedFolder {
             watcher.startPinned(folder: folder)
         }
-    }
-
-    private func refreshUsageSidebar() {
-        usageSidebar.update(
-            claude: watcher.stats,
-            codex: codexPoller.snapshot,
-            piAgent: piAgentPoller.snapshot
-        )
     }
 }

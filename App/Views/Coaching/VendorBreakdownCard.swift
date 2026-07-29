@@ -36,19 +36,19 @@ struct VendorBreakdownCard: View {
                     color: Claude.textPrimary,
                     sessions: sessions
                 )
-                Divider().frame(maxHeight: 80)
+                Divider().frame(maxHeight: 112)
                 column(
                     title: "Claude",
                     color: Claude.orange,
                     sessions: claudeSessions
                 )
-                Divider().frame(maxHeight: 80)
+                Divider().frame(maxHeight: 112)
                 column(
                     title: "Codex",
                     color: .green,
                     sessions: codexSessions
                 )
-                Divider().frame(maxHeight: 80)
+                Divider().frame(maxHeight: 112)
                 column(
                     title: "PiAgent",
                     color: .purple,
@@ -64,6 +64,7 @@ struct VendorBreakdownCard: View {
         let agg = SessionInventory.aggregate(sessions)
         let prompts = sessions.reduce(0) { $0 + $1.promptCount }
         let tools = agg.totalToolCalls
+        let thinking = thinkingBreakdown(sessions)
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(ClaudeFont.label(10))
@@ -73,6 +74,12 @@ struct VendorBreakdownCard: View {
             statRow(label: "Prompts",  value: "\(prompts)")
             statRow(label: "Tools",    value: "\(tools)")
             statRow(label: "Tokens",   value: TokenFormatter.compact(agg.totalTokens))
+            if agg.reasoningTokens > 0 {
+                statRow(label: "Reason", value: TokenFormatter.compact(agg.reasoningTokens))
+            }
+            if !thinking.isEmpty {
+                statRow(label: "Thinking", value: thinking)
+            }
             statRow(label: "Cost",     value: agg.totalCost > 0 ? TokenFormatter.usd(agg.totalCost) : "—")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,6 +95,25 @@ struct VendorBreakdownCard: View {
             Text(value)
                 .font(ClaudeFont.mono(11, weight: .semibold))
                 .foregroundStyle(Claude.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
+    }
+
+    private func thinkingBreakdown(_ sessions: [SessionSummary]) -> String {
+        var counts: [String: Int] = [:]
+        for session in sessions {
+            guard let raw = session.thinkingLevel else { continue }
+            let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { continue }
+            counts[cleaned, default: 0] += 1
+        }
+        let ranked = counts.sorted {
+            if $0.value != $1.value { return $0.value > $1.value }
+            return $0.key < $1.key
+        }
+        return ranked.prefix(2)
+            .map { $0.value > 1 ? "\($0.key) x\($0.value)" : $0.key }
+            .joined(separator: ", ")
     }
 }

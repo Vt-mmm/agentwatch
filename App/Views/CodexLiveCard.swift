@@ -72,13 +72,36 @@ struct CodexLiveCard: View {
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
                                 .background(Color.green.opacity(0.13), in: Capsule())
+                            if latest.reasoningTokens > 0 {
+                                Text("reason \(TokenFormatter.compact(latest.reasoningTokens))")
+                                    .font(ClaudeFont.mono(10, weight: .semibold))
+                                    .foregroundStyle(.green)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(Color.green.opacity(0.10), in: Capsule())
+                            }
+                            if let thinking = latest.thinkingLevel {
+                                Text("think \(thinking)")
+                                    .font(ClaudeFont.mono(10, weight: .semibold))
+                                    .foregroundStyle(.green)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(Color.green.opacity(0.10), in: Capsule())
+                            }
                         }
-                        Text(latest.projectDisplay)
+                        Text(latest.displayTitle)
                             .font(ClaudeFont.body(13))
                             .fontWeight(.semibold)
                             .foregroundStyle(Claude.textPrimary)
                             .lineLimit(1)
                             .truncationMode(.middle)
+                        if latest.displayTitle != latest.projectDisplay {
+                            Text(latest.projectDisplay)
+                                .font(ClaudeFont.mono(10))
+                                .foregroundStyle(Claude.textMuted)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
                         Text(latestMeta(latest))
                             .font(ClaudeFont.mono(10))
                             .foregroundStyle(Claude.textMuted)
@@ -102,6 +125,9 @@ struct CodexLiveCard: View {
                   alignment: .leading, spacing: 10) {
             metric("Sessions", "\(snapshot.sessionCount)")
             metric("Total tok", TokenFormatter.compact(snapshot.totalTokens))
+            if snapshot.totalReasoningTokens > 0 {
+                metric("Reasoning", TokenFormatter.compact(snapshot.totalReasoningTokens))
+            }
             metric("Input", TokenFormatter.compact(snapshot.totalInputTokens))
             metric("Output", TokenFormatter.compact(snapshot.totalOutputTokens))
             metric("Cache R", TokenFormatter.compact(snapshot.totalCacheReadTokens))
@@ -183,7 +209,7 @@ struct CodexLiveCard: View {
             liveBadge(for: session)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(session.projectDisplay)
+                    Text(session.displayTitle)
                         .font(ClaudeFont.body(12))
                         .fontWeight(.medium)
                         .foregroundStyle(Claude.textPrimary)
@@ -195,6 +221,21 @@ struct CodexLiveCard: View {
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(Color.green.opacity(0.13), in: Capsule())
+                    if let thinking = session.thinkingLevel {
+                        Text("think \(thinking)")
+                            .font(ClaudeFont.mono(9, weight: .semibold))
+                            .foregroundStyle(.green)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.green.opacity(0.10), in: Capsule())
+                    }
+                }
+                if session.displayTitle != session.projectDisplay {
+                    Text(session.projectDisplay)
+                        .font(ClaudeFont.mono(10))
+                        .foregroundStyle(Claude.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 Text(latestMeta(session))
                     .font(ClaudeFont.mono(10))
@@ -226,7 +267,11 @@ struct CodexLiveCard: View {
     private func latestMeta(_ session: SessionSummary) -> String {
         let last = session.lastTimestamp.map(relative) ?? "unknown"
         let tokens = TokenFormatter.compact(session.totalTokens)
-        return "\(last) · \(tokens) tok · \(session.toolCallCount) tools · \(session.promptCount) prompts"
+        let thinking = session.thinkingLevel.map { " · think \($0)" } ?? ""
+        let reasoning = session.reasoningTokens > 0
+            ? " · reason \(TokenFormatter.compact(session.reasoningTokens))"
+            : ""
+        return "\(last) · \(tokens) tok\(reasoning)\(thinking) · \(session.toolCallCount) tools · \(session.promptCount) prompts"
     }
 
     private func relative(_ date: Date) -> String {

@@ -17,8 +17,12 @@ struct CodexLiveSnapshot: Sendable, Equatable {
     let totalCost: Double
 
     var sessionCount: Int { sessions.count }
+    var totalReasoningTokens: Int {
+        sessions.reduce(0) { $0 + $1.reasoningTokens }
+    }
     var totalTokens: Int {
-        totalInputTokens + totalOutputTokens + totalCacheReadTokens + totalCacheWriteTokens
+        totalInputTokens + totalOutputTokens + totalReasoningTokens
+            + totalCacheReadTokens + totalCacheWriteTokens
     }
 
     var latestSession: SessionSummary? {

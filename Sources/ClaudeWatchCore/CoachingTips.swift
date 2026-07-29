@@ -251,7 +251,7 @@ public enum CoachingTips {
                 - Error message exact: copy paste nguyên log
                 - Library/version: "axios v1.6", "Swift 6 strict concurrency"
                 """,
-                example: "Fix race condition trong `CoachingDataStore.startAutoRefresh()` (App/CoachingDataStore.swift:125) — `isScopeEmpty` đang flip do `isLoading` race với tick 5s."
+                example: "Fix race condition trong `CoachingDataStore.startAutoRefresh()` (App/CoachingDataStore.swift:125) — `isScopeEmpty` đang flip do auto-refresh bật loading UI khi data cũ vẫn còn hợp lệ."
             )
 
         case .verification:

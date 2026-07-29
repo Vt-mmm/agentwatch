@@ -1,5 +1,5 @@
 // Store giữ data Coaching tab persistent giữa các lần switch tab.
-// Khi user đổi Live ↔ Coaching, data không reload nếu vừa load <5s.
+// Khi user đổi Live ↔ Coaching, data không reload nếu vừa load gần đây.
 // Auto-refresh chạy khi `isActive == true` (tab Coaching đang hiện).
 
 import AppKit
@@ -48,9 +48,9 @@ final class CoachingDataStore {
 
     private var refreshTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
-    private let stalenessThreshold: TimeInterval = 5
+    private let stalenessThreshold: TimeInterval = 60
 
-    /// True nếu data còn fresh (<5s) VÀ scope match → có thể skip reload khi
+    /// True nếu data còn fresh VÀ scope match → có thể skip reload khi
     /// switch tab về Coaching.
     func isFresh(for fingerprint: String) -> Bool {
         guard fingerprint == lastScopeFingerprint else { return false }
@@ -66,17 +66,20 @@ final class CoachingDataStore {
 
     /// Reload sử dụng scope mới nhất. Cancel in-flight load để tránh stale data
     /// được ghi đè lên UI sau khi user đã đổi filter.
-    func reload(scope: ReportScope, fingerprint: String) {
+    func reload(scope: ReportScope, fingerprint: String, showLoading: Bool = true) {
         setActive(scope: scope, fingerprint: fingerprint)
         loadTask?.cancel()
-        isLoading = true
+        let shouldShowLoading = showLoading || (lastRefreshAt == .distantPast && allRecords.isEmpty && allSessions.isEmpty)
+        if shouldShowLoading {
+            isLoading = true
+        }
         lastScopeFingerprint = fingerprint
         let currentRange = Self.dateRange(for: scope)
         let prevRange = Self.previousPeriodRange(matching: scope)
         let trendRange = Self.trendWindowRange(endingAt: scope)
         let combined = Self.unionRange(currentRange, prevRange, trendRange)
 
-        loadTask = Task.detached(priority: .userInitiated) { [weak self] in
+        loadTask = Task.detached(priority: showLoading ? .userInitiated : .utility) { [weak self] in
             let result = await CoachingScan.scan(in: combined)
             // Nếu user đã đổi filter trước khi scan xong → bỏ kết quả này,
             // tránh data cũ ghi đè lên data mới.
@@ -115,6 +118,7 @@ final class CoachingDataStore {
                 self.petState = PetMood.resolve(signals)
                 self.lastRefreshAt = Date()
                 self.isLoading = false
+                self.loadTask = nil
                 // XP hook — gọi sau khi allRecords/allSessions đã apply, trên MainActor.
                 // outlierIds/agentLoopIds được tính lại ở đây để truyền cùng snapshot.
                 let outlierIds = CoachingInsights.outlierSessions(curS)
@@ -127,7 +131,7 @@ final class CoachingDataStore {
     /// Auto-refresh đọc activeScope/Fingerprint từ store MỖI TICK (không capture
     /// snapshot lúc start). Đổi filter → tick kế tiếp dùng filter mới.
     ///
-    /// Idle throttle (P2a): app active → 5s; app inactive → 30s.
+    /// Idle throttle: app active → 20s; app inactive → 90s.
     /// Giảm CPU/IO khi user không nhìn vào Coaching tab (e.g. window ẩn, switch app).
     func startAutoRefresh() {
         stopAutoRefresh()
@@ -135,12 +139,12 @@ final class CoachingDataStore {
             while !Task.isCancelled {
                 // Kiểm tra app active trên MainActor (NSApplication.shared là AppKit).
                 let isActive = NSApplication.shared.isActive
-                // Active → 5s; inactive → 30s để tiết kiệm CPU/IO khi idle.
-                let interval: UInt64 = isActive ? 5_000_000_000 : 30_000_000_000
+                // Active vẫn refresh nền đủ gần realtime, nhưng không bật loading UI.
+                let interval: UInt64 = isActive ? 20_000_000_000 : 90_000_000_000
                 try? await Task.sleep(nanoseconds: interval)
                 if Task.isCancelled { break }
                 guard let self, let scope = self.activeScope else { continue }
-                self.reload(scope: scope, fingerprint: self.activeFingerprint)
+                self.reload(scope: scope, fingerprint: self.activeFingerprint, showLoading: false)
             }
         }
     }

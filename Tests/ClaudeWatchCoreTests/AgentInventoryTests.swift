@@ -142,7 +142,7 @@ final class AgentInventoryTests: XCTestCase {
             [
                 "timestamp": "2026-07-29T01:00:01.000Z",
                 "type": "turn_context",
-                "payload": ["model": "gpt-5.6-sol"],
+                "payload": ["model": "gpt-5.6-sol", "effort": "high"],
             ],
             [
                 "timestamp": "2026-07-29T01:00:02.000Z",
@@ -189,6 +189,7 @@ final class AgentInventoryTests: XCTestCase {
                         "total_token_usage": [
                             "input_tokens": 100,
                             "output_tokens": 20,
+                            "reasoning_output_tokens": 50,
                             "cached_input_tokens": 30,
                             "cache_write_input_tokens": 40,
                         ],
@@ -204,8 +205,11 @@ final class AgentInventoryTests: XCTestCase {
         let summary = try XCTUnwrap(sessions.first)
         XCTAssertEqual(summary.id, "codex-session-1")
         XCTAssertEqual(summary.model, "gpt-5.6-sol")
+        XCTAssertEqual(summary.thinkingLevel, "high")
         XCTAssertEqual(summary.inputTokens, 100)
         XCTAssertEqual(summary.outputTokens, 20)
+        XCTAssertEqual(summary.reasoningTokens, 50)
+        XCTAssertEqual(summary.totalTokens, 240)
         XCTAssertEqual(summary.cacheReadTokens, 30)
         XCTAssertEqual(summary.cacheWriteTokens, 40)
         XCTAssertEqual(summary.promptCount, 1)
@@ -215,6 +219,8 @@ final class AgentInventoryTests: XCTestCase {
         XCTAssertEqual(prompts.map(\.text), ["Review token burn risk"])
 
         let detail = CodexJsonlParser.parseSession(at: file)
+        XCTAssertEqual(detail.thinkingLevel, "high")
+        XCTAssertEqual(detail.reasoningTokens, 50)
         XCTAssertEqual(detail.events.filter { $0.kind == .userMessage }.count, 1)
         let tool = try XCTUnwrap(detail.events.first(where: { $0.kind == .toolUse }))
         XCTAssertEqual(tool.toolName, "bash")

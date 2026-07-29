@@ -46,7 +46,7 @@ public enum CodexJsonlParser {
         let cost = Pricing.cost(
             family: family,
             inputTokens: parsed.inputTokens,
-            outputTokens: parsed.outputTokens,
+            outputTokens: parsed.outputTokens + parsed.reasoningTokens,
             cacheReadTokens: parsed.cacheReadTokens,
             cacheWriteTokens: parsed.cacheWriteTokens
         )
@@ -59,6 +59,7 @@ public enum CodexJsonlParser {
             modelFamily: family,
             inputTokens: parsed.inputTokens,
             outputTokens: parsed.outputTokens,
+            reasoningTokens: parsed.reasoningTokens,
             cacheReadTokens: parsed.cacheReadTokens,
             cacheWriteTokens: parsed.cacheWriteTokens,
             cost: cost,
@@ -67,7 +68,8 @@ public enum CodexJsonlParser {
             promptCount: parsed.promptCount,
             toolCallCount: parsed.toolCalls,
             fileURL: file,
-            agentCount: parsed.isSubagent ? 1 : 0
+            agentCount: parsed.isSubagent ? 1 : 0,
+            thinkingLevel: parsed.thinkingLevel
         )
     }
 
@@ -79,11 +81,13 @@ public enum CodexJsonlParser {
             filePath: file
         )
         stats.model = parsed.model
+        stats.thinkingLevel = parsed.thinkingLevel
         stats.startedAt = parsed.firstTimestampString
         stats.lastEventAt = parsed.lastTimestampString
         stats.messageCount = parsed.messageCount
         stats.inputTokens = parsed.inputTokens
         stats.outputTokens = parsed.outputTokens
+        stats.reasoningTokens = parsed.reasoningTokens
         stats.cacheReadTokens = parsed.cacheReadTokens
         stats.cacheWriteTokens = parsed.cacheWriteTokens
         stats.toolCalls = parsed.toolCalls
@@ -105,6 +109,7 @@ public enum CodexJsonlParser {
         var sessionId: String
         var projectDisplay: String
         var model: String
+        var thinkingLevel: String?
         var isSubagent: Bool
         var firstTimestamp: Date?
         var lastTimestamp: Date?
@@ -113,6 +118,7 @@ public enum CodexJsonlParser {
         var messageCount: Int
         var inputTokens: Int
         var outputTokens: Int
+        var reasoningTokens: Int
         var cacheReadTokens: Int
         var cacheWriteTokens: Int
         var promptCount: Int
@@ -126,6 +132,7 @@ public enum CodexJsonlParser {
         var sessionId = fallbackId
         var cwd = "(unknown)"
         var model = ""
+        var thinkingLevel: String?
         var provider = ""
         var isSubagent = false
         var firstTimestamp: Date?
@@ -137,6 +144,7 @@ public enum CodexJsonlParser {
         var toolCalls = 0
         var inputTokens = 0
         var outputTokens = 0
+        var reasoningTokens = 0
         var cacheReadTokens = 0
         var cacheWriteTokens = 0
         var events: [SessionEvent] = []
@@ -181,6 +189,9 @@ public enum CodexJsonlParser {
             case "turn_context":
                 if let c = payload["cwd"] as? String, !c.isEmpty { cwd = c }
                 if let m = payload["model"] as? String, !m.isEmpty { model = m }
+                if let effort = thinkingEffort(from: payload) {
+                    thinkingLevel = effort
+                }
 
             case "event_msg":
                 applyEventMessage(
@@ -196,6 +207,7 @@ public enum CodexJsonlParser {
                     promptCount: &promptCount,
                     inputTokens: &inputTokens,
                     outputTokens: &outputTokens,
+                    reasoningTokens: &reasoningTokens,
                     cacheReadTokens: &cacheReadTokens,
                     cacheWriteTokens: &cacheWriteTokens,
                     events: &events,
@@ -234,6 +246,7 @@ public enum CodexJsonlParser {
             sessionId: sessionId,
             projectDisplay: cwd,
             model: model.isEmpty ? provider : model,
+            thinkingLevel: thinkingLevel,
             isSubagent: isSubagent,
             firstTimestamp: firstTimestamp,
             lastTimestamp: lastTimestamp,
@@ -242,6 +255,7 @@ public enum CodexJsonlParser {
             messageCount: messageCount,
             inputTokens: inputTokens,
             outputTokens: outputTokens,
+            reasoningTokens: reasoningTokens,
             cacheReadTokens: cacheReadTokens,
             cacheWriteTokens: cacheWriteTokens,
             promptCount: promptCount,
@@ -263,6 +277,7 @@ public enum CodexJsonlParser {
                                           promptCount: inout Int,
                                           inputTokens: inout Int,
                                           outputTokens: inout Int,
+                                          reasoningTokens: inout Int,
                                           cacheReadTokens: inout Int,
                                           cacheWriteTokens: inout Int,
                                           events: inout [SessionEvent],
@@ -306,6 +321,7 @@ public enum CodexJsonlParser {
                let total = info["total_token_usage"] as? [String: Any] {
                 inputTokens = max(inputTokens, intValue(total["input_tokens"]))
                 outputTokens = max(outputTokens, intValue(total["output_tokens"]))
+                reasoningTokens = max(reasoningTokens, intValue(total["reasoning_output_tokens"]))
                 cacheReadTokens = max(cacheReadTokens, intValue(total["cached_input_tokens"]))
                 cacheWriteTokens = max(
                     cacheWriteTokens,
@@ -506,6 +522,16 @@ public enum CodexJsonlParser {
             if let text = block["content"] as? String { return text }
             return nil
         }.joined(separator: "\n")
+    }
+
+    private static func thinkingEffort(from payload: [String: Any]) -> String? {
+        for key in ["effort", "model_reasoning_effort", "reasoning_effort", "thinkingLevel"] {
+            if let value = payload[key] as? String {
+                let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cleaned.isEmpty { return cleaned }
+            }
+        }
+        return nil
     }
 
     private static func reasoningSummary(from payload: [String: Any]) -> String {

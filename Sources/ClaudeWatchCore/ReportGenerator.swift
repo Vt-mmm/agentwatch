@@ -119,10 +119,17 @@ public enum ReportGenerator {
         let usage = SessionInventory.aggregate(sessions)
         let risks = RiskScorer.evaluate(records: records, sessions: sessions, limit: 500)
         let riskSummary = RiskScorer.summary(for: risks)
+        let thinking = thinkingBreakdownLine(sessions)
         var md = "# DAILY/WEEKLY REPORT — AI Coding theo SDD/VSDD\n\n"
         md += "**Phạm vi:** \(scope.label)\n"
         md += "**Tổng prompts:** \(s.totalPrompts) (task: \(s.taskPrompts), follow-up: \(s.followUpPrompts))\n"
         md += "**Sessions:** \(usage.sessionCount) · tokens \(usage.totalTokens) · cost \(String(format: "$%.4f", usage.totalCost))\n"
+        if usage.reasoningTokens > 0 {
+            md += "**Reasoning tokens:** \(usage.reasoningTokens)\n"
+        }
+        if !thinking.isEmpty {
+            md += "**Thinking modes:** \(thinking)\n"
+        }
         md += "**Risk findings:** \(riskSummary.totalFindings) · high/critical \(riskSummary.highOrCriticalCount) · affected sessions \(riskSummary.affectedSessions)\n"
         md += "**Avg score (task prompts):** \(starString(s.avgStars))\n"
         md += "**Nguồn prompt:** \(sourceBreakdownLine(s.sourceBreakdown))\n\n"
@@ -211,6 +218,13 @@ public enum ReportGenerator {
         let usage = SessionInventory.aggregate(sessions)
         let risks = RiskScorer.evaluate(records: records, sessions: sessions, limit: 500)
         let riskSummary = RiskScorer.summary(for: risks)
+        let thinking = thinkingBreakdownLine(sessions)
+        let reasoningStat = usage.reasoningTokens > 0
+            ? "<span class=\"stat\"><b>\(usage.reasoningTokens)</b>Reasoning</span>"
+            : ""
+        let thinkingStat = thinking.isEmpty
+            ? ""
+            : "<span class=\"stat\"><b>\(htmlEscape(thinking))</b>Thinking</span>"
         var rows = ""
         for star in (0...5).reversed() {
             let c = s.starCounts[star] ?? 0
@@ -292,6 +306,8 @@ public enum ReportGenerator {
           <span class="stat"><b>\(s.totalPrompts)</b>Tổng prompts</span>
           <span class="stat"><b>\(usage.sessionCount)</b>Sessions</span>
           <span class="stat"><b>\(usage.totalTokens)</b>Tokens</span>
+          \(reasoningStat)
+          \(thinkingStat)
           <span class="stat"><b>\(riskSummary.highOrCriticalCount)</b>High risks</span>
           <span class="stat"><b>\(s.taskPrompts)</b>Task prompts</span>
           <span class="stat"><b>\(String(format: "%.1f", s.avgStars))★</b>Avg score</span>
@@ -436,6 +452,22 @@ public enum ReportGenerator {
         SessionSource.allCases
             .map { "\($0.shortLabel) \(breakdown[$0] ?? 0)" }
             .joined(separator: " · ")
+    }
+
+    private static func thinkingBreakdownLine(_ sessions: [SessionSummary]) -> String {
+        var counts: [String: Int] = [:]
+        for session in sessions {
+            guard let raw = session.thinkingLevel else { continue }
+            let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { continue }
+            counts[cleaned, default: 0] += 1
+        }
+        return counts.sorted {
+            if $0.value != $1.value { return $0.value > $1.value }
+            return $0.key < $1.key
+        }
+        .map { $0.value > 1 ? "\($0.key) x\($0.value)" : $0.key }
+        .joined(separator: " · ")
     }
 
     private static func bestSessionsById(_ sessions: [SessionSummary]) -> [String: SessionSummary] {

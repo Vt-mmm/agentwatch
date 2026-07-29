@@ -20,12 +20,12 @@ struct MenuBarSummaryView: View {
             Divider().background(Claude.border)
             if hasAnyLiveAgent {
                 liveTotalsBlock
-                if let s = watcher.stats {
+                if let detail = latestDetail {
                     Divider().background(Claude.border)
-                    statsBlock(s)
+                    statsBlock(detail)
                 }
                 Divider().background(Claude.border)
-                agentBlock(watcher.stats)
+                agentBlock()
             } else {
                 Text(emptyMessage)
                     .font(ClaudeFont.body(12))
@@ -60,21 +60,24 @@ struct MenuBarSummaryView: View {
         }
     }
 
-    private func statsBlock(_ s: SessionStats) -> some View {
+    private func statsBlock(_ detail: MenuLiveDetail) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            row("Model",     s.modelFamily.rawValue, color: Claude.orange)
-            if let thinking = s.thinkingLevel {
+            row("Latest", detail.title, color: detail.sourceColor)
+            row("Source", detail.source)
+            row("Model", detail.model, color: detail.sourceColor)
+            if let thinking = detail.thinkingLevel {
                 row("Thinking", thinking, color: .purple)
             }
-            row("Input",     TokenFormatter.compact(s.inputTokens))
-            row("Output",    TokenFormatter.compact(s.outputTokens))
-            if s.reasoningTokens > 0 {
-                row("Reason", TokenFormatter.compact(s.reasoningTokens))
+            row("Input", TokenFormatter.compact(detail.inputTokens))
+            row("Output", TokenFormatter.compact(detail.outputTokens))
+            if detail.reasoningTokens > 0 {
+                row("Reason", TokenFormatter.compact(detail.reasoningTokens))
             }
-            row("Cache R",   TokenFormatter.compact(s.cacheReadTokens))
-            row("Cache W",   TokenFormatter.compact(s.cacheWriteTokens))
-            row("Cost",      TokenFormatter.usd(s.cost), color: Claude.orange, bold: true)
-            row("Messages",  "\(s.messageCount)")
+            row("Cache R", TokenFormatter.compact(detail.cacheReadTokens))
+            row("Cache W", TokenFormatter.compact(detail.cacheWriteTokens))
+            row("Cost", TokenFormatter.usd(detail.cost), color: detail.sourceColor, bold: true)
+            row("Prompts", "\(detail.promptCount)")
+            row("Tools", "\(detail.toolCount)")
         }
     }
 
@@ -84,10 +87,20 @@ struct MenuBarSummaryView: View {
         let piSnapshot = piAgent.snapshot
         let sessions = (claude == nil ? 0 : 1) + codexSnapshot.sessionCount + piSnapshot.sessionCount
         let tokens = (claude?.totalTokens ?? 0) + codexSnapshot.totalTokens + piSnapshot.totalTokens
+        let reasoning = (claude?.reasoningTokens ?? 0)
+            + codexSnapshot.totalReasoningTokens
+            + piSnapshot.totalReasoningTokens
         let cost = (claude?.cost ?? 0) + codexSnapshot.totalCost + piSnapshot.totalCost
+        let thinking = thinkingBreakdown()
         return VStack(alignment: .leading, spacing: 5) {
             row("Live", "\(sessions) sessions", color: sessions > 0 ? Claude.live : Claude.textMuted)
             row("Total", TokenFormatter.compact(tokens) + " tok")
+            if reasoning > 0 {
+                row("Reason", TokenFormatter.compact(reasoning) + " tok", color: .purple)
+            }
+            if !thinking.isEmpty {
+                row("Thinking", thinking, color: .purple)
+            }
             row("Cost", TokenFormatter.usd(cost), color: Claude.orange, bold: true)
             if codexSnapshot.sessionCount > 0 {
                 row("Codex", "\(codexSnapshot.sessionCount) · \(TokenFormatter.compact(codexSnapshot.totalTokens)) tok", color: .green)
@@ -98,9 +111,9 @@ struct MenuBarSummaryView: View {
         }
     }
 
-    private func agentBlock(_ s: SessionStats?) -> some View {
+    private func agentBlock() -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let s {
+            if let s = watcher.stats {
                 HStack(spacing: 8) {
                     Circle()
                         .fill(s.activeAgents.isEmpty ? Claude.done : Claude.live)
@@ -110,8 +123,14 @@ struct MenuBarSummaryView: View {
                         .foregroundStyle(Claude.textPrimary)
                 }
             }
+            if let latest = codex.snapshot.latestSession {
+                row("Codex task", latest.displayTitle, color: .green)
+            }
             if let latest = piAgent.snapshot.latestSession {
                 row("Pi task", latest.displayTitle, color: latest.hasTaskSessionTitle ? Claude.textPrimary : .orange)
+                if let thinking = latest.thinkingLevel {
+                    row("Pi think", thinking, color: .purple)
+                }
             }
         }
     }
@@ -146,6 +165,57 @@ struct MenuBarSummaryView: View {
             : "Waiting for session activity…"
     }
 
+    private var latestDetail: MenuLiveDetail? {
+        let claudeDetail = watcher.stats.map { s in
+            MenuLiveDetail(
+                source: "Claude",
+                title: ProjectPath.displayPath(for: s.projectSlug),
+                model: s.modelFamily.rawValue,
+                thinkingLevel: s.thinkingLevel,
+                inputTokens: s.inputTokens,
+                outputTokens: s.outputTokens,
+                reasoningTokens: s.reasoningTokens,
+                cacheReadTokens: s.cacheReadTokens,
+                cacheWriteTokens: s.cacheWriteTokens,
+                cost: s.cost,
+                promptCount: s.messageCount,
+                toolCount: s.toolCalls,
+                lastActivity: s.mtime,
+                sourceColor: Claude.orange
+            )
+        }
+        let codexDetail = codex.snapshot.latestSession.map { MenuLiveDetail(session: $0, sourceColor: .green) }
+        let piDetail = piAgent.snapshot.latestSession.map { MenuLiveDetail(session: $0, sourceColor: .purple) }
+        return [claudeDetail, codexDetail, piDetail]
+            .compactMap { $0 }
+            .sorted { $0.lastActivity > $1.lastActivity }
+            .first
+    }
+
+    private func thinkingBreakdown() -> String {
+        var levels: [String] = []
+        if let level = watcher.stats?.thinkingLevel { levels.append(level) }
+        levels.append(contentsOf: codex.snapshot.sessions.compactMap(\.thinkingLevel))
+        levels.append(contentsOf: piAgent.snapshot.sessions.compactMap(\.thinkingLevel))
+        return compactBreakdown(levels)
+    }
+
+    private func compactBreakdown(_ values: [String]) -> String {
+        var counts: [String: Int] = [:]
+        for value in values {
+            let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { continue }
+            counts[cleaned, default: 0] += 1
+        }
+        let ranked = counts.sorted {
+            if $0.value != $1.value { return $0.value > $1.value }
+            return $0.key < $1.key
+        }
+        return ranked.prefix(2)
+            .map { $0.value > 1 ? "\($0.key) x\($0.value)" : $0.key }
+            .joined(separator: ", ")
+    }
+
     private func row(_ label: String, _ value: String,
                      color: Color = Claude.textPrimary,
                      bold: Bool = false) -> some View {
@@ -161,5 +231,71 @@ struct MenuBarSummaryView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
+    }
+}
+
+private struct MenuLiveDetail {
+    let source: String
+    let title: String
+    let model: String
+    let thinkingLevel: String?
+    let inputTokens: Int
+    let outputTokens: Int
+    let reasoningTokens: Int
+    let cacheReadTokens: Int
+    let cacheWriteTokens: Int
+    let cost: Double
+    let promptCount: Int
+    let toolCount: Int
+    let lastActivity: Date
+    let sourceColor: Color
+
+    init(source: String,
+         title: String,
+         model: String,
+         thinkingLevel: String?,
+         inputTokens: Int,
+         outputTokens: Int,
+         reasoningTokens: Int,
+         cacheReadTokens: Int,
+         cacheWriteTokens: Int,
+         cost: Double,
+         promptCount: Int,
+         toolCount: Int,
+         lastActivity: Date,
+         sourceColor: Color) {
+        self.source = source
+        self.title = title
+        self.model = model.isEmpty ? "unknown" : model
+        self.thinkingLevel = thinkingLevel
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.reasoningTokens = reasoningTokens
+        self.cacheReadTokens = cacheReadTokens
+        self.cacheWriteTokens = cacheWriteTokens
+        self.cost = cost
+        self.promptCount = promptCount
+        self.toolCount = toolCount
+        self.lastActivity = lastActivity
+        self.sourceColor = sourceColor
+    }
+
+    init(session: SessionSummary, sourceColor: Color) {
+        self.init(
+            source: session.source.label,
+            title: session.displayTitle,
+            model: session.model,
+            thinkingLevel: session.thinkingLevel,
+            inputTokens: session.inputTokens,
+            outputTokens: session.outputTokens,
+            reasoningTokens: session.reasoningTokens,
+            cacheReadTokens: session.cacheReadTokens,
+            cacheWriteTokens: session.cacheWriteTokens,
+            cost: session.cost,
+            promptCount: session.promptCount,
+            toolCount: session.toolCallCount,
+            lastActivity: session.lastTimestamp ?? session.firstTimestamp ?? .distantPast,
+            sourceColor: sourceColor
+        )
     }
 }

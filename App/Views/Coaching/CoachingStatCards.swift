@@ -63,27 +63,61 @@ extension CoachingReportView {
                     .font(ClaudeFont.display(22).monospacedDigit())
                     .foregroundStyle(Claude.orange)
             }
-            statGridWithDelta([
-                ("Input",      TokenFormatter.compact(inventory.inputTokens),
-                  delta: Double(inventory.inputTokens - previousAggregate.inputTokens)),
-                ("Output",     TokenFormatter.compact(inventory.outputTokens),
-                  delta: Double(inventory.outputTokens - previousAggregate.outputTokens)),
-                ("Cache R",    TokenFormatter.compact(inventory.cacheReadTokens),
-                  delta: 0),
-                ("Cache W",    TokenFormatter.compact(inventory.cacheWriteTokens),
-                  delta: 0),
-                ("Total tok",  TokenFormatter.compact(inventory.totalTokens),
-                  delta: Double(inventory.totalTokens - previousAggregate.totalTokens)),
-                ("Tool calls", "\(inventory.totalToolCalls)",
-                  delta: Double(inventory.totalToolCalls - previousAggregate.totalToolCalls)),
-                ("Follow-up",  "\(stats.followUpPrompts)", delta: 0),
-                ("Msg/sess",
-                 inventory.sessionCount > 0
-                 ? "\(stats.totalPrompts / max(inventory.sessionCount, 1))"
-                 : "0", delta: 0),
-            ])
+            statGridWithDelta(tokenCostItems)
         }
         .claudeCard()
+    }
+
+    var tokenCostItems: [(String, String, delta: Double)] {
+        var items: [(String, String, delta: Double)] = [
+            ("Input", TokenFormatter.compact(inventory.inputTokens),
+             delta: Double(inventory.inputTokens - previousAggregate.inputTokens)),
+            ("Output", TokenFormatter.compact(inventory.outputTokens),
+             delta: Double(inventory.outputTokens - previousAggregate.outputTokens)),
+            ("Cache R", TokenFormatter.compact(inventory.cacheReadTokens),
+             delta: 0),
+            ("Cache W", TokenFormatter.compact(inventory.cacheWriteTokens),
+             delta: 0),
+            ("Total tok", TokenFormatter.compact(inventory.totalTokens),
+             delta: Double(inventory.totalTokens - previousAggregate.totalTokens)),
+        ]
+        if inventory.reasoningTokens > 0 {
+            items.append((
+                "Reasoning",
+                TokenFormatter.compact(inventory.reasoningTokens),
+                delta: Double(inventory.reasoningTokens - previousAggregate.reasoningTokens)
+            ))
+        }
+        if !thinkingModeSummary.isEmpty {
+            items.append(("Thinking", thinkingModeSummary, delta: 0))
+        }
+        items.append(contentsOf: [
+            ("Tool calls", "\(inventory.totalToolCalls)",
+             delta: Double(inventory.totalToolCalls - previousAggregate.totalToolCalls)),
+            ("Follow-up", "\(stats.followUpPrompts)", delta: 0),
+            ("Msg/sess",
+             inventory.sessionCount > 0
+             ? "\(stats.totalPrompts / max(inventory.sessionCount, 1))"
+             : "0", delta: 0),
+        ])
+        return items
+    }
+
+    var thinkingModeSummary: String {
+        var counts: [String: Int] = [:]
+        for session in sessions {
+            guard let raw = session.thinkingLevel else { continue }
+            let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { continue }
+            counts[cleaned, default: 0] += 1
+        }
+        return counts.sorted {
+            if $0.value != $1.value { return $0.value > $1.value }
+            return $0.key < $1.key
+        }
+        .prefix(3)
+        .map { $0.value > 1 ? "\($0.key) x\($0.value)" : $0.key }
+        .joined(separator: ", ")
     }
 
     // MARK: - Forecast card

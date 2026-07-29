@@ -68,7 +68,7 @@ public enum PetTalkOracle {
                 "Vào \(project) rồi, code carefully ạ.",
                 "Em đang ngắm session \(project) đây.",
                 "Bật mic, bật camera, bật pet — \(project) bắt đầu!",
-                "Session \(project) live rồi, fight!",
+                "Session \(project) đã vào snapshot rồi, fight!",
                 "Em note xem \(project) hôm nay thế nào.",
             ], variant: variant, tone: .working)
 

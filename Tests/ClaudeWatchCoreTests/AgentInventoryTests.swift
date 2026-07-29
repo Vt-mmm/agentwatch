@@ -150,15 +150,18 @@ final class AgentInventoryTests: XCTestCase {
                 "payload": [
                     "type": "message",
                     "role": "user",
-                    "content": [["type": "text", "text": "Review token burn risk"]],
+                    "content": [["type": "input_text", "text": "Review token burn risk"]],
                 ],
             ],
             [
-                "timestamp": "2026-07-29T01:00:02.500Z",
+                "timestamp": "2026-07-29T01:00:02.600Z",
                 "type": "event_msg",
                 "payload": [
                     "type": "user_message",
-                    "message": "Review token burn risk",
+                    "message": "Check Codex prompt export",
+                    "text_elements": [
+                        ["placeholder": "p", "byte_range": [0, 5]],
+                    ],
                 ],
             ],
             [
@@ -212,16 +215,17 @@ final class AgentInventoryTests: XCTestCase {
         XCTAssertEqual(summary.totalTokens, 240)
         XCTAssertEqual(summary.cacheReadTokens, 30)
         XCTAssertEqual(summary.cacheWriteTokens, 40)
-        XCTAssertEqual(summary.promptCount, 1)
+        XCTAssertEqual(summary.promptCount, 2)
         XCTAssertEqual(summary.toolCallCount, 1)
 
         let prompts = CodexJsonlParser.extractPrompts(from: file, range: range)
-        XCTAssertEqual(prompts.map(\.text), ["Review token burn risk"])
+        XCTAssertEqual(prompts.map(\.text), ["Review token burn risk", "Check Codex prompt export"])
+        XCTAssertEqual(Set(prompts.map(\.source)), [.codex])
 
         let detail = CodexJsonlParser.parseSession(at: file)
         XCTAssertEqual(detail.thinkingLevel, "high")
         XCTAssertEqual(detail.reasoningTokens, 50)
-        XCTAssertEqual(detail.events.filter { $0.kind == .userMessage }.count, 1)
+        XCTAssertEqual(detail.events.filter { $0.kind == .userMessage }.count, 2)
         let tool = try XCTUnwrap(detail.events.first(where: { $0.kind == .toolUse }))
         XCTAssertEqual(tool.toolName, "bash")
         XCTAssertTrue(tool.completed)

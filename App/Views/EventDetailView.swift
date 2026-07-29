@@ -203,7 +203,7 @@ struct EventDetailView: View {
 
     private var statusLabel: String {
         switch event.kind {
-        case .toolUse:  return event.completed ? "Done" : "Live"
+        case .toolUse:  return event.completed ? "Done" : "Open"
         default:        return "—"
         }
     }

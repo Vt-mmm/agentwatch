@@ -1,6 +1,5 @@
-// Reverse-chronological feed of the latest events in the session: user prompts,
-// assistant replies, thinking, and tool invocations. Tool events show a status
-// chip (running / done) and a one-line summary of what was called.
+// Reverse-chronological feed of session events from the latest loaded snapshot:
+// user prompts, assistant replies, thinking, and tool invocations.
 
 import SwiftUI
 import ClaudeWatchCore
@@ -23,7 +22,7 @@ struct LiveActivityCard: View {
                 nowBanner(activity)
             }
             if stats.events.isEmpty {
-                Text("No activity yet — events will appear here when Claude works on a tool call or replies.")
+                Text("No events in this session snapshot yet.")
                     .foregroundStyle(Claude.textMuted)
                     .font(ClaudeFont.body(12))
                     .padding(.vertical, 8)
@@ -42,7 +41,7 @@ struct LiveActivityCard: View {
         return HStack(spacing: 8) {
             Image(systemName: "waveform")
                 .foregroundStyle(Claude.orange)
-            Text("Live activity")
+            Text("Session events")
                 .font(ClaudeFont.heading())
                 .foregroundStyle(Claude.textPrimary)
             Spacer()
@@ -61,7 +60,7 @@ struct LiveActivityCard: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
-                    Text("NOW")
+                    Text("OPEN TOOL")
                         .font(ClaudeFont.label(10))
                         .tracking(0.8)
                         .foregroundStyle(Claude.live)
@@ -80,7 +79,6 @@ struct LiveActivityCard: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Claude.live)
-                .symbolEffect(.variableColor.iterative, options: .repeating)
         }
         .padding(10)
         .background(Claude.live.opacity(0.08))
@@ -144,7 +142,7 @@ private struct EventRow: View {
                         .foregroundStyle(Claude.textPrimary)
                 }
                 if !event.completed {
-                    chip("RUNNING",
+                    chip("OPEN",
                          bg: Claude.live.opacity(0.18),
                          fg: Claude.live)
                 } else {

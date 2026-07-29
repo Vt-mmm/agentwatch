@@ -1,7 +1,8 @@
-// Polls and republishes the latest session stats. Two modes:
-//   - pinned:        watch one specific project folder
-//   - followLatest:  every tick, scan all projects and follow whichever
-//                    session has the newest JSONL mtime
+// Publishes Claude session stats. The legacy watch APIs still poll for the CLI
+// and tests, while the macOS app uses the one-shot snapshot APIs below.
+// Two selection modes:
+//   - pinned:        read one specific project folder
+//   - followLatest:  select whichever session has the newest JSONL mtime
 //
 // Polling beats DispatchSourceFileSystemObject here because:
 //   1. New session UUIDs create new files mid-watch — we'd need to re-bind
@@ -34,15 +35,15 @@ public final class SessionWatcher {
     /// Ring buffer of token snapshots, capped at 60 entries, used by the sparkline.
     public private(set) var tokenHistory: [TokenSample] = []
 
-    /// True when watcher auto-selects the most recently active session across
+    /// True when watcher selects the most recently modified session across
     /// every project. False when pinned to a single folder.
     public private(set) var followLatest: Bool = false
 
     /// The folder the user explicitly pinned, if any.
     public private(set) var pinnedFolder: URL?
 
-    /// The folder we are actually reading from this tick — equals pinnedFolder
-    /// when pinned, equals the active project's decoded folder when following.
+    /// The folder we are actually reading — equals pinnedFolder when pinned,
+    /// equals the latest project's decoded folder when following.
     public private(set) var resolvedFolder: URL?
 
     private var pollTask: Task<Void, Never>?
@@ -56,9 +57,29 @@ public final class SessionWatcher {
         startCommon(followLatest: false, pinned: folder, intervalSeconds: intervalSeconds)
     }
 
-    /// Follow whichever project has the most recently active JSONL.
+    /// Follow whichever project has the most recently modified JSONL.
     public func startFollowingLatest(intervalSeconds: TimeInterval = 1.0) {
         startCommon(followLatest: true, pinned: nil, intervalSeconds: intervalSeconds)
+    }
+
+    /// Audit-mode snapshot: chọn folder rồi đọc 1 lần, không tạo polling task.
+    @discardableResult
+    public func loadPinned(folder: URL) -> SessionStats? {
+        configureSnapshot(followLatest: false, pinned: folder)
+        return refreshNow()
+    }
+
+    /// Audit-mode snapshot: đọc session Claude mới nhất 1 lần, không poll nền.
+    @discardableResult
+    public func loadLatest() -> SessionStats? {
+        configureSnapshot(followLatest: true, pinned: nil)
+        return refreshNow()
+    }
+
+    /// Re-read current selection once. Dùng cho nút refresh trong app.
+    @discardableResult
+    public func refreshSelection() -> SessionStats? {
+        refreshNow()
     }
 
     public func stop() {
@@ -126,6 +147,15 @@ public final class SessionWatcher {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
+    }
+
+    private func configureSnapshot(followLatest: Bool, pinned: URL?) {
+        stop()
+        self.followLatest = followLatest
+        self.pinnedFolder = pinned
+        self.lastMtime = .distantPast
+        self.lastSessionURL = nil
+        self.tokenHistory = []
     }
 
     private func currentTargetSession() -> URL? {

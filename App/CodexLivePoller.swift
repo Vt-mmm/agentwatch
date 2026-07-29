@@ -1,14 +1,14 @@
-// Poll-based Codex live activity tracker. Scan ~/.codex/sessions/ for rollout
-// files modified trong last N minutes. Không stream JSONL (Codex CLI không có
-// reliable tail trigger), poll mỗi 5s vẫn responsive cho UI Live tab.
+// One-shot Codex/PiAgent recent-log snapshot for the Sessions tab.
+// Không poll nền: Agent Watch là audit log viewer, chỉ scan khi user mở tab
+// hoặc bấm refresh.
 
 import Foundation
 import SwiftUI
 import ClaudeWatchCore
 
-/// Lightweight snapshot của Codex hoạt động gần đây — không full session detail.
+/// Lightweight snapshot của Codex log gần đây — không full session detail.
 struct CodexLiveSnapshot: Sendable, Equatable {
-    let sessions: [SessionSummary]   // last activity within window
+    let sessions: [SessionSummary]
     let totalInputTokens: Int
     let totalOutputTokens: Int
     let totalCacheReadTokens: Int
@@ -33,11 +33,9 @@ struct CodexLiveSnapshot: Sendable, Equatable {
 @Observable
 @MainActor
 final class CodexLivePoller {
-    /// Window: chỉ count session có activity trong N giây gần đây.
-    nonisolated private static let activityWindowSec: TimeInterval = 300   // 5 phút
-
-    /// Refresh interval — poll vừa đủ realtime, tránh parse/poll quá dày trên máy team.
-    nonisolated private static let pollIntervalSec: TimeInterval = 8
+    /// Chỉ parse một số file mới nhất để Sessions tab nhẹ, không thành realtime scanner.
+    nonisolated private static let maxCandidateFiles = 60
+    nonisolated private static let maxRecentSessions = 12
 
     private(set) var snapshot: CodexLiveSnapshot = CodexLiveSnapshot(
         sessions: [], totalInputTokens: 0, totalOutputTokens: 0,
@@ -45,30 +43,18 @@ final class CodexLivePoller {
         totalToolCalls: 0, totalCost: 0
     )
 
-    private var timer: Timer?
     private var refreshTask: Task<Void, Never>?
     private var cache: [String: SummaryCacheEntry] = [:]
 
-    func start() {
-        guard timer == nil else { return }
+    func refreshOnce() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: Self.pollIntervalSec, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
-        }
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-        refreshTask?.cancel()
-        refreshTask = nil
     }
 
     private func refresh() {
         guard refreshTask == nil else { return }
         let cacheSnapshot = cache
         refreshTask = Task.detached(priority: .utility) { [cacheSnapshot] in
-            let result = Self.scanCodexLive(cache: cacheSnapshot)
+            let result = Self.scanCodexSnapshot(cache: cacheSnapshot)
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.cache = result.cache
@@ -87,67 +73,45 @@ final class CodexLivePoller {
         let lastAccess: Date
     }
 
-    nonisolated private static func scanCodexLive(
+    nonisolated private static func scanCodexSnapshot(
         cache: [String: SummaryCacheEntry]
     ) -> (snapshot: CodexLiveSnapshot, cache: [String: SummaryCacheEntry]) {
         let now = Date()
-        let windowStart = now.addingTimeInterval(-activityWindowSec)
-        let range = windowStart...now.addingTimeInterval(60)
+        let range = Date.distantPast...now.addingTimeInterval(60)
         var nextCache = cache
         var sessions: [SessionSummary] = []
-        let root = CodexInventory.defaultRoot
-        let fm = FileManager.default
-
-        guard fm.fileExists(atPath: root),
-              let enumerator = fm.enumerator(
-                at: URL(fileURLWithPath: root),
-                includingPropertiesForKeys: [
-                    .contentModificationDateKey,
-                    .fileSizeKey,
-                    .isRegularFileKey
-                ]
-              ) else {
+        let candidates = recentJsonlFiles(
+            roots: [CodexInventory.defaultRoot, CodexInventory.defaultArchivedRoot],
+            skipSubagentPaths: false,
+            limit: maxCandidateFiles
+        )
+        guard !candidates.isEmpty else {
             return (.empty, prune(nextCache, now: now))
         }
 
-        for case let file as URL in enumerator where file.pathExtension == "jsonl" {
-            guard let values = try? file.resourceValues(forKeys: [
-                .contentModificationDateKey,
-                .fileSizeKey,
-                .isRegularFileKey
-            ]),
-            values.isRegularFile != false,
-            let mtime = values.contentModificationDate,
-            mtime >= windowStart else {
-                continue
-            }
-
-            let key = file.path
-            let size = values.fileSize ?? 0
+        for candidate in candidates {
+            let key = candidate.url.path
             let summary: SessionSummary?
             if let hit = nextCache[key],
-               hit.mtime == mtime,
-               hit.size == size {
+               hit.mtime == candidate.mtime,
+               hit.size == candidate.size {
                 summary = hit.summary
                 nextCache[key] = SummaryCacheEntry(
                     mtime: hit.mtime, size: hit.size,
                     summary: hit.summary, lastAccess: now)
             } else {
-                summary = CodexJsonlParser.summarize(file: file, range: range)
+                summary = CodexJsonlParser.summarize(file: candidate.url, range: range)
                 nextCache[key] = SummaryCacheEntry(
-                    mtime: mtime, size: size, summary: summary, lastAccess: now)
+                    mtime: candidate.mtime, size: candidate.size,
+                    summary: summary, lastAccess: now)
             }
 
-            guard let summary,
-                  (summary.lastTimestamp ?? .distantPast) >= windowStart else {
-                continue
-            }
-            sessions.append(summary)
+            if let summary { sessions.append(summary) }
         }
 
-        sessions.sort {
-            ($0.lastTimestamp ?? .distantPast) > ($1.lastTimestamp ?? .distantPast)
-        }
+        sessions = Array(sessions
+            .sorted { ($0.lastTimestamp ?? .distantPast) > ($1.lastTimestamp ?? .distantPast) }
+            .prefix(maxRecentSessions))
 
         let snapshot = CodexLiveSnapshot(
             sessions: sessions,
@@ -187,8 +151,8 @@ private extension CodexLiveSnapshot {
     )
 }
 
-/// Lightweight snapshot của PiAgent activity gần đây. Đây là trục live cho
-/// task/session name: không parse full history, chỉ đụng file có mtime mới.
+/// Lightweight snapshot của PiAgent log gần đây. Đây là trục check
+/// task/session name: không parse full history, chỉ đọc vài file mới nhất.
 struct PiAgentLiveSnapshot: Sendable, Equatable {
     let sessions: [SessionSummary]
     let totalInputTokens: Int
@@ -217,35 +181,23 @@ struct PiAgentLiveSnapshot: Sendable, Equatable {
 @Observable
 @MainActor
 final class PiAgentLivePoller {
-    nonisolated private static let activityWindowSec: TimeInterval = 300
-    nonisolated private static let pollIntervalSec: TimeInterval = 8
+    nonisolated private static let maxCandidateFiles = 60
+    nonisolated private static let maxRecentSessions = 12
 
     private(set) var snapshot: PiAgentLiveSnapshot = .empty
 
-    private var timer: Timer?
     private var refreshTask: Task<Void, Never>?
     private var cache: [String: SummaryCacheEntry] = [:]
 
-    func start() {
-        guard timer == nil else { return }
+    func refreshOnce() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: Self.pollIntervalSec, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
-        }
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-        refreshTask?.cancel()
-        refreshTask = nil
     }
 
     private func refresh() {
         guard refreshTask == nil else { return }
         let cacheSnapshot = cache
         refreshTask = Task.detached(priority: .utility) { [cacheSnapshot] in
-            let result = Self.scanPiAgentLive(cache: cacheSnapshot)
+            let result = Self.scanPiAgentSnapshot(cache: cacheSnapshot)
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.cache = result.cache
@@ -264,68 +216,45 @@ final class PiAgentLivePoller {
         let lastAccess: Date
     }
 
-    nonisolated private static func scanPiAgentLive(
+    nonisolated private static func scanPiAgentSnapshot(
         cache: [String: SummaryCacheEntry]
     ) -> (snapshot: PiAgentLiveSnapshot, cache: [String: SummaryCacheEntry]) {
         let now = Date()
-        let windowStart = now.addingTimeInterval(-activityWindowSec)
-        let range = windowStart...now.addingTimeInterval(60)
+        let range = Date.distantPast...now.addingTimeInterval(60)
         var nextCache = cache
         var sessions: [SessionSummary] = []
-        let root = PiAgentInventory.defaultRoot
-        let fm = FileManager.default
-
-        guard fm.fileExists(atPath: root),
-              let enumerator = fm.enumerator(
-                at: URL(fileURLWithPath: root),
-                includingPropertiesForKeys: [
-                    .contentModificationDateKey,
-                    .fileSizeKey,
-                    .isRegularFileKey
-                ]
-              ) else {
+        let candidates = recentJsonlFiles(
+            roots: [PiAgentInventory.defaultRoot],
+            skipSubagentPaths: true,
+            limit: maxCandidateFiles
+        )
+        guard !candidates.isEmpty else {
             return (.empty, prune(nextCache, now: now))
         }
 
-        for case let file as URL in enumerator where file.pathExtension == "jsonl" {
-            guard !file.pathComponents.contains("subagent"),
-                  let values = try? file.resourceValues(forKeys: [
-                    .contentModificationDateKey,
-                    .fileSizeKey,
-                    .isRegularFileKey
-                  ]),
-                  values.isRegularFile != false,
-                  let mtime = values.contentModificationDate,
-                  mtime >= windowStart else {
-                continue
-            }
-
-            let key = file.path
-            let size = values.fileSize ?? 0
+        for candidate in candidates {
+            let key = candidate.url.path
             let summary: SessionSummary?
             if let hit = nextCache[key],
-               hit.mtime == mtime,
-               hit.size == size {
+               hit.mtime == candidate.mtime,
+               hit.size == candidate.size {
                 summary = hit.summary
                 nextCache[key] = SummaryCacheEntry(
                     mtime: hit.mtime, size: hit.size,
                     summary: hit.summary, lastAccess: now)
             } else {
-                summary = PiAgentJsonlParser.summarize(file: file, range: range)
+                summary = PiAgentJsonlParser.summarize(file: candidate.url, range: range)
                 nextCache[key] = SummaryCacheEntry(
-                    mtime: mtime, size: size, summary: summary, lastAccess: now)
+                    mtime: candidate.mtime, size: candidate.size,
+                    summary: summary, lastAccess: now)
             }
 
-            guard let summary,
-                  (summary.lastTimestamp ?? .distantPast) >= windowStart else {
-                continue
-            }
-            sessions.append(summary)
+            if let summary { sessions.append(summary) }
         }
 
-        sessions.sort {
-            ($0.lastTimestamp ?? .distantPast) > ($1.lastTimestamp ?? .distantPast)
-        }
+        sessions = Array(sessions
+            .sorted { ($0.lastTimestamp ?? .distantPast) > ($1.lastTimestamp ?? .distantPast) }
+            .prefix(maxRecentSessions))
 
         let snapshot = PiAgentLiveSnapshot(
             sessions: sessions,
@@ -352,6 +281,46 @@ final class PiAgentLivePoller {
             .map(\.key))
         return fresh.filter { keepKeys.contains($0.key) }
     }
+}
+
+private struct RecentLogFile: Sendable {
+    let url: URL
+    let mtime: Date
+    let size: Int
+}
+
+private func recentJsonlFiles(roots: [String], skipSubagentPaths: Bool, limit: Int) -> [RecentLogFile] {
+    let fm = FileManager.default
+    var files: [RecentLogFile] = []
+    for root in roots where fm.fileExists(atPath: root) {
+        guard let enumerator = fm.enumerator(
+            at: URL(fileURLWithPath: root),
+            includingPropertiesForKeys: [
+                .contentModificationDateKey,
+                .fileSizeKey,
+                .isRegularFileKey
+            ]
+        ) else {
+            continue
+        }
+
+        for case let file as URL in enumerator where file.pathExtension == "jsonl" {
+            guard !skipSubagentPaths || !file.pathComponents.contains("subagent"),
+                  let values = try? file.resourceValues(forKeys: [
+                    .contentModificationDateKey,
+                    .fileSizeKey,
+                    .isRegularFileKey
+                  ]),
+                  values.isRegularFile != false,
+                  let mtime = values.contentModificationDate else {
+                continue
+            }
+            files.append(RecentLogFile(url: file, mtime: mtime, size: values.fileSize ?? 0))
+        }
+    }
+    return Array(files
+        .sorted { $0.mtime > $1.mtime }
+        .prefix(max(0, limit)))
 }
 
 private extension PiAgentLiveSnapshot {

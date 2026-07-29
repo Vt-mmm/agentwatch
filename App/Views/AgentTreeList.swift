@@ -9,7 +9,7 @@ struct AgentTreeList: View {
     @State private var page: Int = 0
     private let pageSize = 15
 
-    /// Live agent lên đầu; completed sắp xếp mới nhất trước. Không drop cũ.
+    /// Open agent lên đầu; completed sắp xếp mới nhất trước. Không drop cũ.
     private var ordered: [AgentSpawn] {
         let live = agents.filter { !$0.completed }
         let done = agents.filter { $0.completed }.reversed()
@@ -55,7 +55,7 @@ struct AgentTreeList: View {
                 .font(ClaudeFont.heading())
                 .foregroundStyle(Claude.textPrimary)
             Spacer()
-            Text("\(active) live · \(agents.count) total")
+            Text("\(active) open · \(agents.count) total")
                 .font(ClaudeFont.label(11))
                 .foregroundStyle(Claude.textMuted)
             Paginator(page: info.page, totalPages: info.totalPages) { page = $0 }

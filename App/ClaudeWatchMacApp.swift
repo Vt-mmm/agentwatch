@@ -42,10 +42,6 @@ struct ClaudeWatchMacApp: App {
                 .onAppear {
                     // Bắt đầu thu thập MetricKit payloads — silent, không có UI.
                     MetricsCollector.shared.start()
-                    startWatchingIfPossible()
-                    // v0.8.0: Codex poller cho Live tab.
-                    codexPoller.start()
-                    piAgentPoller.start()
                     petBroker.attach(floatingPet)
                     // Sync floating pet từ PetCollectionStore (nguồn sự thật mới).
                     floatingPet.characterName = petCollection.selectedId
@@ -111,11 +107,6 @@ struct ClaudeWatchMacApp: App {
                 .environment(codexPoller)
                 .environment(piAgentPoller)
                 .preferredColorScheme(appearance.mode.colorScheme)
-                .onAppear {
-                    startWatchingIfPossible()
-                    codexPoller.start()
-                    piAgentPoller.start()
-                }
                 .onChange(of: watcher.stats) { _, new in
                     notifications.update(with: new)
                 }
@@ -137,14 +128,5 @@ struct ClaudeWatchMacApp: App {
             return "$\(String(format: "%.2f", total))"
         }
         return ""
-    }
-
-    private func startWatchingIfPossible() {
-        guard !watcher.isWatching else { return }
-        if projectStore.followLatest || projectStore.pinnedFolder == nil {
-            watcher.startFollowingLatest()
-        } else if let folder = projectStore.pinnedFolder {
-            watcher.startPinned(folder: folder)
-        }
     }
 }

@@ -1,6 +1,6 @@
 # Claude Watch Mac
 
-Native macOS menu bar + window app theo dõi Claude Code sessions. Auto-detect session đang chạy (hoặc pin 1 folder cụ thể), live tokens / cost / subagent tree, refresh mỗi 1s.
+Native macOS menu bar + window app audit Claude, Codex và PiAgent sessions. App đọc snapshot log local theo lần mở tab / bấm refresh, hiển thị prompts, tokens, cost, thinking mode và rủi ro usage theo phiên.
 
 App chạy **local only** — không có hosted distribution, mỗi dev tự clone về build trên máy mình.
 
@@ -49,10 +49,10 @@ open ClaudeWatchMac.xcodeproj
 ## Cách dùng
 
 1. Mở app → icon Claude sparkle xuất hiện trên menu bar (top right) + cửa sổ chính.
-2. **Default**: app tự follow session JSONL mới nhất từ `~/.claude/projects/` — không cần làm gì, mở 1 phiên Claude Code lên rồi check app.
-3. Hoặc bấm **Pin folder…** để khoá theo 1 project folder cụ thể; bấm **Follow active** để quay lại auto-follow.
-4. Click menu bar icon → dropdown summary cost + tokens.
-5. Full window: session header, token / cost card kèm sparkline, live activity feed (tool call hiện tại), agent tree với LIVE / DONE badge. Click 1 row để mở detail sheet (full prompt / result).
+2. **Default**: app đọc session JSONL mới nhất từ `~/.claude/projects/`, cộng thêm snapshot log Codex/PiAgent gần nhất.
+3. Hoặc bấm **Pin folder…** để khoá theo 1 project folder cụ thể; bấm **Latest Claude** để quay lại scope mới nhất.
+4. Click menu bar icon → dropdown summary cost + tokens; bấm **Refresh** để đọc log lại một lần.
+5. Full window: tab **Sessions** hiển thị session header, token / cost, event feed theo snapshot và agent tree với Open / Done status. Tab **Coaching** audit prompts, source filter, report export và risk scoring.
 
 ## Iteration loop khi sửa code
 
@@ -91,12 +91,12 @@ claude-watch-mac/
 ├── Sources/
 │   └── ClaudeWatchCore/        # Pure logic, no AppKit
 │       ├── Pricing.swift        # USD/Mtok lookup (opus/sonnet/haiku/fable)
-│       ├── SessionStats.swift   # aggregate model + live activity
+│       ├── SessionStats.swift   # aggregate model + session activity
 │       ├── SessionEvent.swift   # one timeline entry
 │       ├── AgentSpawn.swift     # subagent tracking
 │       ├── ProjectPath.swift    # cwd ↔ slug, latest-session lookup
 │       ├── JsonlParser.swift    # parse one transcript
-│       └── SessionWatcher.swift # @Observable poll 1s + token history
+│       └── SessionWatcher.swift # @Observable snapshot loader + token history
 ├── App/                        # SwiftUI app target
 │   ├── ClaudeWatchMacApp.swift # @main, MenuBarExtra + WindowGroup
 │   ├── ProjectStore.swift      # persists pinned / follow-latest mode
@@ -190,5 +190,5 @@ Khi user bấm **Export MD / HTML / CSV** trong tab Coaching → file lưu trự
 - Cost = ước tính theo Anthropic list price; 5m vs 1h cache prompt không phân biệt riêng.
 - Subagent token cost gộp vào parent session (Claude Code không tách JSONL riêng).
 - macOS 14+ (MenuBarExtra requirement, Observation framework).
-- Polling 1s — trễ tối đa 1 giây so với JSONL append.
+- Không realtime polling; dữ liệu cập nhật khi mở tab, đổi scope hoặc bấm Refresh.
 - Ad-hoc signed → user mở lần đầu thấy Gatekeeper warning, right-click Open để bypass.

@@ -13,6 +13,12 @@ extension CoachingReportView {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 SectionLabel(text: "Prompts trong session (\(records.count))")
+                if !promptSourceSummary.isEmpty {
+                    Text(promptSourceSummary)
+                        .font(ClaudeFont.mono(10, weight: .semibold))
+                        .foregroundStyle(Claude.textMuted)
+                        .lineLimit(1)
+                }
                 Spacer()
                 if !records.isEmpty {
                     Text(promptRangeLabel(info))
@@ -43,6 +49,17 @@ extension CoachingReportView {
             }
         }
         .claudeCard()
+    }
+
+    private var promptSourceSummary: String {
+        let counts = Dictionary(grouping: records, by: \.source)
+            .mapValues(\.count)
+        return SessionSource.allCases
+            .compactMap { source in
+                let count = counts[source] ?? 0
+                return count > 0 ? "\(source.shortLabel) \(count)" : nil
+            }
+            .joined(separator: " · ")
     }
 
     private var promptPageSizeMenu: some View {

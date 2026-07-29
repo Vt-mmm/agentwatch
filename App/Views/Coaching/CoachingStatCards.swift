@@ -21,7 +21,7 @@ extension CoachingReportView {
                 } else {
                     HStack(spacing: 6) {
                         Circle().fill(Claude.live).frame(width: 6, height: 6)
-                        Text("auto · cập nhật \(TokenFormatter.clockTime(from: isoStringNow))")
+                        Text("snapshot · cập nhật \(TokenFormatter.clockTime(from: isoStringNow))")
                             .font(ClaudeFont.label(10))
                             .foregroundStyle(Claude.textMuted)
                     }

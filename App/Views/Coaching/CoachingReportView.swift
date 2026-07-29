@@ -97,6 +97,7 @@ struct CoachingReportView: View {
             return true
         }
         return dedupedPromptRecords(filtered)
+            .sorted { $0.timestamp > $1.timestamp }
     }
 
     var filteredSessions: [SessionSummary] {
@@ -206,9 +207,7 @@ struct CoachingReportView: View {
             } else {
                 data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
             }
-            data.startAutoRefresh()
         }
-        .onDisappear { data.stopAutoRefresh() }
         .onChange(of: scope) { _, _ in
             resetPages()
             data.reload(scope: currentScope, fingerprint: scopeFingerprint)

@@ -22,7 +22,7 @@ struct MainWindowView: View {
     @AppStorage("notif.streakRisk.enabled") private var streakRiskNoti: Bool = false
 
     enum Tab: String, CaseIterable, Identifiable {
-        case live = "Live"
+        case live = "Sessions"
         case coaching = "Coaching"
         case pets = "Pets"
         var id: String { rawValue }
@@ -46,6 +46,10 @@ struct MainWindowView: View {
         .background(Claude.backgroundGradient)
         .background(shortcutKeys)
         .sheet(isPresented: $showPrivacy) { PrivacyView() }
+        .onAppear { refreshAuditSnapshots() }
+        .onChange(of: tab) { _, newTab in
+            if newTab == .live { refreshAuditSnapshots() }
+        }
     }
 
     /// Invisible buttons giữ keyboardShortcut active toàn window.
@@ -74,11 +78,21 @@ struct MainWindowView: View {
             .frame(maxWidth: 220)
 
             if tab == .live {
-                // Pet nằm trong ProjectPickerView, ngay bên trái cụm live/pin.
+                // Pet nằm trong ProjectPickerView, ngay bên trái cụm snapshot/pin.
                 Divider().frame(height: 22)
                 ProjectPickerView()
             }
             Spacer()
+            if tab == .live {
+                Button { refreshAuditSnapshots() } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Claude.textPrimary)
+                        .frame(width: 28, height: 22)
+                }
+                .buttonStyle(.borderless)
+                .help("Đọc log lại một lần")
+            }
             // Tab Coaching + Pets không có ProjectPickerView → pet ở đây để vẫn hiện.
             if tab == .coaching || tab == .pets {
                 HeaderPet()
@@ -212,8 +226,8 @@ struct MainWindowView: View {
                 claudeLiveSection(stats)
             } else {
                 LiveEmptyAgentCard(
-                    title: "Claude đang idle",
-                    detail: "Chưa thấy Claude CLI/Desktop session đang cập nhật.",
+                    title: "Chưa có Claude log trong snapshot",
+                    detail: "Bấm refresh để đọc session Claude mới nhất.",
                     systemImage: "moon.zzz.fill"
                 )
             }
@@ -275,12 +289,22 @@ struct MainWindowView: View {
 
     private var placeholderText: String {
         if projectStore.followLatest {
-            return "Đang scan session agent local…\nMở Claude Code, Codex hoặc PiAgent để bắt đầu."
+            return "Chưa có snapshot gần đây.\nBấm refresh để đọc log Claude, Codex hoặc PiAgent một lần."
         }
         if let folder = projectStore.pinnedFolder {
-            return "Đợi hoạt động trong \(folder.lastPathComponent)…"
+            return "Chưa có snapshot trong \(folder.lastPathComponent).\nBấm refresh để đọc log mới nhất."
         }
-        return "Pin 1 folder ở trên để bắt đầu."
+        return "Pin 1 folder hoặc bấm refresh để đọc session mới nhất."
+    }
+
+    private func refreshAuditSnapshots() {
+        if projectStore.followLatest || projectStore.pinnedFolder == nil {
+            watcher.loadLatest()
+        } else if let folder = projectStore.pinnedFolder {
+            watcher.loadPinned(folder: folder)
+        }
+        codex.refreshOnce()
+        piAgent.refreshOnce()
     }
 }
 
@@ -340,7 +364,7 @@ private struct LiveOverviewCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .foregroundStyle(activeSessions > 0 ? Claude.live : Claude.textMuted)
-                Text("Live agents")
+                Text("Recent sessions")
                     .font(ClaudeFont.heading())
                     .foregroundStyle(Claude.textPrimary)
                 Spacer()
@@ -395,14 +419,14 @@ private struct LiveOverviewCard: View {
     }
 
     private var claudeDetail: String {
-        guard let s = claudeStats else { return "idle" }
+        guard let s = claudeStats else { return "no log" }
         let thinking = s.thinkingLevel.map { " · think \($0)" } ?? ""
         let reasoning = s.reasoningTokens > 0 ? " · reason \(TokenFormatter.compact(s.reasoningTokens))" : ""
         return "\(TokenFormatter.compact(s.totalTokens)) tok\(reasoning)\(thinking) · \(s.toolCalls) tools"
     }
 
     private var codexDetail: String {
-        guard codexSnapshot.sessionCount > 0 else { return "idle" }
+        guard codexSnapshot.sessionCount > 0 else { return "no log" }
         let reasoning = codexSnapshot.totalReasoningTokens > 0
             ? " · reason \(TokenFormatter.compact(codexSnapshot.totalReasoningTokens))"
             : ""
@@ -416,7 +440,7 @@ private struct LiveOverviewCard: View {
     }
 
     private var piDetail: String {
-        guard piSnapshot.sessionCount > 0 else { return "idle" }
+        guard piSnapshot.sessionCount > 0 else { return "no log" }
         let thinking = piSnapshot.latestSession?.thinkingLevel.map { " · think \($0)" } ?? ""
         let reasoning = piSnapshot.totalReasoningTokens > 0
             ? " · reason \(TokenFormatter.compact(piSnapshot.totalReasoningTokens))"
@@ -593,7 +617,7 @@ private struct ClaudeLiveSessionCard: View {
             cell("Model", stats.model.isEmpty ? "?" : stats.model, mono: true)
             cell("Family", stats.modelFamily.rawValue, tint: familyColor)
             cell("Last event", lastEventLabel, mono: true)
-            cell("Agents", "\(stats.activeAgents.count) live · \(stats.agents.count) total", tint: Claude.live)
+            cell("Agents", "\(stats.activeAgents.count) open · \(stats.agents.count) total", tint: Claude.live)
         }
     }
 

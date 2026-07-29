@@ -1,9 +1,9 @@
-// Pet ở header — compact toolbar size 56×56, đặt NGAY BÊN TRÁI cụm "live" +
+// Pet ở header — compact toolbar size 56×56, đặt NGAY BÊN TRÁI cụm "snapshot" +
 // "Pin folder" (trong ProjectPickerView). Bubble nói chuyện là OVERLAY nổi
 // sang BÊN TRÁI pet (tail trỏ phải về phía pet), KHÔNG nằm trong layout flow
 // → header KHÔNG đổi chiều cao khi bubble appear/disappear (no reflow).
 //
-// Vì sao bubble đặt trái: bên phải pet là nút live/pin (control bấm được),
+// Vì sao bubble đặt trái: bên phải pet là nút snapshot/pin (control bấm được),
 // bên trái là khoảng trống/đường dẫn project → bubble trái đỡ che nút.
 
 import SwiftUI

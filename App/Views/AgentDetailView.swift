@@ -44,7 +44,7 @@ struct AgentDetailView: View {
                 Text(agent.subagentType)
                     .font(ClaudeFont.heading(18))
                     .foregroundStyle(Claude.textPrimary)
-                Text(agent.completed ? "Completed" : "Live")
+                Text(agent.completed ? "Completed" : "Open")
                     .font(ClaudeFont.body(12))
                     .foregroundStyle(agent.completed ? Claude.textMuted : Claude.live)
             }
@@ -71,7 +71,7 @@ struct AgentDetailView: View {
     private var statusRow: some View {
         HStack(spacing: 16) {
             badge("STATUS",
-                  value: agent.completed ? "Done" : "Live",
+                  value: agent.completed ? "Done" : "Open",
                   tint: agent.completed ? Claude.textMuted : Claude.live)
             badge("DURATION", value: durationText, tint: Claude.textPrimary)
             badge("TOOL ID",

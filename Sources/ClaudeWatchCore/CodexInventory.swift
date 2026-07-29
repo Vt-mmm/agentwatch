@@ -508,20 +508,58 @@ public enum CodexJsonlParser {
     }
 
     private static func promptText(from payload: [String: Any]) -> String {
-        if let message = payload["message"] as? String { return message }
-        if let content = payload["content"] as? String { return content }
-        return responseMessageText(from: payload)
+        var pieces: [String] = []
+        if let message = payload["message"] as? String {
+            pieces.append(message)
+        }
+        if let text = payload["text"] as? String {
+            pieces.append(text)
+        }
+        if let content = payload["content"] as? String {
+            pieces.append(content)
+        }
+        if let blocks = payload["content"] as? [[String: Any]] {
+            pieces.append(contentsOf: textPieces(from: blocks))
+        }
+        return pieces
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
     }
 
     private static func responseMessageText(from payload: [String: Any]) -> String {
         if let text = payload["text"] as? String { return text }
         if let content = payload["content"] as? String { return content }
-        guard let blocks = payload["content"] as? [[String: Any]] else { return "" }
-        return blocks.compactMap { block -> String? in
-            if let text = block["text"] as? String { return text }
-            if let text = block["content"] as? String { return text }
-            return nil
-        }.joined(separator: "\n")
+        if let blocks = payload["content"] as? [[String: Any]] {
+            return textPieces(from: blocks).joined(separator: "\n")
+        }
+        return ""
+    }
+
+    private static func textPieces(from blocks: [[String: Any]]) -> [String] {
+        blocks.flatMap { textPieces(from: $0) }
+    }
+
+    private static func textPieces(from block: [String: Any]) -> [String] {
+        let type = block["type"] as? String ?? ""
+        if type == "input_image" || type == "image_url" { return [] }
+
+        var pieces: [String] = []
+        if let text = block["text"] as? String {
+            pieces.append(text)
+        }
+        if let text = block["input_text"] as? String {
+            pieces.append(text)
+        }
+        if let text = block["content"] as? String {
+            pieces.append(text)
+        }
+        if let nested = block["content"] as? [[String: Any]] {
+            pieces.append(contentsOf: textPieces(from: nested))
+        }
+        return pieces
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private static func thinkingEffort(from payload: [String: Any]) -> String? {

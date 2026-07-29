@@ -1,5 +1,5 @@
-// Top bar shows mode (follow-active vs pinned), current resolved folder,
-// and lets the user switch between modes.
+// Top bar shows audit scope (latest Claude session vs pinned folder) and lets
+// the user switch scope. Refresh is one-shot, not realtime polling.
 
 import SwiftUI
 import ClaudeWatchCore
@@ -17,14 +17,14 @@ struct ProjectPickerView: View {
                 folderSubtitle
             }
             Spacer()
-            // Pet ngay bên trái cụm "live" + "Pin folder".
+            // Pet ngay bên trái cụm snapshot + "Pin folder".
             HeaderPet()
-            if watcher.isWatching {
-                watchingPill
+            if watcher.lastRefreshAt != nil {
+                snapshotPill
             }
             if !projectStore.followLatest {
                 Button(action: switchToFollow) {
-                    pillButton("Follow active", tint: Claude.textPrimary, filled: false)
+                    pillButton("Latest Claude", tint: Claude.textPrimary, filled: false)
                 }
                 .buttonStyle(.plain)
             }
@@ -53,7 +53,7 @@ struct ProjectPickerView: View {
     private var modeTitle: some View {
         HStack(spacing: 6) {
             if projectStore.followLatest {
-                Text("Following active session")
+                Text("Latest Claude session")
                     .font(ClaudeFont.heading(14))
                     .foregroundStyle(Claude.textPrimary)
             } else if let folder = projectStore.pinnedFolder {
@@ -71,27 +71,28 @@ struct ProjectPickerView: View {
     private var folderSubtitle: some View {
         let path: String? = {
             if projectStore.followLatest {
-                return watcher.resolvedFolder?.path ?? "Scanning ~/.claude/projects…"
+                return watcher.resolvedFolder?.path ?? "Latest from ~/.claude/projects"
             }
             return projectStore.pinnedFolder?.path
         }()
-        return Text(path ?? "Pin a folder or follow the active session")
+        return Text(path ?? "Pin a folder or read the latest Claude session")
             .font(ClaudeFont.mono(11))
             .foregroundStyle(Claude.textMuted)
             .lineLimit(1)
             .truncationMode(.middle)
     }
 
-    private var watchingPill: some View {
+    private var snapshotPill: some View {
         HStack(spacing: 6) {
-            Circle().fill(Claude.live).frame(width: 7, height: 7)
-            Text("live")
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 9, weight: .semibold))
+            Text("snapshot")
                 .font(ClaudeFont.label(11))
-                .foregroundStyle(Claude.live)
         }
+        .foregroundStyle(Claude.done)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Claude.live.opacity(0.12), in: Capsule())
+        .background(Claude.done.opacity(0.12), in: Capsule())
     }
 
     private func pillButton(_ title: String, tint: Color, filled: Bool) -> some View {
@@ -114,18 +115,16 @@ struct ProjectPickerView: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Watch"
-        panel.message = "Select a project folder to pin. Agent Watch will tail the latest session JSONL there."
+        panel.prompt = "Audit"
+        panel.message = "Select a project folder to pin. Agent Watch will read the latest session log once when refreshed."
         if panel.runModal() == .OK, let url = panel.url {
             projectStore.pinFolder(url)
-            watcher.stop()
-            watcher.startPinned(folder: url)
+            watcher.loadPinned(folder: url)
         }
     }
 
     private func switchToFollow() {
         projectStore.switchToFollowLatest()
-        watcher.stop()
-        watcher.startFollowingLatest()
+        watcher.loadLatest()
     }
 }

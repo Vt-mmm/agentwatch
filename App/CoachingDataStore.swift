@@ -1,8 +1,8 @@
 // Store giữ data Coaching tab persistent giữa các lần switch tab.
-// Khi user đổi Live ↔ Coaching, data không reload nếu vừa load gần đây.
-// Auto-refresh chạy khi `isActive == true` (tab Coaching đang hiện).
+// Khi user đổi Sessions ↔ Coaching, data không reload nếu đã có snapshot đúng scope.
+// Không auto-refresh: app chỉ đọc log theo snapshot khi mở tab, đổi scope,
+// hoặc user bấm refresh.
 
-import AppKit
 import Foundation
 import Observation
 import ClaudeWatchCore
@@ -35,8 +35,8 @@ final class CoachingDataStore {
     /// data cũ không match → buộc reload.
     var lastScopeFingerprint: String = ""
 
-    /// Scope/fingerprint đang ACTIVE — auto-refresh dùng giá trị này MỖI TICK
-    /// thay vì capture 1 lần lúc start (fix bug filter cũ ghi đè data mới).
+    /// Scope/fingerprint đang được chọn — dùng để bỏ kết quả load cũ nếu user
+    /// đổi filter trong lúc snapshot scan chưa xong.
     private var activeScope: ReportScope?
     private var activeFingerprint: String = ""
 
@@ -46,19 +46,17 @@ final class CoachingDataStore {
     var onReloadComplete: ((_ records: [PromptRecord], _ sessions: [SessionSummary],
                             _ outlierIds: Set<String>, _ agentLoopIds: Set<String>) -> Void)?
 
-    private var refreshTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
-    private let stalenessThreshold: TimeInterval = 60
 
-    /// True nếu data còn fresh VÀ scope match → có thể skip reload khi
-    /// switch tab về Coaching.
+    /// True nếu đã có snapshot cho đúng scope → skip reload khi switch tab về
+    /// Coaching. User bấm Refresh hoặc đổi scope mới scan lại.
     func isFresh(for fingerprint: String) -> Bool {
         guard fingerprint == lastScopeFingerprint else { return false }
-        return Date().timeIntervalSince(lastRefreshAt) < stalenessThreshold
+        return lastRefreshAt != .distantPast
     }
 
-    /// Cập nhật active scope MÀ KHÔNG trigger reload — dùng khi onAppear thấy
-    /// data còn fresh nhưng auto-refresh vẫn cần biết scope hiện tại.
+    /// Cập nhật scope đang chọn MÀ KHÔNG trigger reload — dùng khi onAppear
+    /// thấy data còn fresh nhưng vẫn cần giữ fingerprint hiện tại.
     func setActive(scope: ReportScope, fingerprint: String) {
         activeScope = scope
         activeFingerprint = fingerprint
@@ -126,32 +124,6 @@ final class CoachingDataStore {
                 self.onReloadComplete?(curP, curS, outlierIds, loopIds)
             }
         }
-    }
-
-    /// Auto-refresh đọc activeScope/Fingerprint từ store MỖI TICK (không capture
-    /// snapshot lúc start). Đổi filter → tick kế tiếp dùng filter mới.
-    ///
-    /// Idle throttle: app active → 20s; app inactive → 90s.
-    /// Giảm CPU/IO khi user không nhìn vào Coaching tab (e.g. window ẩn, switch app).
-    func startAutoRefresh() {
-        stopAutoRefresh()
-        refreshTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                // Kiểm tra app active trên MainActor (NSApplication.shared là AppKit).
-                let isActive = NSApplication.shared.isActive
-                // Active vẫn refresh nền đủ gần realtime, nhưng không bật loading UI.
-                let interval: UInt64 = isActive ? 20_000_000_000 : 90_000_000_000
-                try? await Task.sleep(nanoseconds: interval)
-                if Task.isCancelled { break }
-                guard let self, let scope = self.activeScope else { continue }
-                self.reload(scope: scope, fingerprint: self.activeFingerprint, showLoading: false)
-            }
-        }
-    }
-
-    func stopAutoRefresh() {
-        refreshTask?.cancel()
-        refreshTask = nil
     }
 
     // MARK: - Range helpers (nonisolated để dùng từ Task.detached)

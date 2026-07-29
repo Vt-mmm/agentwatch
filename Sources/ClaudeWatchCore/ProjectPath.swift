@@ -67,7 +67,7 @@ public enum ProjectPath {
     }
 
     /// Scan every `<projects>/<slug>/*.jsonl` and return the JSONL whose mtime
-    /// is the most recent. Used to auto-pick the active session on launch.
+    /// is the most recent. Used by snapshot mode to pick the latest session.
     public static func mostRecentSessionAcrossAllProjects() -> URL? {
         guard let projects = try? FileManager.default.contentsOfDirectory(
             at: projectsDir,
@@ -93,7 +93,7 @@ public enum ProjectPath {
     }
 
     /// The folder (decoded from slug) of the most-recent session, if any.
-    /// This is the "follow active" entrypoint for the UI.
+    /// This is the "latest snapshot" entrypoint for the UI.
     public static func mostRecentActiveProjectFolder() -> URL? {
         guard let session = mostRecentSessionAcrossAllProjects() else { return nil }
         let slug = session.deletingLastPathComponent().lastPathComponent

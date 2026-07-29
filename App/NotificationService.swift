@@ -84,7 +84,7 @@ final class NotificationService {
     private func processAgents(_ agents: [AgentSpawn]) {
         for agent in agents {
             if !agent.completed {
-                // Track it as "live" so we can fire when it completes.
+                // Track it as open so we can fire when it completes.
                 seenLiveAgentIds.insert(agent.id)
             } else if seenLiveAgentIds.contains(agent.id),
                       !seenCompletedAgentIds.contains(agent.id) {

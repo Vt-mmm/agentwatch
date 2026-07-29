@@ -1,5 +1,5 @@
-// Live Codex activity card for the Live tab.
-// Keep it lightweight: render aggregate metrics + a capped recent-session list.
+// Recent Codex/PiAgent log cards for the Sessions tab.
+// Keep them lightweight: render aggregate metrics + capped recent-session lists.
 
 import SwiftUI
 import ClaudeWatchCore
@@ -31,10 +31,10 @@ struct CodexLiveCard: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "sparkles.rectangle.stack.fill")
                 .foregroundStyle(isActive ? .green : Claude.textMuted)
-            Text("Codex live")
+            Text("Codex logs")
                 .font(ClaudeFont.heading())
                 .foregroundStyle(Claude.textPrimary)
-            Text("5 phút")
+            Text("snapshot")
                 .font(ClaudeFont.mono(10, weight: .semibold))
                 .foregroundStyle(Claude.textMuted)
                 .padding(.horizontal, 6)
@@ -46,7 +46,7 @@ struct CodexLiveCard: View {
                     .font(ClaudeFont.display(24).monospacedDigit())
                     .foregroundStyle(isActive ? .green : Claude.textMuted)
                     .contentTransition(.numericText())
-                Text(isActive ? "\(snapshot.sessionCount) active" : "idle")
+                Text(isActive ? "\(snapshot.sessionCount) logs" : "empty")
                     .font(ClaudeFont.label(10))
                     .foregroundStyle(isActive ? .green : Claude.textMuted)
             }
@@ -60,7 +60,7 @@ struct CodexLiveCard: View {
                 selectedSession = latest
             } label: {
                 HStack(alignment: .top, spacing: 10) {
-                    liveBadge(for: latest)
+                    sessionBadge(for: latest)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             Text("Latest")
@@ -173,11 +173,11 @@ struct CodexLiveCard: View {
                     .foregroundStyle(Claude.textMuted)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Chưa có Codex session đang hoạt động")
+                Text("Chưa có Codex log trong snapshot")
                     .font(ClaudeFont.body(13))
                     .fontWeight(.medium)
                     .foregroundStyle(Claude.textPrimary)
-                Text("Codex sẽ hiện ở đây khi rollout log mới cập nhật.")
+                Text("Bấm refresh để đọc lại các session Codex mới nhất.")
                     .font(ClaudeFont.body(11))
                     .foregroundStyle(Claude.textMuted)
             }
@@ -206,7 +206,7 @@ struct CodexLiveCard: View {
 
     private func codexSessionRow(_ session: SessionSummary) -> some View {
         HStack(spacing: 9) {
-            liveBadge(for: session)
+            sessionBadge(for: session)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(session.displayTitle)
@@ -252,8 +252,8 @@ struct CodexLiveCard: View {
         .contentShape(Rectangle())
     }
 
-    private func liveBadge(for session: SessionSummary) -> some View {
-        let fresh = Date().timeIntervalSince(session.lastTimestamp ?? .distantPast) < 60
+    private func sessionBadge(for session: SessionSummary) -> some View {
+        let fresh = Date().timeIntervalSince(session.lastTimestamp ?? .distantPast) < 86_400
         return ZStack {
             RoundedRectangle(cornerRadius: 7)
                 .fill((fresh ? Color.green : Claude.textMuted).opacity(0.16))
@@ -309,10 +309,10 @@ struct PiAgentLiveCard: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "tag.circle.fill")
                 .foregroundStyle(isActive ? .purple : Claude.textMuted)
-            Text("PiAgent live")
+            Text("PiAgent logs")
                 .font(ClaudeFont.heading())
                 .foregroundStyle(Claude.textPrimary)
-            Text("5 phút")
+            Text("snapshot")
                 .font(ClaudeFont.mono(10, weight: .semibold))
                 .foregroundStyle(Claude.textMuted)
                 .padding(.horizontal, 6)
@@ -324,7 +324,7 @@ struct PiAgentLiveCard: View {
                     .font(ClaudeFont.display(24).monospacedDigit())
                     .foregroundStyle(isActive ? .purple : Claude.textMuted)
                     .contentTransition(.numericText())
-                Text(isActive ? "\(snapshot.namedTaskCount)/\(snapshot.sessionCount) named" : "idle")
+                Text(isActive ? "\(snapshot.namedTaskCount)/\(snapshot.sessionCount) named" : "empty")
                     .font(ClaudeFont.label(10))
                     .foregroundStyle(isActive ? .purple : Claude.textMuted)
             }
@@ -338,7 +338,7 @@ struct PiAgentLiveCard: View {
                 selectedSession = latest
             } label: {
                 HStack(alignment: .top, spacing: 10) {
-                    liveBadge(for: latest)
+                    sessionBadge(for: latest)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             Text(latest.hasTaskSessionTitle ? "Named task" : "Needs name")
@@ -440,11 +440,11 @@ struct PiAgentLiveCard: View {
                     .foregroundStyle(Claude.textMuted)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Chưa có PiAgent session đang hoạt động")
+                Text("Chưa có PiAgent log trong snapshot")
                     .font(ClaudeFont.body(13))
                     .fontWeight(.medium)
                     .foregroundStyle(Claude.textPrimary)
-                Text("PiAgent sẽ hiện ở đây khi session log mới cập nhật.")
+                Text("Bấm refresh để đọc lại các session PiAgent mới nhất.")
                     .font(ClaudeFont.body(11))
                     .foregroundStyle(Claude.textMuted)
             }
@@ -473,7 +473,7 @@ struct PiAgentLiveCard: View {
 
     private func piSessionRow(_ session: SessionSummary) -> some View {
         HStack(spacing: 9) {
-            liveBadge(for: session)
+            sessionBadge(for: session)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(session.displayTitle)
@@ -504,8 +504,8 @@ struct PiAgentLiveCard: View {
         .contentShape(Rectangle())
     }
 
-    private func liveBadge(for session: SessionSummary) -> some View {
-        let fresh = Date().timeIntervalSince(session.lastTimestamp ?? .distantPast) < 60
+    private func sessionBadge(for session: SessionSummary) -> some View {
+        let fresh = Date().timeIntervalSince(session.lastTimestamp ?? .distantPast) < 86_400
         return ZStack {
             RoundedRectangle(cornerRadius: 7)
                 .fill((fresh ? Color.purple : Claude.textMuted).opacity(0.16))

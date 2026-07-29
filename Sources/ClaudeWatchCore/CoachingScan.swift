@@ -10,7 +10,7 @@ import Foundation
 // MARK: - Parse result cache (P0 optimisation)
 
 /// Cache kết quả parse JSONL theo (path, mtime, size). Thread-safe via actor.
-/// Tránh re-parse file không đổi trong mỗi auto-refresh tick (5s polling).
+/// Tránh re-parse file không đổi khi user reload snapshot cùng scope.
 /// Giới hạn 1000 entry — evict theo lastAccess cũ nhất để tránh tăng vô hạn.
 actor JsonlParseCache {
     static let shared = JsonlParseCache()

@@ -10,7 +10,7 @@ struct MenuBarSummaryView: View {
     @Environment(PiAgentLivePoller.self) private var piAgent
     @Environment(\.openWindow) private var openWindow
 
-    private var hasAnyLiveAgent: Bool {
+    private var hasAnySnapshot: Bool {
         watcher.stats != nil || codex.snapshot.sessionCount > 0 || piAgent.snapshot.sessionCount > 0
     }
 
@@ -18,7 +18,7 @@ struct MenuBarSummaryView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             Divider().background(Claude.border)
-            if hasAnyLiveAgent {
+            if hasAnySnapshot {
                 liveTotalsBlock
                 if let detail = latestDetail {
                     Divider().background(Claude.border)
@@ -93,7 +93,7 @@ struct MenuBarSummaryView: View {
         let cost = (claude?.cost ?? 0) + codexSnapshot.totalCost + piSnapshot.totalCost
         let thinking = thinkingBreakdown()
         return VStack(alignment: .leading, spacing: 5) {
-            row("Live", "\(sessions) sessions", color: sessions > 0 ? Claude.live : Claude.textMuted)
+            row("Snapshot", "\(sessions) sessions", color: sessions > 0 ? Claude.live : Claude.textMuted)
             row("Total", TokenFormatter.compact(tokens) + " tok")
             if reasoning > 0 {
                 row("Reason", TokenFormatter.compact(reasoning) + " tok", color: .purple)
@@ -118,7 +118,7 @@ struct MenuBarSummaryView: View {
                     Circle()
                         .fill(s.activeAgents.isEmpty ? Claude.done : Claude.live)
                         .frame(width: 8, height: 8)
-                    Text("\(s.activeAgents.count) live · \(s.agents.count) total Claude agents")
+                    Text("\(s.activeAgents.count) open · \(s.agents.count) total Claude agents")
                         .font(ClaudeFont.body(12))
                         .foregroundStyle(Claude.textPrimary)
                 }
@@ -137,6 +137,11 @@ struct MenuBarSummaryView: View {
 
     private var footer: some View {
         HStack {
+            Button("Refresh") { refreshAuditSnapshots() }
+                .buttonStyle(.plain)
+                .font(ClaudeFont.body(12))
+                .foregroundStyle(Claude.orange)
+            Spacer()
             Button("Open window") { openWindow(id: "main") }
                 .buttonStyle(.plain)
                 .font(ClaudeFont.body(12))
@@ -151,18 +156,28 @@ struct MenuBarSummaryView: View {
 
     private var subtitle: String {
         if projectStore.followLatest {
-            return watcher.resolvedFolder?.lastPathComponent ?? "Following active…"
+            return watcher.resolvedFolder?.lastPathComponent ?? "Latest snapshot"
         }
         return projectStore.pinnedFolder?.lastPathComponent ?? "No folder pinned"
     }
 
     private var emptyMessage: String {
         if projectStore.followLatest {
-            return "Scanning for active session…"
+            return "No snapshot loaded. Press Refresh."
         }
         return projectStore.pinnedFolder == nil
             ? "Pin a folder to start."
-            : "Waiting for session activity…"
+            : "No session snapshot yet. Press Refresh."
+    }
+
+    private func refreshAuditSnapshots() {
+        if projectStore.followLatest || projectStore.pinnedFolder == nil {
+            watcher.loadLatest()
+        } else if let folder = projectStore.pinnedFolder {
+            watcher.loadPinned(folder: folder)
+        }
+        codex.refreshOnce()
+        piAgent.refreshOnce()
     }
 
     private var latestDetail: MenuLiveDetail? {

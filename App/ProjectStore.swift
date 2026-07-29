@@ -1,5 +1,5 @@
 // Persists the user's project mode across launches: either pinned to a folder
-// or following the most-recently-active session across all projects.
+// or using the most-recent session across all projects for one-shot snapshots.
 
 import Foundation
 import Observation
@@ -14,7 +14,7 @@ final class ProjectStore {
         didSet { persist() }
     }
 
-    /// Default true on first launch — anh mở app là thấy ngay session đang chạy.
+    /// Default true on first launch — app mở là đọc được session mới nhất.
     var followLatest: Bool {
         didSet { persist() }
     }

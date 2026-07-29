@@ -93,7 +93,7 @@ extension CoachingReportView {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 320)
+                .frame(width: 260)
                 Spacer()
                 Text(filterCountLabel)
                     .font(ClaudeFont.mono(11))

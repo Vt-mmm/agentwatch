@@ -8,7 +8,7 @@ import ClaudeWatchCore
 extension CoachingReportView {
 
     var riskFindings: [RiskFinding] {
-        RiskScorer.evaluate(records: records, sessions: sessions, limit: 50)
+        RiskScorer.evaluate(records: records, sessions: filteredSessions, limit: 50)
     }
 
     var riskSummary: RiskSummary {

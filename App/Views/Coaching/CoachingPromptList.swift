@@ -98,6 +98,8 @@ struct PromptRow: View {
                     if let risk {
                         riskBadge(risk)
                     }
+                    metaChip("\(record.score.charCount) chars")
+                    metaChip(String(record.sessionUuid.prefix(8)))
                     Text(record.projectDisplay)
                         .font(ClaudeFont.body(11))
                         .foregroundStyle(Claude.textMuted)
@@ -132,7 +134,6 @@ struct PromptRow: View {
         .contentShape(Rectangle())
     }
 
-    @ViewBuilder
     private var sourceBadge: some View {
         let (fg, bg) = badgeColors(record.source)
         return Text("\(record.source.emoji) \(record.source.shortLabel)")
@@ -165,6 +166,16 @@ struct PromptRow: View {
             .background(color.opacity(0.15))
             .clipShape(Capsule())
             .help("\(risk.category.label): \(risk.reason)")
+    }
+
+    private func metaChip(_ text: String) -> some View {
+        Text(text)
+            .font(ClaudeFont.mono(9, weight: .semibold))
+            .foregroundStyle(Claude.textMuted)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Claude.surface)
+            .clipShape(Capsule())
     }
 
     private func riskColor(_ severity: RiskSeverity) -> Color {

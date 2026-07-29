@@ -21,8 +21,7 @@ struct SessionDetailSheet: View {
 
     /// Events sau khi reverse + áp filter: mới nhất ở đầu.
     private var events: [SessionEvent] {
-        guard let s = stats else { return [] }
-        let reversed = Array(s.events.reversed())
+        let reversed = Array(dedupedEvents.reversed())
         guard !toolFilter.isEmpty else { return reversed }
         return reversed.filter { e in
             switch toolFilter {
@@ -35,24 +34,60 @@ struct SessionDetailSheet: View {
         }
     }
 
+    private var dedupedEvents: [SessionEvent] {
+        guard let s = stats else { return [] }
+        return dedupeEvents(s.events)
+    }
+
     /// Distinct tool names trong session, sorted theo count giảm dần.
     private var availableToolNames: [String] {
-        guard let s = stats else { return [] }
         var counts: [String: Int] = [:]
-        for e in s.events where e.kind == .toolUse {
+        for e in dedupedEvents where e.kind == .toolUse {
             if let n = e.toolName { counts[n, default: 0] += 1 }
         }
         return counts.sorted { $0.value > $1.value }.map(\.key)
     }
 
     private var toolBreakdown: [(name: String, count: Int)] {
-        guard let s = stats else { return [] }
         var map: [String: Int] = [:]
-        for e in s.events where e.kind == .toolUse {
+        for e in dedupedEvents where e.kind == .toolUse {
             let n = e.toolName ?? "?"
             map[n, default: 0] += 1
         }
         return map.sorted { $0.value > $1.value }.map { (name: $0.key, count: $0.value) }
+    }
+
+    private func dedupeEvents(_ input: [SessionEvent]) -> [SessionEvent] {
+        var lastTimestampByKey: [String: Date] = [:]
+        var timelessKeys: Set<String> = []
+        var seenToolIds: Set<String> = []
+        var output: [SessionEvent] = []
+
+        for event in input {
+            if event.kind == .toolUse, let toolId = event.toolUseId {
+                let key = "\(event.toolName ?? "Tool")|\(toolId)"
+                if seenToolIds.contains(key) { continue }
+                seenToolIds.insert(key)
+                output.append(event)
+                continue
+            }
+
+            let key = "\(event.kind.rawValue)|\(normalizedEventText(event.summary))"
+            if let date = eventDate(event.timestamp) {
+                defer { lastTimestampByKey[key] = date }
+                if let previous = lastTimestampByKey[key],
+                   abs(date.timeIntervalSince(previous)) <= 3 {
+                    continue
+                }
+                output.append(event)
+            } else {
+                if timelessKeys.contains(key) { continue }
+                timelessKeys.insert(key)
+                output.append(event)
+            }
+        }
+
+        return output
     }
 
     var body: some View {
@@ -405,7 +440,7 @@ struct SessionDetailSheet: View {
     /// List các SessionEvent có toolName == name (capped 30 để không quá dài).
     @ViewBuilder
     private func toolInvocations(name: String) -> some View {
-        let calls = (stats?.events ?? []).filter { $0.kind == .toolUse && $0.toolName == name }
+        let calls = dedupedEvents.filter { $0.kind == .toolUse && $0.toolName == name }
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(calls.prefix(30).enumerated()), id: \.offset) { idx, e in
                 VStack(alignment: .leading, spacing: 2) {
@@ -649,16 +684,26 @@ struct SessionDetailSheet: View {
         }
     }
 
-    /// Parse ISO timestamp → "HH:mm:ss" local. Best-effort; fallback empty.
-    private func shortTime(_ iso: String) -> String {
+    private func normalizedEventText(_ text: String) -> String {
+        let compact = text
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+        return String(compact.prefix(800))
+    }
+
+    private func eventDate(_ iso: String) -> Date? {
         let p = ISO8601DateFormatter()
         p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let d = p.date(from: iso) ?? {
-            let p2 = ISO8601DateFormatter()
-            p2.formatOptions = [.withInternetDateTime]
-            return p2.date(from: iso)
-        }()
-        guard let date = d else { return "" }
+        if let date = p.date(from: iso) { return date }
+        let p2 = ISO8601DateFormatter()
+        p2.formatOptions = [.withInternetDateTime]
+        return p2.date(from: iso)
+    }
+
+    /// Parse ISO timestamp → "HH:mm:ss" local. Best-effort; fallback empty.
+    private func shortTime(_ iso: String) -> String {
+        guard let date = eventDate(iso) else { return "" }
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss"; f.timeZone = .current
         return f.string(from: date)

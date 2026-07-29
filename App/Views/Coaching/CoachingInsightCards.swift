@@ -137,8 +137,9 @@ extension CoachingReportView {
         let info = Pagination.info(items: sessions, page: sessionPage, pageSize: pageSize)
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                SectionLabel(text: "Sessions theo cost (\(sessions.count))")
+                SectionLabel(text: "Sessions (\(sessions.count))")
                 Spacer()
+                sessionSortMenu
                 Paginator(page: info.page, totalPages: info.totalPages) { sessionPage = $0 }
             }
             ForEach(Array(info.slice)) { s in
@@ -149,6 +150,32 @@ extension CoachingReportView {
             }
         }
         .claudeCard()
+    }
+
+    private var sessionSortMenu: some View {
+        Menu {
+            ForEach(SessionSort.allCases) { option in
+                Button(option.rawValue) { sessionSort = option }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(sessionSort.rawValue)
+                    .font(ClaudeFont.mono(10, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .foregroundStyle(Claude.textMuted)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Claude.surfaceAlt)
+            .clipShape(Capsule())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Sắp xếp session")
     }
 
     // MARK: - Shared helpers

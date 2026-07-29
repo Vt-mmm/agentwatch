@@ -134,6 +134,14 @@ final class AgentInventoryTests: XCTestCase {
                 ],
             ],
             [
+                "timestamp": "2026-07-29T01:00:02.500Z",
+                "type": "event_msg",
+                "payload": [
+                    "type": "user_message",
+                    "message": "Review token burn risk",
+                ],
+            ],
+            [
                 "timestamp": "2026-07-29T01:00:03.000Z",
                 "type": "response_item",
                 "payload": [
@@ -187,6 +195,7 @@ final class AgentInventoryTests: XCTestCase {
         XCTAssertEqual(prompts.map(\.text), ["Review token burn risk"])
 
         let detail = CodexJsonlParser.parseSession(at: file)
+        XCTAssertEqual(detail.events.filter { $0.kind == .userMessage }.count, 1)
         let tool = try XCTUnwrap(detail.events.first(where: { $0.kind == .toolUse }))
         XCTAssertEqual(tool.toolName, "bash")
         XCTAssertTrue(tool.completed)

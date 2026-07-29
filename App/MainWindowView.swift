@@ -14,6 +14,7 @@ struct MainWindowView: View {
     @Environment(PetCollectionStore.self) private var petCollection
     @Environment(CodexLivePoller.self) private var codex
     @State private var tab: Tab = .live
+    @State private var liveFilter: LiveAgentFilter = .all
     @State private var showPrivacy: Bool = false
     // Sync với @AppStorage trong SpritePet — toggle áp dụng cho mọi pet instance.
     @AppStorage("PetFlippedHorizontally") private var petFlipped: Bool = true
@@ -157,24 +158,18 @@ struct MainWindowView: View {
     @ViewBuilder
     private var liveTab: some View {
         let codexSnapshot = codex.snapshot
-        // v0.8.1: Codex card LÊN ĐẦU theo yêu cầu user. Render trước Claude
-        // section nếu Codex đang active, hoặc nếu không có Claude live.
-        if let s = watcher.stats {
+        let claudeStats = watcher.stats
+        let hasClaude = claudeStats != nil
+        let hasCodex = codexSnapshot.sessionCount > 0
+        if hasClaude || hasCodex {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    CodexLiveCard(snapshot: codexSnapshot)
-                    SessionHeaderView(stats: s)
-                    TokenStatsCard(stats: s)
-                    LiveActivityCard(stats: s)
-                    AgentTreeList(agents: s.agents)
-                }
-                .padding(20)
-            }
-            .background(Claude.backgroundGradient)
-        } else if codexSnapshot.sessionCount > 0 {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    CodexLiveCard(snapshot: codexSnapshot)
+                    LiveOverviewCard(
+                        claudeStats: claudeStats,
+                        codexSnapshot: codexSnapshot,
+                        filter: $liveFilter
+                    )
+                    liveAgentSections(claudeStats: claudeStats, codexSnapshot: codexSnapshot)
                 }
                 .padding(20)
             }
@@ -182,6 +177,49 @@ struct MainWindowView: View {
         } else {
             placeholder
         }
+    }
+
+    @ViewBuilder
+    private func liveAgentSections(claudeStats: SessionStats?,
+                                   codexSnapshot: CodexLiveSnapshot) -> some View {
+        switch liveFilter {
+        case .all:
+            if shouldShowCodexFirst(claudeStats: claudeStats, codexSnapshot: codexSnapshot) {
+                if codexSnapshot.sessionCount > 0 { CodexLiveCard(snapshot: codexSnapshot) }
+                if let stats = claudeStats { claudeLiveSection(stats) }
+            } else {
+                if let stats = claudeStats { claudeLiveSection(stats) }
+                if codexSnapshot.sessionCount > 0 { CodexLiveCard(snapshot: codexSnapshot) }
+            }
+        case .claude:
+            if let stats = claudeStats {
+                claudeLiveSection(stats)
+            } else {
+                LiveEmptyAgentCard(
+                    title: "Claude đang idle",
+                    detail: "Chưa thấy Claude CLI/Desktop session đang cập nhật.",
+                    systemImage: "moon.zzz.fill"
+                )
+            }
+        case .codex:
+            CodexLiveCard(snapshot: codexSnapshot)
+        }
+    }
+
+    @ViewBuilder
+    private func claudeLiveSection(_ stats: SessionStats) -> some View {
+        ClaudeLiveSessionCard(stats: stats)
+        LiveActivityCard(stats: stats)
+        if !stats.agents.isEmpty {
+            AgentTreeList(agents: stats.agents)
+        }
+    }
+
+    private func shouldShowCodexFirst(claudeStats: SessionStats?,
+                                      codexSnapshot: CodexLiveSnapshot) -> Bool {
+        let codexDate = codexSnapshot.latestSession?.lastTimestamp ?? .distantPast
+        let claudeDate = claudeStats?.mtime ?? .distantPast
+        return codexDate > claudeDate
     }
 
     private var placeholder: some View {
@@ -220,5 +258,303 @@ struct MainWindowView: View {
             return "Đợi hoạt động trong \(folder.lastPathComponent)…"
         }
         return "Pin 1 folder ở trên để bắt đầu."
+    }
+}
+
+enum LiveAgentFilter: String, CaseIterable, Identifiable {
+    case all = "Tất cả"
+    case claude = "Claude"
+    case codex = "Codex"
+
+    var id: String { rawValue }
+}
+
+private struct LiveOverviewCard: View {
+    let claudeStats: SessionStats?
+    let codexSnapshot: CodexLiveSnapshot
+    @Binding var filter: LiveAgentFilter
+
+    private var activeSessions: Int {
+        (claudeStats == nil ? 0 : 1) + codexSnapshot.sessionCount
+    }
+
+    private var totalCost: Double {
+        (claudeStats?.cost ?? 0) + codexSnapshot.totalCost
+    }
+
+    private var totalTokens: Int {
+        (claudeStats?.totalTokens ?? 0) + codexSnapshot.totalTokens
+    }
+
+    private var totalTools: Int {
+        (claudeStats?.toolCalls ?? 0) + codexSnapshot.totalToolCalls
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .foregroundStyle(activeSessions > 0 ? Claude.live : Claude.textMuted)
+                Text("Live agents")
+                    .font(ClaudeFont.heading())
+                    .foregroundStyle(Claude.textPrimary)
+                Spacer()
+                Picker("", selection: $filter) {
+                    ForEach(LiveAgentFilter.allCases) { option in
+                        Text(option.rawValue).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 240)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)],
+                      alignment: .leading, spacing: 10) {
+                metric("Sessions", "\(activeSessions)")
+                metric("Cost", TokenFormatter.usd(totalCost))
+                metric("Tokens", TokenFormatter.compact(totalTokens))
+                metric("Tools", "\(totalTools)")
+            }
+
+            HStack(spacing: 10) {
+                agentButton(
+                    name: "Claude",
+                    active: claudeStats != nil,
+                    detail: claudeDetail,
+                    tint: Claude.orange,
+                    target: .claude
+                )
+                agentButton(
+                    name: "Codex",
+                    active: codexSnapshot.sessionCount > 0,
+                    detail: codexDetail,
+                    tint: .green,
+                    target: .codex
+                )
+            }
+        }
+        .claudeCard()
+    }
+
+    private var claudeDetail: String {
+        guard let s = claudeStats else { return "idle" }
+        return "\(TokenFormatter.compact(s.totalTokens)) tok · \(s.toolCalls) tools"
+    }
+
+    private var codexDetail: String {
+        guard codexSnapshot.sessionCount > 0 else { return "idle" }
+        return "\(codexSnapshot.sessionCount) sessions · \(TokenFormatter.compact(codexSnapshot.totalTokens)) tok"
+    }
+
+    private func metric(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SectionLabel(text: label)
+            Text(value)
+                .font(ClaudeFont.mono(17, weight: .semibold))
+                .foregroundStyle(Claude.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(9)
+        .background(Claude.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func agentButton(name: String,
+                             active: Bool,
+                             detail: String,
+                             tint: Color,
+                             target: LiveAgentFilter) -> some View {
+        Button { filter = target } label: {
+            HStack(spacing: 9) {
+                Circle()
+                    .fill(active ? tint : Claude.textMuted)
+                    .frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(ClaudeFont.body(12))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Claude.textPrimary)
+                    Text(detail)
+                        .font(ClaudeFont.mono(10))
+                        .foregroundStyle(Claude.textMuted)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if filter == target {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(filter == target ? tint.opacity(0.10) : Claude.surfaceAlt)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct LiveEmptyAgentCard: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle().fill(Claude.surfaceAlt).frame(width: 34, height: 34)
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Claude.textMuted)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(ClaudeFont.body(13))
+                    .fontWeight(.medium)
+                    .foregroundStyle(Claude.textPrimary)
+                Text(detail)
+                    .font(ClaudeFont.body(11))
+                    .foregroundStyle(Claude.textMuted)
+            }
+            Spacer()
+        }
+        .claudeCard()
+    }
+}
+
+private struct ClaudeLiveSessionCard: View {
+    let stats: SessionStats
+    @Environment(SessionWatcher.self) private var watcher
+
+    private var projectDisplay: String {
+        ProjectPath.displayPath(for: stats.projectSlug)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            metadataGrid
+            tokenGrid
+            if !watcher.tokenHistory.isEmpty {
+                TokenRateSparkline(samples: watcher.tokenHistory)
+                    .frame(maxWidth: .infinity)
+            }
+            Divider().background(Claude.border)
+            footer
+        }
+        .claudeCard()
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Claude.orangeSoft)
+                Image(systemName: "circle.grid.cross.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Claude.orange)
+            }
+            .frame(width: 34, height: 34)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("Claude session")
+                        .font(ClaudeFont.heading())
+                        .foregroundStyle(Claude.textPrimary)
+                    Text(stats.sessionId.prefix(8))
+                        .font(ClaudeFont.mono(10, weight: .semibold))
+                        .foregroundStyle(Claude.textMuted)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Claude.surfaceAlt, in: Capsule())
+                }
+                Text(projectDisplay)
+                    .font(ClaudeFont.body(12))
+                    .foregroundStyle(Claude.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(TokenFormatter.usd(stats.cost))
+                    .font(ClaudeFont.display(26).monospacedDigit())
+                    .foregroundStyle(Claude.orange)
+                    .contentTransition(.numericText())
+                Text("estimated · list price")
+                    .font(ClaudeFont.label(10))
+                    .foregroundStyle(Claude.textMuted)
+            }
+        }
+    }
+
+    private var metadataGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)],
+                  alignment: .leading, spacing: 10) {
+            cell("Model", stats.model.isEmpty ? "?" : stats.model, mono: true)
+            cell("Family", stats.modelFamily.rawValue, tint: familyColor)
+            cell("Last event", lastEventLabel, mono: true)
+            cell("Agents", "\(stats.activeAgents.count) live · \(stats.agents.count) total", tint: Claude.live)
+        }
+    }
+
+    private var tokenGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 10)],
+                  alignment: .leading, spacing: 10) {
+            cell("Input", TokenFormatter.compact(stats.inputTokens), mono: true)
+            cell("Output", TokenFormatter.compact(stats.outputTokens), mono: true)
+            cell("Cache R", TokenFormatter.compact(stats.cacheReadTokens), mono: true)
+            cell("Cache W", TokenFormatter.compact(stats.cacheWriteTokens), mono: true)
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            Label("\(stats.messageCount) messages", systemImage: "text.bubble")
+            Spacer()
+            Label("\(stats.toolCalls) tool calls", systemImage: "wrench.and.screwdriver")
+            Spacer()
+            Label(TokenFormatter.compact(stats.totalTokens) + " tokens", systemImage: "number")
+        }
+        .font(ClaudeFont.body(11))
+        .foregroundStyle(Claude.textMuted)
+    }
+
+    private var lastEventLabel: String {
+        stats.lastEventAt.isEmpty ? "?" : TokenFormatter.clockTime(from: stats.lastEventAt)
+    }
+
+    private func cell(_ label: String,
+                      _ value: String,
+                      tint: Color = Claude.textPrimary,
+                      mono: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SectionLabel(text: label)
+            Text(value)
+                .font(mono ? ClaudeFont.mono(12, weight: .semibold) : ClaudeFont.body(12))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(9)
+        .background(Claude.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var familyColor: Color {
+        switch stats.modelFamily {
+        case .opus:    return Claude.orange
+        case .sonnet:  return .blue
+        case .haiku:   return Claude.live
+        case .fable:   return .purple
+        case .gpt:     return .green
+        case .unknown: return Claude.textMuted
+        }
     }
 }

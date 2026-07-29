@@ -17,6 +17,7 @@ struct CoachingReportView: View {
     @State var projectFilter: String = ""    // "" = all projects
     @State var modelFilter: String = ""      // "" = all models
     @State var viewMode: ViewMode = .all
+    @State var sessionSort: SessionSort = .recent
     @State var selectedRecord: PromptRecord?
     @State var selectedSession: SessionSummary?
     @State var promptPageSize: Int = 25
@@ -46,8 +47,6 @@ struct CoachingReportView: View {
         case claude = "Claude"
         case codex = "Codex"
         case piagent = "PiAgent"
-        case cli = "CLI"
-        case desktop = "Desktop"
         var id: String { rawValue }
 
         func matches(_ source: SessionSource) -> Bool {
@@ -56,10 +55,16 @@ struct CoachingReportView: View {
             case .claude:  return source.vendor == .claude
             case .codex:   return source.vendor == .codex
             case .piagent: return source.vendor == .piagent
-            case .cli:     return source == .cli
-            case .desktop: return source == .desktop
             }
         }
+    }
+
+    enum SessionSort: String, CaseIterable, Identifiable {
+        case recent = "Mới nhất"
+        case risk = "Risk"
+        case cost = "Cost"
+        case tokens = "Token"
+        var id: String { rawValue }
     }
 
     // MARK: - Derived data từ store (shared, persist across tab switch)
@@ -85,21 +90,26 @@ struct CoachingReportView: View {
             base = allRecords
         }
         let q = searchQuery.lowercased()
-        return base.filter { r in
+        let filtered = base.filter { r in
             guard sourceFilter.matches(r.source) else { return false }
             if !projectFilter.isEmpty && r.projectDisplay != projectFilter { return false }
             if !q.isEmpty && !r.text.lowercased().contains(q) { return false }
             return true
         }
+        return dedupedPromptRecords(filtered)
     }
 
-    var sessions: [SessionSummary] {
+    var filteredSessions: [SessionSummary] {
         allSessions.filter { s in
             guard sourceFilter.matches(s.source) else { return false }
             if !projectFilter.isEmpty && s.projectDisplay != projectFilter { return false }
             if !modelFilter.isEmpty && s.model != modelFilter { return false }
             return true
         }
+    }
+
+    var sessions: [SessionSummary] {
+        sortedSessions(filteredSessions)
     }
 
     /// List unique project names cho project filter dropdown.
@@ -210,6 +220,7 @@ struct CoachingReportView: View {
         .onChange(of: projectFilter) { _, _ in resetPages() }
         .onChange(of: modelFilter) { _, _ in resetPages() }
         .onChange(of: viewMode) { _, _ in resetPages() }
+        .onChange(of: sessionSort) { _, _ in sessionPage = 0 }
         .onChange(of: promptPageSize) { _, _ in promptPage = 0 }
         .sheet(item: $selectedRecord) { record in
             PromptDetailSheet(record: record)
@@ -217,5 +228,62 @@ struct CoachingReportView: View {
         .sheet(item: $selectedSession) { session in
             SessionDetailSheet(session: session)
         }
+    }
+
+    private func dedupedPromptRecords(_ input: [PromptRecord]) -> [PromptRecord] {
+        var lastTimestampByKey: [String: Date] = [:]
+        return input.filter { record in
+            let key = "\(record.source.rawValue)|\(record.sessionUuid)|\(normalizedPromptText(record.text))"
+            defer { lastTimestampByKey[key] = record.timestamp }
+            guard let previous = lastTimestampByKey[key] else { return true }
+            return abs(record.timestamp.timeIntervalSince(previous)) > 3
+        }
+    }
+
+    private func sortedSessions(_ input: [SessionSummary]) -> [SessionSummary] {
+        switch sessionSort {
+        case .recent:
+            return input.sorted(by: recencySort)
+        case .risk:
+            let risks = riskBySession
+            return input.sorted { a, b in
+                let ar = risks[a.id]
+                let br = risks[b.id]
+                let aSeverity = ar?.severity.rawValue ?? 0
+                let bSeverity = br?.severity.rawValue ?? 0
+                if aSeverity != bSeverity { return aSeverity > bSeverity }
+                let aScore = ar?.score ?? -1
+                let bScore = br?.score ?? -1
+                if aScore != bScore { return aScore > bScore }
+                return recencySort(a, b)
+            }
+        case .cost:
+            return input.sorted { a, b in
+                if a.cost != b.cost { return a.cost > b.cost }
+                if a.totalTokens != b.totalTokens { return a.totalTokens > b.totalTokens }
+                return recencySort(a, b)
+            }
+        case .tokens:
+            return input.sorted { a, b in
+                if a.totalTokens != b.totalTokens { return a.totalTokens > b.totalTokens }
+                if a.cost != b.cost { return a.cost > b.cost }
+                return recencySort(a, b)
+            }
+        }
+    }
+
+    private func recencySort(_ a: SessionSummary, _ b: SessionSummary) -> Bool {
+        let ad = a.lastTimestamp ?? a.firstTimestamp ?? .distantPast
+        let bd = b.lastTimestamp ?? b.firstTimestamp ?? .distantPast
+        if ad != bd { return ad > bd }
+        return a.id < b.id
+    }
+
+    private func normalizedPromptText(_ text: String) -> String {
+        let compact = text
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+        return String(compact.prefix(800))
     }
 }

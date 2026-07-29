@@ -142,6 +142,7 @@ public enum CodexJsonlParser {
         var events: [SessionEvent] = []
         var prompts: [PromptRecord] = []
         var pendingTools: [String: Int] = [:]
+        var promptDedupe = PromptDedupeState()
         var lineIndex = 0
         var eventCounter = 0
 
@@ -199,6 +200,7 @@ public enum CodexJsonlParser {
                     cacheWriteTokens: &cacheWriteTokens,
                     events: &events,
                     prompts: &prompts,
+                    promptDedupe: &promptDedupe,
                     eventCounter: &eventCounter
                 )
 
@@ -219,6 +221,7 @@ public enum CodexJsonlParser {
                     events: &events,
                     prompts: &prompts,
                     pendingTools: &pendingTools,
+                    promptDedupe: &promptDedupe,
                     eventCounter: &eventCounter
                 )
 
@@ -264,6 +267,7 @@ public enum CodexJsonlParser {
                                           cacheWriteTokens: inout Int,
                                           events: inout [SessionEvent],
                                           prompts: inout [PromptRecord],
+                                          promptDedupe: inout PromptDedupeState,
                                           eventCounter: inout Int) {
         switch payload["type"] as? String {
         case "user_message":
@@ -281,6 +285,7 @@ public enum CodexJsonlParser {
                 promptCount: &promptCount,
                 events: &events,
                 prompts: &prompts,
+                promptDedupe: &promptDedupe,
                 eventCounter: &eventCounter
             )
 
@@ -328,6 +333,7 @@ public enum CodexJsonlParser {
                                           events: inout [SessionEvent],
                                           prompts: inout [PromptRecord],
                                           pendingTools: inout [String: Int],
+                                          promptDedupe: inout PromptDedupeState,
                                           eventCounter: inout Int) {
         switch payload["type"] as? String {
         case "message":
@@ -347,6 +353,7 @@ public enum CodexJsonlParser {
                     promptCount: &promptCount,
                     events: &events,
                     prompts: &prompts,
+                    promptDedupe: &promptDedupe,
                     eventCounter: &eventCounter
                 )
             } else if role == "assistant" {
@@ -416,9 +423,18 @@ public enum CodexJsonlParser {
                                          promptCount: inout Int,
                                          events: inout [SessionEvent],
                                          prompts: inout [PromptRecord],
+                                         promptDedupe: inout PromptDedupeState,
                                          eventCounter: inout Int) {
         let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        guard !isDuplicateUserPrompt(
+            text,
+            sessionId: sessionId,
+            timestampDate: timestampDate,
+            state: &promptDedupe
+        ) else {
+            return
+        }
         promptCount += 1
         if includeEvents {
             eventCounter += 1
@@ -444,6 +460,35 @@ public enum CodexJsonlParser {
             score: PromptScorer.score(text),
             source: .codex
         ))
+    }
+
+    private struct PromptDedupeState {
+        var lastTimestampByKey: [String: Date] = [:]
+        var timelessKeys: Set<String> = []
+    }
+
+    private static func isDuplicateUserPrompt(_ text: String,
+                                              sessionId: String,
+                                              timestampDate: Date?,
+                                              state: inout PromptDedupeState) -> Bool {
+        let key = "\(sessionId)|\(normalizedPromptText(text))"
+        guard let timestampDate else {
+            if state.timelessKeys.contains(key) { return true }
+            state.timelessKeys.insert(key)
+            return false
+        }
+
+        defer { state.lastTimestampByKey[key] = timestampDate }
+        guard let previous = state.lastTimestampByKey[key] else { return false }
+        return abs(timestampDate.timeIntervalSince(previous)) <= 3
+    }
+
+    private static func normalizedPromptText(_ text: String) -> String {
+        let compact = text
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+        return String(compact.prefix(800))
     }
 
     private static func promptText(from payload: [String: Any]) -> String {

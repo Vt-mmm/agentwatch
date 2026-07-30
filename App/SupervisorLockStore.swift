@@ -155,11 +155,13 @@ final class SupervisorLockStore {
     private let lockedKey = "supervisor.lock.enabled"
     private let lockedByLabelKey = "supervisor.lock.byLabel"
     private let heartbeatInterval: TimeInterval = 60
+    private let updateRelaunchAuthorizationWindow: TimeInterval = 5
     private let runId = UUID()
     private let runStartedAt = Date()
 
     private var started = false
     private var heartbeatTimer: Timer?
+    private var updateRelaunchAuthorizedUntil: Date?
     private var powerObserverTokens: [NSObjectProtocol] = []
     private var terminationAuthorized = false
     private var didMarkCleanExit = false
@@ -261,7 +263,28 @@ final class SupervisorLockStore {
         NSApp.terminate(nil)
     }
 
+    /// Sparkle invokes this immediately before its verified update relaunch.
+    /// The one-shot window prevents a stale authorization from weakening
+    /// ordinary Quit/Cmd+Q behavior if installation is unexpectedly aborted.
+    func authorizeUpdateRelaunch() {
+        updateRelaunchAuthorizedUntil = Date()
+            .addingTimeInterval(updateRelaunchAuthorizationWindow)
+        appendAudit(
+            kind: .quitAuthorized,
+            keyLabel: lockedByLabel,
+            message: "Quit authorized automatically for verified Sparkle update relaunch; unlock pass was not requested."
+        )
+    }
+
     func shouldTerminate(source: String) -> NSApplication.TerminateReply {
+        if let authorizedUntil = updateRelaunchAuthorizedUntil {
+            updateRelaunchAuthorizedUntil = nil
+            if Date() <= authorizedUntil {
+                markCleanExit(source: "Sparkle update relaunch")
+                return .terminateNow
+            }
+        }
+
         if terminationAuthorized {
             markCleanExit(source: source)
             return .terminateNow

@@ -14,6 +14,19 @@ private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
     nonisolated func updaterShouldPromptForPermissionToCheck(forUpdates updater: SPUUpdater) -> Bool {
         false   // skip permission dialog
     }
+
+    nonisolated func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
+        let authorizeRelaunch = {
+            MainActor.assumeIsolated {
+                SupervisorLockStore.shared.authorizeUpdateRelaunch()
+            }
+        }
+        if Thread.isMainThread {
+            authorizeRelaunch()
+        } else {
+            DispatchQueue.main.sync(execute: authorizeRelaunch)
+        }
+    }
 }
 
 @Observable

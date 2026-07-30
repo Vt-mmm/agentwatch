@@ -141,10 +141,10 @@ struct SupervisorLockView: View {
 
     private var statusDetail: String {
         if lock.requiresStartupKey {
-            return "Heartbeat chỉ được tính là hợp lệ sau khi nhập key. Quit/Cmd+Q vẫn bị chặn."
+            return "Heartbeat chỉ hợp lệ sau khi nhập key. Quit/Cmd+Q bị chặn; update được tự restart."
         }
         return lock.isLocked
-            ? "Quit/Cmd+Q yêu cầu unlock pass riêng. Force quit sẽ bị ghi nhận theo heartbeat."
+            ? "Quit/Cmd+Q cần unlock pass. Update tự restart; force quit được ghi nhận qua heartbeat."
             : "App cần được enroll trước; bấm quit khi chưa enroll sẽ bị chặn và ghi audit."
     }
 

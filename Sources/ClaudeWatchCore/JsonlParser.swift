@@ -3,6 +3,17 @@
 
 import Foundation
 
+public struct JsonlUserPrompt: Sendable, Equatable {
+    public let timestamp: Date
+    public let text: String
+    public let lineIndex: Int
+}
+
+public struct JsonlSessionScanResult: Sendable, Equatable {
+    public let stats: SessionStats
+    public let prompts: [JsonlUserPrompt]
+}
+
 public enum JsonlParser {
 
     /// Parse one JSONL transcript into a SessionStats.
@@ -11,18 +22,46 @@ public enum JsonlParser {
     public static func parseSession(at url: URL,
                                     range: ClosedRange<Date>? = nil,
                                     eventLimit: Int? = SessionStats.eventWindowSize) -> SessionStats {
+        parseSessionData(
+            at: url,
+            range: range,
+            eventLimit: eventLimit,
+            capturePrompts: false
+        ).stats
+    }
+
+    /// Parse aggregate statistics and full user prompts in the same streaming pass.
+    public static func scanSession(at url: URL,
+                                   range: ClosedRange<Date>? = nil,
+                                   eventLimit: Int? = SessionStats.eventWindowSize) -> JsonlSessionScanResult {
+        parseSessionData(
+            at: url,
+            range: range,
+            eventLimit: eventLimit,
+            capturePrompts: true
+        )
+    }
+
+    private static func parseSessionData(at url: URL,
+                                         range: ClosedRange<Date>?,
+                                         eventLimit: Int?,
+                                         capturePrompts: Bool) -> JsonlSessionScanResult {
         var stats = SessionStats(
             sessionId: url.deletingPathExtension().lastPathComponent,
             projectSlug: url.deletingLastPathComponent().lastPathComponent,
             filePath: url
         )
+        var prompts: [JsonlUserPrompt] = []
 
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return stats }
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            return JsonlSessionScanResult(stats: stats, prompts: prompts)
+        }
         defer { try? handle.close() }
 
         var pendingAgentIds: Set<String> = []
         var pendingToolUseIds: [String: Int] = [:]  // tool_use_id → events[index]
         var eventCounter = 0
+        var lineIndex = 0
 
         // Streaming: đọc từng chunk 64 KB thay vì readToEnd() toàn bộ file.
         // Peak memory = O(64 KB buffer + 1-2 dòng) thay vì O(filesize).
@@ -50,12 +89,16 @@ public enum JsonlParser {
                 // Xử lý mọi dòng hoàn chỉnh trong buffer (kết thúc bằng 0x0A).
                 while let nlRange = buffer.firstRange(of: newlineByte) {
                     let lineData = buffer[buffer.startIndex..<nlRange.lowerBound]
+                    lineIndex += 1
                     if !lineData.isEmpty {
                         applyLine(lineData, to: &stats,
                                   pendingAgents: &pendingAgentIds,
                                   pendingTools: &pendingToolUseIds,
                                   counter: &eventCounter,
-                                  range: range)
+                                  lineIndex: lineIndex,
+                                  range: range,
+                                  capturePrompts: capturePrompts,
+                                  prompts: &prompts)
                     }
                     buffer.removeSubrange(buffer.startIndex...nlRange.lowerBound)
                 }
@@ -64,11 +107,15 @@ public enum JsonlParser {
 
         // Flush phần cuối file nếu không kết thúc bằng newline.
         if !buffer.isEmpty {
+            lineIndex += 1
             applyLine(buffer, to: &stats,
                       pendingAgents: &pendingAgentIds,
                       pendingTools: &pendingToolUseIds,
                       counter: &eventCounter,
-                      range: range)
+                      lineIndex: lineIndex,
+                      range: range,
+                      capturePrompts: capturePrompts,
+                      prompts: &prompts)
         }
 
         // Interactive detail uses a bounded window. Export passes nil to retain
@@ -76,7 +123,7 @@ public enum JsonlParser {
         if let eventLimit, stats.events.count > eventLimit {
             stats.events = Array(stats.events.suffix(max(0, eventLimit)))
         }
-        return stats
+        return JsonlSessionScanResult(stats: stats, prompts: prompts)
     }
 
     /// Convenience: parse the most-recently-modified session for a folder.
@@ -92,7 +139,10 @@ public enum JsonlParser {
                                   pendingAgents: inout Set<String>,
                                   pendingTools: inout [String: Int],
                                   counter: inout Int,
-                                  range: ClosedRange<Date>?) {
+                                  lineIndex: Int,
+                                  range: ClosedRange<Date>?,
+                                  capturePrompts: Bool,
+                                  prompts: inout [JsonlUserPrompt]) {
         guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return
         }
@@ -136,6 +186,15 @@ public enum JsonlParser {
             }
 
         case "user":
+            if capturePrompts,
+               let timestamp,
+               let text = fullUserPrompt(from: msg["content"]) {
+                prompts.append(JsonlUserPrompt(
+                    timestamp: timestamp,
+                    text: text,
+                    lineIndex: lineIndex
+                ))
+            }
             if let content = msg["content"] as? [[String: Any]] {
                 if content.contains(where: {
                     ($0["type"] as? String) == "text"
@@ -162,6 +221,22 @@ public enum JsonlParser {
         default:
             break
         }
+    }
+
+    private static func fullUserPrompt(from content: Any?) -> String? {
+        let text: String
+        if let raw = content as? String {
+            text = raw
+        } else if let blocks = content as? [[String: Any]] {
+            text = blocks.compactMap { block -> String? in
+                guard (block["type"] as? String) == "text" else { return nil }
+                return block["text"] as? String
+            }.joined(separator: "\n")
+        } else {
+            return nil
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func applyAssistantContent(_ content: [[String: Any]],

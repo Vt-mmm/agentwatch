@@ -7,6 +7,11 @@
 
 import Foundation
 
+struct CoachingFileResult: Sendable {
+    let prompts: [PromptRecord]
+    let summary: SessionSummary?
+}
+
 // MARK: - Parse result cache (P0 optimisation)
 
 /// Cache kết quả parse JSONL theo (path, mtime, size). Thread-safe via actor.
@@ -18,7 +23,11 @@ actor JsonlParseCache {
     private struct CachedSession {
         let mtime: Date
         let size: Int64
-        let stats: SessionStats
+        let rangeLowerBound: Date
+        let rangeUpperBound: Date
+        let source: SessionSource
+        let result: CoachingFileResult
+        let parsedAt: Date
         var lastAccess: Date
     }
 
@@ -26,23 +35,44 @@ actor JsonlParseCache {
     private let maxEntries = 1000
 
     /// Trả về cached SessionStats nếu (mtime, size) không đổi; nil nếu stale.
-    func get(path: String, mtime: Date, size: Int64) -> SessionStats? {
+    func get(path: String, mtime: Date, size: Int64,
+             range: ClosedRange<Date>,
+             source: SessionSource,
+             allowRecentGrowth: Bool) -> CoachingFileResult? {
         guard var entry = cache[path],
-              entry.mtime == mtime,
-              entry.size == size else { return nil }
+              entry.rangeLowerBound == range.lowerBound,
+              entry.rangeUpperBound == range.upperBound,
+              entry.source == source else { return nil }
+        let unchanged = entry.mtime == mtime && entry.size == size
+        // Snapshot reload and immediate export often happen back-to-back while
+        // the active agent is still appending to its JSONL. Coalesce only that
+        // short burst; a later manual refresh must observe the new bytes.
+        let recentlyParsed = allowRecentGrowth && Date().timeIntervalSince(entry.parsedAt) < 5
+        guard unchanged || recentlyParsed else { return nil }
         // Cập nhật lastAccess để LRU eviction hoạt động đúng.
         entry.lastAccess = Date()
         cache[path] = entry
-        return entry.stats
+        return entry.result
     }
 
     /// Lưu kết quả parse vào cache, evict oldest entry nếu vượt 1000.
-    func set(path: String, mtime: Date, size: Int64, stats: SessionStats) {
+    func set(path: String, mtime: Date, size: Int64,
+             range: ClosedRange<Date>,
+             source: SessionSource,
+             result: CoachingFileResult) {
         if cache.count >= maxEntries, let oldestKey = oldestKey() {
             cache.removeValue(forKey: oldestKey)
         }
-        cache[path] = CachedSession(mtime: mtime, size: size,
-                                    stats: stats, lastAccess: Date())
+        cache[path] = CachedSession(
+            mtime: mtime,
+            size: size,
+            rangeLowerBound: range.lowerBound,
+            rangeUpperBound: range.upperBound,
+            source: source,
+            result: result,
+            parsedAt: Date(),
+            lastAccess: Date()
+        )
     }
 
     private func oldestKey() -> String? {
@@ -61,21 +91,36 @@ public enum CoachingScan {
 
     /// Scan toàn bộ session file có khả năng chạm `range`. Parallel parse mỗi file.
     /// Trả về cả prompt list lẫn session summary từ CÙNG 1 pass đọc file.
-    public static func scan(in range: ClosedRange<Date>) async -> CoachingScanResult {
+    public static func scan(in range: ClosedRange<Date>,
+                            allowRecentGrowth: Bool = true) async -> CoachingScanResult {
         let index = DesktopOriginIndex.shared()
         let candidates = collectCandidateFiles(in: range)
         // Parallel parse — IO-bound trên SSD, CPU-bound bị JSON; TaskGroup
         // tận dụng cả 2.
-        let results = await withTaskGroup(of: ScanOne?.self) { group in
-            for c in candidates {
+        let results = await withTaskGroup(of: CoachingFileResult?.self) { group in
+            let workerCount = min(4, candidates.count)
+            var nextIndex = 0
+            for _ in 0..<workerCount {
+                let c = candidates[nextIndex]
+                nextIndex += 1
                 group.addTask {
                     await parseOne(file: c.url, slug: c.slug, display: c.display,
-                                   source: c.source(via: index), range: range)
+                                   source: c.source(via: index), range: range,
+                                   allowRecentGrowth: allowRecentGrowth)
                 }
             }
-            var collected: [ScanOne] = []
-            for await r in group {
+            var collected: [CoachingFileResult] = []
+            while let r = await group.next() {
                 if let r { collected.append(r) }
+                if nextIndex < candidates.count {
+                    let c = candidates[nextIndex]
+                    nextIndex += 1
+                    group.addTask {
+                        await parseOne(file: c.url, slug: c.slug, display: c.display,
+                                       source: c.source(via: index), range: range,
+                                       allowRecentGrowth: allowRecentGrowth)
+                    }
+                }
             }
             return collected
         }
@@ -200,143 +245,94 @@ public enum CoachingScan {
     // MARK: - Per-file parse
 
     /// Output combined: prompts trong range + session summary (nếu session chạm range).
-    private struct ScanOne {
-        let prompts: [PromptRecord]
-        let summary: SessionSummary?
-    }
-
     /// Parse 1 file: lấy SessionStats (cho summary) + extract user prompts.
     /// JsonlParser.parseSession đã handle full schema CLI + Desktop audit.
     /// Cache hit: file không đổi (mtime + size) → bỏ qua parse, dùng stats cũ.
     private static func parseOne(file: URL, slug: String, display: String,
                                  source: SessionSource,
-                                 range: ClosedRange<Date>) async -> ScanOne? {
-        if source == .codex {
-            let summary = CodexJsonlParser.summarize(file: file, range: range)
-            let prompts = CodexJsonlParser.extractPrompts(from: file, range: range)
-            if summary == nil && prompts.isEmpty { return nil }
-            return ScanOne(prompts: prompts, summary: summary)
-        }
-        if source == .piagent {
-            let summary = PiAgentJsonlParser.summarize(file: file, range: range)
-            let prompts = PiAgentJsonlParser.extractPrompts(from: file, range: range)
-            if summary == nil && prompts.isEmpty { return nil }
-            return ScanOne(prompts: prompts, summary: summary)
-        }
-
-        let stats = JsonlParser.parseSession(at: file, range: range)
-        let firstTs = parseISO(stats.startedAt)
-        let lastTs = parseISO(stats.lastEventAt)
-
-        // Session summary nếu session chạm range.
-        let summary: SessionSummary? = if let firstTs, let lastTs {
-            SessionSummary(
-                id: stats.sessionId,
-                projectDisplay: display,
-                source: source,
-                model: stats.model,
-                modelFamily: stats.modelFamily,
-                inputTokens: stats.inputTokens,
-                outputTokens: stats.outputTokens,
-                cacheReadTokens: stats.cacheReadTokens,
-                cacheWriteTokens: stats.cacheWriteTokens,
-                cost: stats.cost,
-                firstTimestamp: firstTs,
-                lastTimestamp: lastTs,
-                promptCount: stats.promptCount,
-                toolCallCount: stats.toolCalls,
-                fileURL: file,
-                agentCount: stats.agents.count,
-                costBasis: stats.costBasis,
-                usageScope: .exactRange,
-                dataWarnings: stats.costBasis == .unavailable
-                    ? ["No versioned price quote for model '\(stats.model)'; cost is unavailable."]
-                    : []
-            )
-        } else {
-            nil
-        }
-
-        // Prompts trong range — bao giờ cũng parse file 2 lần nay → đọc thêm 1 lần
-        // RIÊNG cho prompt extraction để giữ full text (JsonlParser cap 160ch).
-        let prompts = extractPromptsInRange(file: file, slug: slug, display: display,
-                                            source: source, range: range)
-
-        if summary == nil && prompts.isEmpty { return nil }
-        return ScanOne(prompts: prompts, summary: summary)
-    }
-
-    /// Wrapper quanh JsonlParser.parseSession với cache (path, mtime, size).
-    /// Nếu file không thay đổi so với lần parse trước → trả về stats đã cache,
-    /// hoàn toàn bỏ qua parse (0 disk read ngoài stat() inode).
-    /// Hàm async để giao tiếp trực tiếp với JsonlParseCache actor — không cần semaphore.
-    private static func cachedParseSession(at file: URL) async -> SessionStats {
+                                 range: ClosedRange<Date>,
+                                 allowRecentGrowth: Bool) async -> CoachingFileResult? {
         let path = file.path
         let mtime = ProjectPath.mtime(of: file)
         let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize)
             .flatMap { Int64($0) } ?? 0
-
-        // Cache hit: file không đổi → trả về ngay, không parse.
-        if let cached = await JsonlParseCache.shared.get(path: path, mtime: mtime, size: size) {
-            return cached
+        if let cached = await JsonlParseCache.shared.get(
+            path: path,
+            mtime: mtime,
+            size: size,
+            range: range,
+            source: source,
+            allowRecentGrowth: allowRecentGrowth
+        ) {
+            return cached.summary == nil && cached.prompts.isEmpty ? nil : cached
         }
 
-        // Cache miss → parse thực sự và lưu kết quả.
-        let stats = JsonlParser.parseSession(at: file)
-        await JsonlParseCache.shared.set(path: path, mtime: mtime, size: size, stats: stats)
-        return stats
-    }
-
-    /// Extract moi user prompts hop le trong range. Agent Watch audit can xem
-    /// tung prompt cua nhan vien, khong chi prompt dau session.
-    private static func extractPromptsInRange(file: URL, slug: String, display: String,
-                                              source: SessionSource,
-                                              range: ClosedRange<Date>) -> [PromptRecord] {
-        guard let data = try? Data(contentsOf: file),
-              let raw = String(data: data, encoding: .utf8) else { return [] }
-        let sessionUuid = file.deletingPathExtension().lastPathComponent
-
-        // Gom mọi user message hợp lệ (timestamp + text không rỗng) từ TOÀN BỘ file.
-        struct UserMsg {
-            let ts: Date
-            let text: String
-            let lineIndex: Int
-        }
-        var msgs: [UserMsg] = []
-        var lineIndex = 0
-        raw.enumerateLines { line, _ in
-            lineIndex += 1
-            guard !line.isEmpty,
-                  let lineData = line.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
-            else { return }
-            guard (obj["type"] as? String) == "user" else { return }
-
-            let tsStr = (obj["timestamp"] as? String)
-                ?? (obj["_audit_timestamp"] as? String)
-            guard let s = tsStr, let ts = parseISO(s) else { return }
-
-            let text = extractUserText(from: obj["message"])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return }
-
-            msgs.append(UserMsg(ts: ts, text: text, lineIndex: lineIndex))
-        }
-
-        return msgs
-            .filter { range.contains($0.ts) && !isLikelySystemInjection($0.text) }
-            .map { msg in
-                PromptRecord(
-                    id: "\(sessionUuid)-\(msg.lineIndex)",
-                    timestamp: msg.ts,
+        let result: CoachingFileResult
+        if source == .codex {
+            let parsed = CodexJsonlParser.scan(file: file, range: range)
+            result = CoachingFileResult(prompts: parsed.prompts, summary: parsed.summary)
+        } else if source == .piagent {
+            let parsed = PiAgentJsonlParser.scan(file: file, range: range)
+            result = CoachingFileResult(prompts: parsed.prompts, summary: parsed.summary)
+        } else {
+            let parsed = JsonlParser.scanSession(at: file, range: range)
+            let stats = parsed.stats
+            let firstTs = parseISO(stats.startedAt)
+            let lastTs = parseISO(stats.lastEventAt)
+            let summary: SessionSummary? = if let firstTs, let lastTs {
+                SessionSummary(
+                    id: stats.sessionId,
+                    projectDisplay: display,
+                    source: source,
+                    model: stats.model,
+                    modelFamily: stats.modelFamily,
+                    inputTokens: stats.inputTokens,
+                    outputTokens: stats.outputTokens,
+                    cacheReadTokens: stats.cacheReadTokens,
+                    cacheWriteTokens: stats.cacheWriteTokens,
+                    cost: stats.cost,
+                    firstTimestamp: firstTs,
+                    lastTimestamp: lastTs,
+                    promptCount: stats.promptCount,
+                    toolCallCount: stats.toolCalls,
+                    fileURL: file,
+                    agentCount: stats.agents.count,
+                    costBasis: stats.costBasis,
+                    usageScope: .exactRange,
+                    dataWarnings: stats.costBasis == .unavailable
+                        ? ["No versioned price quote for model '\(stats.model)'; cost is unavailable."]
+                        : []
+                )
+            } else {
+                nil
+            }
+            let sessionUuid = file.deletingPathExtension().lastPathComponent
+            let prompts = parsed.prompts.compactMap { prompt -> PromptRecord? in
+                let cleaned = stripSystemTags(prompt.text)
+                guard !cleaned.isEmpty, !isLikelySystemInjection(cleaned) else { return nil }
+                return PromptRecord(
+                    id: "\(sessionUuid)-\(prompt.lineIndex)",
+                    timestamp: prompt.timestamp,
                     projectSlug: slug,
                     projectDisplay: display,
                     sessionUuid: sessionUuid,
-                    text: msg.text,
-                    score: PromptScorer.score(msg.text),
+                    text: cleaned,
+                    score: PromptScorer.score(cleaned),
                     source: source
                 )
             }
+            result = CoachingFileResult(prompts: prompts, summary: summary)
+        }
+
+        await JsonlParseCache.shared.set(
+            path: path,
+            mtime: mtime,
+            size: size,
+            range: range,
+            source: source,
+            result: result
+        )
+        return result.summary == nil && result.prompts.isEmpty ? nil : result
     }
 
     /// True nếu text trông giống auto-injected message của Claude Code thay vì
@@ -377,19 +373,6 @@ public enum CoachingScan {
         }
 
         return false
-    }
-
-    private static func extractUserText(from message: Any?) -> String {
-        guard let dict = message as? [String: Any] else { return "" }
-        if let raw = dict["content"] as? String { return stripSystemTags(raw) }
-        guard let blocks = dict["content"] as? [[String: Any]] else { return "" }
-        var pieces: [String] = []
-        for block in blocks {
-            guard (block["type"] as? String) == "text",
-                  let txt = block["text"] as? String, !txt.isEmpty else { continue }
-            pieces.append(txt)
-        }
-        return stripSystemTags(pieces.joined(separator: "\n"))
     }
 
     /// Loại bỏ `<tag>...</tag>` của các wrapper system Claude Code chèn vào user

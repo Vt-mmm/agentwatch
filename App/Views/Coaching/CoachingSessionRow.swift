@@ -11,18 +11,7 @@ extension CoachingReportView {
     /// Map source + sessionUuid → intent from the first three prompts.
     /// v0.5.0: Cursor-style "Conversation Insights" but rule-based.
     var sessionIntents: [String: SessionIntent] {
-        var bySession: [String: [PromptRecord]] = [:]
-        for r in allRecords {
-            bySession[r.sessionAuditKey, default: []].append(r)
-        }
-        var result: [String: SessionIntent] = [:]
-        for (uuid, recs) in bySession {
-            let firstPrompts = recs.sorted { $0.timestamp < $1.timestamp }
-                                   .prefix(3)
-                                   .map(\.text)
-            result[uuid] = SessionIntentClassifier.classify(prompts: firstPrompts)
-        }
-        return result
+        derived.sessionIntents
     }
 
     // MARK: - Session row

@@ -96,6 +96,26 @@ final class RiskScorerTests: XCTestCase {
         XCTAssertTrue(findings.contains { $0.severity == .high })
     }
 
+    func testAgentSessionResumeIsNotClassifiedAsOffTaskWork() {
+        let record = makeRecord(
+            id: "resume-agent",
+            text: "Resume the Codex session and continue the company auth task."
+        )
+        let session = makeSession(
+            project: "/Users/team/company/resume-session-tool",
+            promptCount: 1
+        )
+
+        let findings = RiskScorer.evaluate(
+            records: [record],
+            sessions: [session],
+            limit: 20
+        )
+
+        XCTAssertFalse(findings.contains { $0.category == .possibleOffTask })
+        XCTAssertFalse(findings.contains { $0.category == .nonCompanyWorkspace })
+    }
+
     func testCostOutlierUsesRobustBaselineWithinSameCohort() {
         let sessions = [
             makeSession(id: "normal-1", cost: 1.0),

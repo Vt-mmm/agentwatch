@@ -197,6 +197,75 @@ final class JsonlParserTests: XCTestCase {
         XCTAssertEqual(stats.totalTokens, 190)
     }
 
+    func testScanSessionReturnsFullPromptsAndStatsFromSamePass() throws {
+        let prompt = String(repeating: "Detailed requirement ", count: 20)
+        let url = try writeFixture([
+            [
+                "type": "user",
+                "timestamp": "2026-06-12T00:01:00.000Z",
+                "message": [
+                    "content": [
+                        ["type": "text", "text": prompt],
+                        ["type": "text", "text": "Acceptance: tests pass"],
+                    ],
+                ],
+            ],
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-12T00:02:00.000Z",
+                "message": [
+                    "model": "claude-sonnet-4-6",
+                    "usage": ["input_tokens": 100, "output_tokens": 20],
+                    "content": [],
+                ],
+            ],
+        ])
+
+        let result = JsonlParser.scanSession(at: url)
+
+        XCTAssertEqual(result.stats.promptCount, 1)
+        XCTAssertEqual(result.stats.inputTokens, 100)
+        XCTAssertEqual(result.prompts.count, 1)
+        XCTAssertEqual(result.prompts.first?.text, "\(prompt)\nAcceptance: tests pass")
+        XCTAssertGreaterThan(result.prompts.first?.text.count ?? 0, 160)
+    }
+
+    func testCoachingCacheDoesNotHideRecentGrowthFromStrictExportScan() async {
+        let cache = JsonlParseCache()
+        let mtime = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let range = mtime...mtime.addingTimeInterval(300)
+        let result = CoachingFileResult(prompts: [], summary: nil)
+
+        await cache.set(
+            path: "/tmp/live-session.jsonl",
+            mtime: mtime,
+            size: 100,
+            range: range,
+            source: .codex,
+            result: result
+        )
+
+        let uiHit = await cache.get(
+            path: "/tmp/live-session.jsonl",
+            mtime: mtime.addingTimeInterval(1),
+            size: 120,
+            range: range,
+            source: .codex,
+            allowRecentGrowth: true
+        )
+        XCTAssertNotNil(uiHit)
+
+        let exportMiss = await cache.get(
+            path: "/tmp/live-session.jsonl",
+            mtime: mtime.addingTimeInterval(1),
+            size: 120,
+            range: range,
+            source: .codex,
+            allowRecentGrowth: false
+        )
+        XCTAssertNil(exportMiss)
+    }
+
     func testSlugReplacesSlashUnderscoreAndDot() {
         XCTAssertEqual(
             ProjectPath.slug(for: URL(fileURLWithPath: "/Users/vtamm/Documents/Working")),

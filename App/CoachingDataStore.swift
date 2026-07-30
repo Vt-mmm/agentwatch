@@ -126,7 +126,9 @@ final class CoachingDataStore {
         let startedAt = Date()
         onScanStarted?("export", scope)
         let result = await Task.detached(priority: .userInitiated) {
-            await CoachingScan.scan(in: currentRange)
+            // Export must include bytes appended after the last UI snapshot.
+            // Unchanged files still use the cache.
+            await CoachingScan.scan(in: currentRange, allowRecentGrowth: false)
         }.value
         return applyScanResult(
             result,

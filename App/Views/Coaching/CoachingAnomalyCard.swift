@@ -8,24 +8,24 @@ import ClaudeWatchCore
 extension CoachingReportView {
 
     var riskFindings: [RiskFinding] {
-        RiskScorer.evaluate(records: records, sessions: filteredSessions, limit: 50)
+        derived.riskFindings
     }
 
     var riskSummary: RiskSummary {
-        RiskScorer.summary(for: riskFindings)
+        derived.riskSummary
     }
 
     var riskBySession: [String: RiskFinding] {
-        RiskScorer.highestBySession(riskFindings)
+        derived.riskBySession
     }
 
     var riskByPrompt: [String: RiskFinding] {
-        RiskScorer.highestByPrompt(riskFindings)
+        derived.riskByPrompt
     }
 
-    /// Computed danh sách anomalies. Re-derive mỗi render — cheap, list nhỏ.
+    /// Snapshot anomalies rebuilt only when scan data or filters change.
     var anomalies: [Anomaly] {
-        AnomalyScorer.detect(in: records, limit: 3)
+        derived.anomalies
     }
 
     @ViewBuilder

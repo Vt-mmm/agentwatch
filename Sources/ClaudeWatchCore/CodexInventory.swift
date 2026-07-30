@@ -32,7 +32,19 @@ public enum CodexInventory {
 
 public enum CodexJsonlParser {
     public static func summarize(file: URL, range: ClosedRange<Date>) -> SessionSummary? {
+        scan(file: file, range: range).summary
+    }
+
+    /// Decode summary and prompts in one streaming pass.
+    public static func scan(file: URL,
+                            range: ClosedRange<Date>) -> AgentLogScanResult {
         let parsed = parse(file: file, includeEvents: false, range: range)
+        let summary = makeSummary(from: parsed, file: file)
+        let prompts = parsed.isSubagent ? [] : parsed.prompts
+        return AgentLogScanResult(summary: summary, prompts: prompts)
+    }
+
+    private static func makeSummary(from parsed: Parsed, file: URL) -> SessionSummary? {
         guard parsed.firstTimestamp != nil,
               parsed.lastTimestamp != nil else {
             return nil
@@ -116,9 +128,7 @@ public enum CodexJsonlParser {
 
     public static func extractPrompts(from file: URL,
                                       range: ClosedRange<Date>) -> [PromptRecord] {
-        let parsed = parse(file: file, includeEvents: false, range: range)
-        guard !parsed.isSubagent else { return [] }
-        return parsed.prompts
+        scan(file: file, range: range).prompts
     }
 
     private struct Parsed {

@@ -5,6 +5,24 @@ import SwiftUI
 import AppKit
 import ClaudeWatchCore
 
+struct CoachingDerivedData {
+    var records: [PromptRecord] = []
+    var filteredSessions: [SessionSummary] = []
+    var sessions: [SessionSummary] = []
+    var projectOptions: [String] = []
+    var modelOptions: [String] = []
+    var inventory: InventoryAggregate = .zero
+    var outlierIds: Set<String> = []
+    var agentLoopIds: Set<String> = []
+    var stats: ReportStats = ReportGenerator.stats(for: [])
+    var riskFindings: [RiskFinding] = []
+    var riskSummary: RiskSummary = RiskScorer.summary(for: [])
+    var riskBySession: [String: RiskFinding] = [:]
+    var riskByPrompt: [String: RiskFinding] = [:]
+    var anomalies: [Anomaly] = []
+    var sessionIntents: [String: SessionIntent] = [:]
+}
+
 struct CoachingReportView: View {
     // Internal (not private) — cross-file extensions in Coaching/ need access.
     @Environment(BookmarkStore.self) var bookmarks
@@ -23,6 +41,7 @@ struct CoachingReportView: View {
     @State var selectedSession: SessionSummary?
     @State var showLockAuditLog: Bool = false
     @State var promptPageSize: Int = 25
+    @State var derived = CoachingDerivedData()
 
     // Pagination — 15 mỗi trang đủ rộng để xem mà không cuộn quá dài.
     @State var sessionPage: Int = 0
@@ -83,65 +102,23 @@ struct CoachingReportView: View {
     // MARK: - Filtered collections
 
     /// Records sau khi áp tất cả filter (source + project + search + bookmark mode).
-    var records: [PromptRecord] {
-        let base: [PromptRecord]
-        if viewMode == .bookmarks {
-            let ids = Set(bookmarks.items.map(\.id))
-            base = allRecords.filter { ids.contains($0.id) }
-        } else {
-            base = allRecords
-        }
-        let q = searchQuery.lowercased()
-        let filtered = base.filter { r in
-            guard sourceFilter.matches(r.source) else { return false }
-            if !projectFilter.isEmpty && !matchesTaskOrProject(r, projectFilter) { return false }
-            if !q.isEmpty && !r.text.lowercased().contains(q) { return false }
-            return true
-        }
-        return dedupedPromptRecords(filtered)
-            .sorted { $0.timestamp > $1.timestamp }
-    }
-
-    var filteredSessions: [SessionSummary] {
-        allSessions.filter { s in
-            guard sourceFilter.matches(s.source) else { return false }
-            if !projectFilter.isEmpty && !matchesTaskOrProject(s, projectFilter) { return false }
-            if !modelFilter.isEmpty && s.model != modelFilter { return false }
-            return true
-        }
-    }
-
-    var sessions: [SessionSummary] {
-        sortedSessions(filteredSessions)
-    }
+    var records: [PromptRecord] { derived.records }
+    var filteredSessions: [SessionSummary] { derived.filteredSessions }
+    var sessions: [SessionSummary] { derived.sessions }
 
     /// List unique project names cho project filter dropdown.
-    var projectOptions: [String] {
-        let names = Set(allRecords.map(\.projectDisplay))
-            .union(Set(allRecords.map(\.displayTitle)))
-            .union(Set(allSessions.map(\.projectDisplay)))
-            .union(Set(allSessions.map(\.displayTitle)))
-        return names.sorted()
-    }
+    var projectOptions: [String] { derived.projectOptions }
 
     /// List unique model names có data trong scope hiện tại.
-    var modelOptions: [String] {
-        Set(allSessions.map(\.model)).filter { !$0.isEmpty }.sorted()
-    }
+    var modelOptions: [String] { derived.modelOptions }
 
-    var inventory: InventoryAggregate {
-        SessionInventory.aggregate(sessions)
-    }
+    var inventory: InventoryAggregate { derived.inventory }
 
     /// Source-aware session key vượt robust cost baseline — view tô cảnh báo.
-    var outlierIds: Set<String> {
-        CoachingInsights.outlierSessions(sessions)
-    }
+    var outlierIds: Set<String> { derived.outlierIds }
 
     /// Session bị spawn quá nhiều subagent → suspect agent loop.
-    var agentLoopIds: Set<String> {
-        CoachingInsights.agentLoopSessions(sessions)
-    }
+    var agentLoopIds: Set<String> { derived.agentLoopIds }
 
     /// Chưa từng load lần nào (mount lần đầu, hoặc app vừa mở).
     var hasNeverLoaded: Bool { lastRefreshAt == .distantPast }
@@ -159,9 +136,7 @@ struct CoachingReportView: View {
         !hasNeverLoaded && allSessions.isEmpty && allRecords.isEmpty && lockAuditEvents.isEmpty
     }
 
-    var stats: ReportStats {
-        ReportGenerator.stats(for: records)
-    }
+    var stats: ReportStats { derived.stats }
 
     var lockAuditEvents: [SupervisorLockAuditEvent] {
         supervisorLock.events(in: currentScope)
@@ -218,6 +193,7 @@ struct CoachingReportView: View {
         }
         .onAppear {
             data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
+            rebuildDerivedData()
         }
         .onChange(of: scope) { _, _ in
             resetPages()
@@ -227,12 +203,14 @@ struct CoachingReportView: View {
             resetPages()
             data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
         }
-        .onChange(of: sourceFilter) { _, _ in resetPages() }
-        .onChange(of: searchQuery) { _, _ in resetPages() }
-        .onChange(of: projectFilter) { _, _ in resetPages() }
-        .onChange(of: modelFilter) { _, _ in resetPages() }
-        .onChange(of: viewMode) { _, _ in resetPages() }
-        .onChange(of: sessionSort) { _, _ in sessionPage = 0 }
+        .onChange(of: sourceFilter) { _, _ in resetPages(); rebuildDerivedData() }
+        .onChange(of: searchQuery) { _, _ in resetPages(); rebuildDerivedData() }
+        .onChange(of: projectFilter) { _, _ in resetPages(); rebuildDerivedData() }
+        .onChange(of: modelFilter) { _, _ in resetPages(); rebuildDerivedData() }
+        .onChange(of: viewMode) { _, _ in resetPages(); rebuildDerivedData() }
+        .onChange(of: sessionSort) { _, _ in sessionPage = 0; rebuildDerivedData() }
+        .onChange(of: data.lastRefreshAt) { _, _ in rebuildDerivedData() }
+        .onChange(of: bookmarks.items) { _, _ in rebuildDerivedData() }
         .onChange(of: promptPageSize) { _, _ in promptPage = 0 }
         .sheet(item: $selectedRecord) { record in
             PromptDetailSheet(record: record)
@@ -260,11 +238,15 @@ struct CoachingReportView: View {
     }
 
     func sortedSessions(_ input: [SessionSummary]) -> [SessionSummary] {
+        sortedSessions(input, risks: derived.riskBySession)
+    }
+
+    private func sortedSessions(_ input: [SessionSummary],
+                                risks: [String: RiskFinding]) -> [SessionSummary] {
         switch sessionSort {
         case .recent:
             return input.sorted(by: recencySort)
         case .risk:
-            let risks = riskBySession
             return input.sorted { a, b in
                 let ar = risks[RiskScorer.sessionKey(source: a.source, id: a.id)]
                 let br = risks[RiskScorer.sessionKey(source: b.source, id: b.id)]
@@ -289,6 +271,69 @@ struct CoachingReportView: View {
                 return recencySort(a, b)
             }
         }
+    }
+
+    private func rebuildDerivedData() {
+        let bookmarkIds = Set(bookmarks.items.map(\.id))
+        let base = viewMode == .bookmarks
+            ? allRecords.filter { bookmarkIds.contains($0.id) }
+            : allRecords
+        let query = searchQuery.lowercased()
+        let records = dedupedPromptRecords(base.filter { record in
+            guard sourceFilter.matches(record.source) else { return false }
+            if !projectFilter.isEmpty && !matchesTaskOrProject(record, projectFilter) {
+                return false
+            }
+            return query.isEmpty || record.text.lowercased().contains(query)
+        })
+        .sorted { $0.timestamp > $1.timestamp }
+        let filteredSessions = allSessions.filter { session in
+            guard sourceFilter.matches(session.source) else { return false }
+            if !projectFilter.isEmpty && !matchesTaskOrProject(session, projectFilter) {
+                return false
+            }
+            return modelFilter.isEmpty || session.model == modelFilter
+        }
+        let riskFindings = RiskScorer.evaluate(
+            records: records,
+            sessions: filteredSessions,
+            limit: 50
+        )
+        let riskBySession = RiskScorer.highestBySession(riskFindings)
+        let sessions = sortedSessions(filteredSessions, risks: riskBySession)
+        let projectNames = Set(allRecords.map(\.projectDisplay))
+            .union(Set(allRecords.map(\.displayTitle)))
+            .union(Set(allSessions.map(\.projectDisplay)))
+            .union(Set(allSessions.map(\.displayTitle)))
+        var recordsBySession: [String: [PromptRecord]] = [:]
+        for record in allRecords {
+            recordsBySession[record.sessionAuditKey, default: []].append(record)
+        }
+        var sessionIntents: [String: SessionIntent] = [:]
+        for (sessionKey, sessionRecords) in recordsBySession {
+            let prompts = sessionRecords
+                .sorted { $0.timestamp < $1.timestamp }
+                .prefix(3)
+                .map(\.text)
+            sessionIntents[sessionKey] = SessionIntentClassifier.classify(prompts: prompts)
+        }
+        derived = CoachingDerivedData(
+            records: records,
+            filteredSessions: filteredSessions,
+            sessions: sessions,
+            projectOptions: projectNames.sorted(),
+            modelOptions: Set(allSessions.map(\.model)).filter { !$0.isEmpty }.sorted(),
+            inventory: SessionInventory.aggregate(sessions),
+            outlierIds: CoachingInsights.outlierSessions(sessions),
+            agentLoopIds: CoachingInsights.agentLoopSessions(sessions),
+            stats: ReportGenerator.stats(for: records),
+            riskFindings: riskFindings,
+            riskSummary: RiskScorer.summary(for: riskFindings),
+            riskBySession: riskBySession,
+            riskByPrompt: RiskScorer.highestByPrompt(riskFindings),
+            anomalies: AnomalyScorer.detect(in: records, limit: 3),
+            sessionIntents: sessionIntents
+        )
     }
 
     private func recencySort(_ a: SessionSummary, _ b: SessionSummary) -> Bool {

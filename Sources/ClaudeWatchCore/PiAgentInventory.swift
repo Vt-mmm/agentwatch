@@ -26,7 +26,19 @@ public enum PiAgentInventory {
 
 public enum PiAgentJsonlParser {
     public static func summarize(file: URL, range: ClosedRange<Date>) -> SessionSummary? {
+        scan(file: file, range: range).summary
+    }
+
+    /// Decode summary and prompts in one streaming pass.
+    public static func scan(file: URL,
+                            range: ClosedRange<Date>) -> AgentLogScanResult {
         let parsed = parse(file: file, includeEvents: false, range: range)
+        let summary = makeSummary(from: parsed, file: file)
+        let prompts = isSubagentFile(file) ? [] : parsed.prompts
+        return AgentLogScanResult(summary: summary, prompts: prompts)
+    }
+
+    private static func makeSummary(from parsed: Parsed, file: URL) -> SessionSummary? {
         guard parsed.firstTimestamp != nil, parsed.lastTimestamp != nil else { return nil }
 
         let family = ModelFamily.from(modelId: parsed.model)
@@ -117,9 +129,7 @@ public enum PiAgentJsonlParser {
 
     public static func extractPrompts(from file: URL,
                                       range: ClosedRange<Date>) -> [PromptRecord] {
-        guard !isSubagentFile(file) else { return [] }
-        let parsed = parse(file: file, includeEvents: false, range: range)
-        return parsed.prompts
+        scan(file: file, range: range).prompts
     }
 
     private struct Parsed {

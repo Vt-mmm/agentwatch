@@ -688,7 +688,7 @@ public enum RiskScorer {
         let pathTerms = [
             "/desktop/", "/downloads/", "/movies/", "/music/", "/pictures/",
             "/tmp/", "/private/tmp/", "/personal/", "/freelance/", "/side-project",
-            "/side_project", "/job-search", "/resume", "/cv/"
+            "/side_project", "/job-search", "/resumes/", "/cv/"
         ]
         return pathTerms.contains { lower.contains($0) }
     }
@@ -723,7 +723,8 @@ public enum RiskScorer {
 
     private static let offTaskTerms: [String] = [
         "viet cv", "sua cv", "cover letter", "xin viec", "apply job",
-        "job application", "resume", "linkedin profile", "freelance",
+        "job application", "write my resume", "update my resume", "resume template",
+        "linkedin profile", "freelance",
         "fiverr", "upwork", "side project", "du an rieng", "ngoai cong ty",
         "ca cuoc", "betting", "casino", "crypto trading", "tinder", "dating",
         "netflix", "du lich", "travel itinerary", "recipe", "nau an",

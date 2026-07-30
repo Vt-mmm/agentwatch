@@ -117,6 +117,11 @@ final class AgentInventoryTests: XCTestCase {
         let prompts = PiAgentJsonlParser.extractPrompts(from: file, range: range)
         XCTAssertEqual(prompts.map(\.text), ["Implement payment audit report"])
         XCTAssertEqual(prompts.first?.sessionTitle, "PAY-742 Payment audit")
+        let combined = PiAgentJsonlParser.scan(file: file, range: range)
+        XCTAssertEqual(combined.summary?.id, summary.id)
+        XCTAssertEqual(combined.summary?.sessionTitle, summary.sessionTitle)
+        XCTAssertEqual(combined.summary?.totalTokens, summary.totalTokens)
+        XCTAssertEqual(combined.prompts, prompts)
 
         let detail = PiAgentJsonlParser.parseSession(at: file)
         XCTAssertEqual(detail.sessionName, "PAY-742 Payment audit")
@@ -280,6 +285,11 @@ final class AgentInventoryTests: XCTestCase {
         let prompts = CodexJsonlParser.extractPrompts(from: file, range: range)
         XCTAssertEqual(prompts.map(\.text), ["Review token burn risk", "Check Codex prompt export"])
         XCTAssertEqual(Set(prompts.map(\.source)), [.codex])
+        let combined = CodexJsonlParser.scan(file: file, range: range)
+        XCTAssertEqual(combined.summary?.id, summary.id)
+        XCTAssertEqual(combined.summary?.thinkingLevel, summary.thinkingLevel)
+        XCTAssertEqual(combined.summary?.totalTokens, summary.totalTokens)
+        XCTAssertEqual(combined.prompts, prompts)
 
         let detail = CodexJsonlParser.parseSession(at: file)
         XCTAssertEqual(detail.thinkingLevel, "high")

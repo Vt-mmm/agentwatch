@@ -246,6 +246,21 @@ final class ReportGeneratorTests: XCTestCase {
         XCTAssertTrue(markdown.contains("Tool activity audit (1)"))
         XCTAssertTrue(markdown.contains("Bash"))
         XCTAssertTrue(markdown.contains("32 tests passed"))
+        XCTAssertTrue(markdown.contains("2026-07-30 09:00:00"))
+        XCTAssertFalse(markdown.contains("2026-07-30T02:00:00.000Z"))
+
+        let html = ReportGenerator.html(
+            scope: scope,
+            records: [],
+            sessions: [session],
+            includeToolAudit: true
+        )
+        XCTAssertTrue(html.contains("Time (GMT+7)"))
+        XCTAssertTrue(html.contains("2026-07-30 09:00:00"))
+        XCTAssertTrue(html.contains("class=\"table-scroll\""))
+        XCTAssertTrue(html.contains("class=\"tool-table\""))
+        XCTAssertTrue(html.contains("<details class=\"tool-audit\">"))
+        XCTAssertFalse(html.contains("2026-07-30T02:00:00.000Z"))
 
         let csv = ReportGenerator.csv(
             records: [],
@@ -255,6 +270,7 @@ final class ReportGeneratorTests: XCTestCase {
         )
         XCTAssertTrue(csv.contains("tool_action"))
         XCTAssertTrue(csv.contains("swift test"))
+        XCTAssertTrue(csv.contains("2026-07-30 09:00:00"))
         let rows = csv.split(separator: "\n").map(String.init)
         let columnCount = rows[0].split(separator: ",", omittingEmptySubsequences: false).count
         for row in rows {

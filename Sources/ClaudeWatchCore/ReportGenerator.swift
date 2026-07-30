@@ -358,30 +358,55 @@ public enum ReportGenerator {
         <!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">
         <title>Agent Watch Report — \(htmlEscape(scope.label))</title>
         <style>
-          body{font-family:-apple-system,BlinkMacSystemFont,system-ui;color:#172033;background:#faf7f2;margin:0;padding:32px}
-          .wrap{max-width:960px;margin:0 auto;background:#fff;border-radius:18px;padding:32px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
-          h1{margin:0 0 6px;font-size:28px;letter-spacing:-.02em}
+          *{box-sizing:border-box}
+          html,body{max-width:100%;overflow-x:hidden}
+          body{font-family:-apple-system,BlinkMacSystemFont,system-ui;color:#172033;background:#faf7f2;margin:0;padding:24px;line-height:1.45}
+          .wrap{width:min(1180px,100%);margin:0 auto;background:#fff;border-radius:8px;padding:28px;box-shadow:0 6px 24px rgba(0,0,0,.06);overflow:hidden}
+          h1{margin:0 0 6px;font-size:28px;letter-spacing:0}
           .muted{color:#666}
           h2{margin-top:28px;font-size:20px}
-          table{width:100%;border-collapse:collapse;margin:8px 0}
-          th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left}
+          h3,h4{overflow-wrap:anywhere}
+          .table-scroll{width:100%;max-width:100%;overflow-x:auto;margin:8px 0;-webkit-overflow-scrolling:touch}
+          table{width:100%;max-width:100%;border-collapse:collapse;table-layout:fixed}
+          th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left;vertical-align:top;overflow-wrap:anywhere;word-break:break-word}
           th{font-weight:600;background:#fafafa}
-          .stat{display:inline-block;padding:10px 16px;margin:4px 8px 4px 0;background:#fff4e8;border-radius:12px;border:1px solid #f0c7a0}
-          .stat b{display:block;font-size:22px;color:#cc785c}
-          .prompt{margin:14px 0;padding:12px;border:1px solid #eee;border-radius:10px;background:#fcfbf9}
-          .session{margin:18px 0;padding:14px;border:1px solid #ddd;border-radius:10px}
+          .wide-table{min-width:900px}
+          .usage-table{min-width:1180px;font-size:12px}
+          .risk-table{min-width:980px;font-size:12px}
+          .tool-table{font-size:11px}
+          .tool-table td:nth-child(3),.tool-table td:nth-child(5){font-family:ui-monospace,SFMono-Regular,monospace;white-space:pre-wrap}
+          .tool-audit{margin:12px 0;border:1px solid #ddd;border-radius:8px;background:#fcfbf9;overflow:hidden}
+          .tool-audit summary{cursor:pointer;padding:10px 12px;font-weight:650;background:#fafafa}
+          .tool-audit .table-scroll{margin:0}
+          .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:8px;margin-top:20px}
+          .stat{display:block;min-width:0;padding:10px 12px;background:#fff4e8;border-radius:8px;border:1px solid #f0c7a0}
+          .stat b{display:block;font-size:20px;color:#cc785c;overflow-wrap:anywhere}
+          .prompt{margin:14px 0;padding:12px;border:1px solid #eee;border-radius:8px;background:#fcfbf9;min-width:0}
+          .session{margin:18px 0;padding:14px;border:1px solid #ddd;border-radius:8px;min-width:0;overflow:hidden}
           .session h3{margin:0 0 4px}
+          .formula,.proj{overflow-wrap:anywhere;word-break:break-word}
           .formula{font-family:ui-monospace,SFMono-Regular,monospace;color:#555;font-size:12px}
           .ptime{font-weight:600}
           .tag{background:#cc785c;color:#fff;padding:2px 8px;border-radius:999px;font-size:12px}
           .proj{color:#888;font-size:13px;margin:2px 0 8px}
           .missing{color:#b14a1a;font-size:13px;margin:6px 0}
-          pre{background:#1a1a1a;color:#e8e2d5;padding:12px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;font-size:12px;line-height:1.5}
-          @media print{body{background:#fff;padding:0}.wrap{box-shadow:none}}
+          pre{max-width:100%;background:#1a1a1a;color:#e8e2d5;padding:12px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:12px;line-height:1.5}
+          @media(max-width:700px){body{padding:10px}.wrap{padding:16px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:23px}}
+          @media print{
+            @page{size:A4 landscape;margin:9mm}
+            body{background:#fff;padding:0;font-size:10px}
+            .wrap{width:100%;max-width:none;padding:0;box-shadow:none;overflow:visible}
+            .table-scroll{overflow:visible}
+            .wide-table,.usage-table,.risk-table{min-width:0}
+            th,td{padding:4px;font-size:8px}
+            .session{break-before:page;break-inside:auto}
+            .prompt{break-inside:avoid}
+            .tool-audit:not([open])>:not(summary){display:block}
+          }
         </style></head><body><div class="wrap">
         <h1>Agent Watch Report</h1>
         <div class="muted">\(htmlEscape(scope.label)) · GMT+7 · accounting usage-v2 · prices \(Pricing.versionLabel)</div>
-        <div style="margin-top:20px">
+        <div class="stats">
           <span class="stat"><b>\(s.totalPrompts)</b>Tổng prompts</span>
           <span class="stat"><b>\(usage.sessionCount)</b>Sessions</span>
           <span class="stat"><b>\(usage.totalTokens)</b>Tokens</span>
@@ -404,15 +429,15 @@ public enum ReportGenerator {
           <li>Session rows are scoped to the selected GMT+7 report period. Partial rows carry an explicit warning.</li>
         </ul>
         <h2>Phân bổ chất lượng</h2>
-        <table><thead><tr><th>Mức</th><th>Số prompt</th></tr></thead><tbody>\(rows)</tbody></table>
+        <div class="table-scroll"><table><thead><tr><th>Mức</th><th>Số prompt</th></tr></thead><tbody>\(rows)</tbody></table></div>
         <h2>Section hay thiếu</h2>
         <ul>\(missing.isEmpty ? "<li class=muted>Không có data.</li>" : missing)</ul>
         <h2>Breakdown theo project</h2>
-        <table><thead><tr><th>Project</th><th>Task prompts</th><th>Avg score</th></tr></thead><tbody>\(projects)</tbody></table>
+        <div class="table-scroll"><table><thead><tr><th>Project</th><th>Task prompts</th><th>Avg score</th></tr></thead><tbody>\(projects)</tbody></table></div>
         <h2>Risk audit</h2>
-        <table><thead><tr><th>Severity</th><th>Score</th><th>Category</th><th>Source</th><th>Project</th><th>Session</th><th>Reason</th></tr></thead><tbody>\(riskRows.isEmpty ? "<tr><td colspan=7 class=muted>Không có risk finding nào.</td></tr>" : riskRows)</tbody></table>
+        <div class="table-scroll"><table class="wide-table risk-table"><colgroup><col style="width:8%"><col style="width:6%"><col style="width:13%"><col style="width:10%"><col style="width:17%"><col style="width:20%"><col style="width:26%"></colgroup><thead><tr><th>Severity</th><th>Score</th><th>Category</th><th>Source</th><th>Project</th><th>Session</th><th>Reason</th></tr></thead><tbody>\(riskRows.isEmpty ? "<tr><td colspan=7 class=muted>Không có risk finding nào.</td></tr>" : riskRows)</tbody></table></div>
         <h2>Top usage sessions theo task/session</h2>
-        <table><thead><tr><th>Source</th><th>Task/session</th><th>Project</th><th>Model</th><th>Thinking</th><th>Prompts</th><th>Tools</th><th>Tokens</th><th>Reasoning</th><th>Cost</th><th>Basis</th><th>Range</th></tr></thead><tbody>\(sessionRows.isEmpty ? "<tr><td colspan=12 class=muted>Không có session nào.</td></tr>" : sessionRows)</tbody></table>
+        <div class="table-scroll"><table class="wide-table usage-table"><thead><tr><th>Source</th><th>Task/session</th><th>Project</th><th>Model</th><th>Thinking</th><th>Prompts</th><th>Tools</th><th>Tokens</th><th>Reasoning</th><th>Cost</th><th>Basis</th><th>Range</th></tr></thead><tbody>\(sessionRows.isEmpty ? "<tr><td colspan=12 class=muted>Không có session nào.</td></tr>" : sessionRows)</tbody></table></div>
         <h2>Công việc theo từng session</h2>
         \(details.isEmpty ? "<p class=muted>Không có prompt nào.</p>" : details)
         </div></body></html>
@@ -565,7 +590,7 @@ public enum ReportGenerator {
                     .joined(separator: " · ")
                     let cols: [String] = [
                         "tool_action",
-                        event.timestamp,
+                        localizedEventTimestamp(event.timestamp),
                         session.source.rawValue,
                         csvEscape(session.projectDisplay),
                         session.id,
@@ -715,7 +740,7 @@ public enum ReportGenerator {
         output += "| Time | Tool | Action | Status | Result |\n"
         output += "|---|---|---|---|---|\n"
         for event in events {
-            output += "| \(markdownTableEscape(event.timestamp))"
+            output += "| \(markdownTableEscape(localizedEventTimestamp(event.timestamp)))"
                 + " | \(markdownTableEscape(event.toolName ?? "Tool"))"
                 + " | \(markdownTableEscape(event.summary))"
                 + " | \(event.completed ? "completed" : "no result in range")"
@@ -733,7 +758,7 @@ public enum ReportGenerator {
                 : ""
         }
         let rows = events.map { event in
-            "<tr><td>\(htmlEscape(event.timestamp))</td>"
+            "<tr><td>\(htmlEscape(localizedEventTimestamp(event.timestamp)))</td>"
                 + "<td>\(htmlEscape(event.toolName ?? "Tool"))</td>"
                 + "<td>\(htmlEscape(event.summary))</td>"
                 + "<td>\(event.completed ? "completed" : "no result in range")</td>"
@@ -741,9 +766,19 @@ public enum ReportGenerator {
         }
         .joined()
         return """
-        <h4>Tool activity audit (\(events.count))</h4>
-        <table><thead><tr><th>Time</th><th>Tool</th><th>Action</th><th>Status</th><th>Result</th></tr></thead><tbody>\(rows)</tbody></table>
+        <details class="tool-audit">
+        <summary>Tool activity audit (\(events.count)) · mở chi tiết</summary>
+        <div class="table-scroll"><table class="tool-table"><colgroup><col style="width:145px"><col style="width:105px"><col style="width:34%"><col style="width:105px"><col></colgroup><thead><tr><th>Time (GMT+7)</th><th>Tool</th><th>Action</th><th>Status</th><th>Result</th></tr></thead><tbody>\(rows)</tbody></table></div>
+        </details>
         """
+    }
+
+    private static func localizedEventTimestamp(_ raw: String) -> String {
+        if let date = eventISOWithFractional.date(from: raw)
+            ?? eventISOPlain.date(from: raw) {
+            return isoLabel.string(from: date)
+        }
+        return raw
     }
 
     private static func reportRange(for scope: ReportScope) -> ClosedRange<Date> {
@@ -835,6 +870,18 @@ public enum ReportGenerator {
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
         f.timeZone = ReportTime.timeZone
         return f
+    }()
+
+    nonisolated(unsafe) private static let eventISOWithFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    nonisolated(unsafe) private static let eventISOPlain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
     }()
 
     // MARK: - Helpers

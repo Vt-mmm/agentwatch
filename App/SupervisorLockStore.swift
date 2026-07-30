@@ -522,7 +522,7 @@ final class SupervisorLockStore {
         }.joined()
         return """
         <h2>Agent Watch activity audit</h2>
-        <table><thead><tr><th>Time</th><th>Event</th><th>Key</th><th>Downtime</th><th>Message</th></tr></thead><tbody>\(rows)</tbody></table>
+        <div class="table-scroll"><table class="wide-table"><thead><tr><th>Time (GMT+7)</th><th>Event</th><th>Key</th><th>Downtime</th><th>Message</th></tr></thead><tbody>\(rows)</tbody></table></div>
         """
     }
 
@@ -542,7 +542,7 @@ final class SupervisorLockStore {
         }.joined()
         return """
         <h2>Agent Watch compliance</h2>
-        <table><thead><tr><th>Severity</th><th>Time</th><th>Source</th><th>Session</th><th>Finding</th><th>Recommendation</th></tr></thead><tbody>\(rows)</tbody></table>
+        <div class="table-scroll"><table class="wide-table risk-table"><thead><tr><th>Severity</th><th>Time (GMT+7)</th><th>Source</th><th>Session</th><th>Finding</th><th>Recommendation</th></tr></thead><tbody>\(rows)</tbody></table></div>
         """
     }
 

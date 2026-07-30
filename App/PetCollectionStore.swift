@@ -171,14 +171,14 @@ final class PetCollectionStore {
         let sessionsToday = newSessions.filter {
             ($0.firstTimestamp ?? Date.distantPast) >= todayStart
         }
-        let cleanSessionsToday = sessionsToday.filter { !outlierIds.contains($0.id) }
+        let cleanSessionsToday = sessionsToday.filter { !outlierIds.contains($0.auditKey) }
         let highStarToday = promptsToday.filter { $0.score.stars >= 4 }
         let taskPromptsToday = promptsToday.filter { $0.score.isTaskPrompt }
         let avgStarsToday: Double = {
             let stars = promptsToday.map { Double($0.score.stars) }
             return stars.isEmpty ? 0 : stars.reduce(0, +) / Double(stars.count)
         }()
-        let outliersToday = sessionsToday.filter { outlierIds.contains($0.id) }
+        let outliersToday = sessionsToday.filter { outlierIds.contains($0.auditKey) }
 
         var bonus = 0
         var ledgerEvents: [XPEvent] = []
@@ -278,8 +278,13 @@ final class PetCollectionStore {
         agentLoopIds: Set<String>
     ) {
         // Lọc records/sessions chưa tính XP
-        let newPrompts = records.filter { !seenPromptIds.contains($0.id) }
-        let newSessions = sessions.filter { !seenSessionIds.contains($0.id) }
+        // Raw-ID fallback keeps pre-source-aware persisted state idempotent.
+        let newPrompts = records.filter {
+            !seenPromptIds.contains($0.auditKey) && !seenPromptIds.contains($0.id)
+        }
+        let newSessions = sessions.filter {
+            !seenSessionIds.contains($0.auditKey) && !seenSessionIds.contains($0.id)
+        }
 
         guard !newPrompts.isEmpty || !newSessions.isEmpty else { return }
 
@@ -310,8 +315,8 @@ final class PetCollectionStore {
             ))
         }
         for s in newSessions {
-            let isOut = outlierIds.contains(s.id)
-            let isLoop = agentLoopIds.contains(s.id)
+            let isOut = outlierIds.contains(s.auditKey)
+            let isLoop = agentLoopIds.contains(s.auditKey)
             let amount = TrainerProgress.xpForSession(isOutlier: isOut, isAgentLoop: isLoop)
             let kind: XPEventKind = amount < 5 ? .penalty : .session
             let badge = isOut ? " (outlier)" : isLoop ? " (agent loop)" : ""
@@ -371,8 +376,8 @@ final class PetCollectionStore {
         }
 
         // Đánh dấu đã seen — insert có bounded eviction để tránh unbounded growth.
-        for p in newPrompts { insertSeenPrompt(p.id) }
-        for s in newSessions { insertSeenSession(s.id) }
+        for p in newPrompts { insertSeenPrompt(p.auditKey) }
+        for s in newSessions { insertSeenSession(s.auditKey) }
         persistSeenIds()
     }
 

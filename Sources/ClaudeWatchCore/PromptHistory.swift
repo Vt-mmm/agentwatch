@@ -39,6 +39,14 @@ public struct PromptRecord: Identifiable, Sendable, Equatable {
         sessionTitle ?? projectDisplay
     }
 
+    public var auditKey: String {
+        "\(source.rawValue)|\(id)"
+    }
+
+    public var sessionAuditKey: String {
+        "\(source.rawValue)|\(sessionUuid)"
+    }
+
     public func withSessionTitle(_ title: String?) -> PromptRecord {
         PromptRecord(
             id: id,
@@ -274,9 +282,6 @@ public enum PromptHistory {
 
     /// Tuần bắt đầu thứ Hai, locale Việt Nam.
     public static let currentMondayBased: Calendar = {
-        var cal = Calendar(identifier: .iso8601)
-        cal.timeZone = .current
-        cal.firstWeekday = 2 // Monday
-        return cal
+        ReportTime.mondayBasedCalendar
     }()
 }

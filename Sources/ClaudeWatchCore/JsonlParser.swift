@@ -8,7 +8,9 @@ public enum JsonlParser {
     /// Parse one JSONL transcript into a SessionStats.
     /// Malformed lines are skipped (Claude Code can write partial lines while
     /// a session is in flight — never abort the whole parse on one bad line).
-    public static func parseSession(at url: URL) -> SessionStats {
+    public static func parseSession(at url: URL,
+                                    range: ClosedRange<Date>? = nil,
+                                    eventLimit: Int? = SessionStats.eventWindowSize) -> SessionStats {
         var stats = SessionStats(
             sessionId: url.deletingPathExtension().lastPathComponent,
             projectSlug: url.deletingLastPathComponent().lastPathComponent,
@@ -52,7 +54,8 @@ public enum JsonlParser {
                         applyLine(lineData, to: &stats,
                                   pendingAgents: &pendingAgentIds,
                                   pendingTools: &pendingToolUseIds,
-                                  counter: &eventCounter)
+                                  counter: &eventCounter,
+                                  range: range)
                     }
                     buffer.removeSubrange(buffer.startIndex...nlRange.lowerBound)
                 }
@@ -64,12 +67,14 @@ public enum JsonlParser {
             applyLine(buffer, to: &stats,
                       pendingAgents: &pendingAgentIds,
                       pendingTools: &pendingToolUseIds,
-                      counter: &eventCounter)
+                      counter: &eventCounter,
+                      range: range)
         }
 
-        // Cap events to window size (keep most recent).
-        if stats.events.count > SessionStats.eventWindowSize {
-            stats.events = Array(stats.events.suffix(SessionStats.eventWindowSize))
+        // Interactive detail uses a bounded window. Export passes nil to retain
+        // every tool action in the selected report range.
+        if let eventLimit, stats.events.count > eventLimit {
+            stats.events = Array(stats.events.suffix(max(0, eventLimit)))
         }
         return stats
     }
@@ -86,7 +91,8 @@ public enum JsonlParser {
                                   to stats: inout SessionStats,
                                   pendingAgents: inout Set<String>,
                                   pendingTools: inout [String: Int],
-                                  counter: inout Int) {
+                                  counter: inout Int,
+                                  range: ClosedRange<Date>?) {
         guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return
         }
@@ -95,19 +101,27 @@ public enum JsonlParser {
         // CLI dùng "timestamp"; Desktop audit JSONL dùng "_audit_timestamp".
         let ts = (raw["timestamp"] as? String)
             ?? (raw["_audit_timestamp"] as? String) ?? ""
-        if !ts.isEmpty {
+        let timestamp = parseISO(ts)
+        let belongsToRange = range == nil
+            || timestamp.map { range!.contains($0) } == true
+        let visibleAtRangeEnd = range == nil
+            || timestamp.map { $0 <= range!.upperBound } == true
+        if !ts.isEmpty, belongsToRange {
             if stats.startedAt.isEmpty { stats.startedAt = ts }
             stats.lastEventAt = ts
         }
 
         guard let msg = raw["message"] as? [String: Any] else { return }
+        if visibleAtRangeEnd,
+           stats.model.isEmpty,
+           let model = msg["model"] as? String {
+            stats.model = model
+        }
+        guard belongsToRange else { return }
 
         switch type {
         case "assistant":
             stats.messageCount += 1
-            if stats.model.isEmpty, let model = msg["model"] as? String {
-                stats.model = model
-            }
             if let usage = msg["usage"] as? [String: Any] {
                 stats.inputTokens      += intValue(usage["input_tokens"])
                 stats.outputTokens     += intValue(usage["output_tokens"])
@@ -123,10 +137,26 @@ public enum JsonlParser {
 
         case "user":
             if let content = msg["content"] as? [[String: Any]] {
+                if content.contains(where: {
+                    ($0["type"] as? String) == "text"
+                        && !(($0["text"] as? String) ?? "").isEmpty
+                }) {
+                    stats.promptCount += 1
+                }
                 applyUserContent(content, to: &stats,
                                   pendingAgents: &pendingAgents,
                                   pendingTools: &pendingTools,
                                   counter: &counter, timestamp: ts)
+            } else if let text = msg["content"] as? String,
+                      !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                stats.promptCount += 1
+                counter += 1
+                stats.events.append(SessionEvent(
+                    id: "user-\(counter)",
+                    timestamp: ts,
+                    kind: .userMessage,
+                    summary: String(text.prefix(160))
+                ))
             }
 
         default:
@@ -384,4 +414,22 @@ public enum JsonlParser {
         if let n = raw as? NSNumber { return n.intValue }
         return 0
     }
+
+    private static func parseISO(_ raw: String) -> Date? {
+        guard !raw.isEmpty else { return nil }
+        if let date = isoFractional.date(from: raw) { return date }
+        return isoPlain.date(from: raw)
+    }
+
+    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    nonisolated(unsafe) private static let isoPlain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 }

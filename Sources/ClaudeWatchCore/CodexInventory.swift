@@ -32,24 +32,30 @@ public enum CodexInventory {
 
 public enum CodexJsonlParser {
     public static func summarize(file: URL, range: ClosedRange<Date>) -> SessionSummary? {
-        let parsed = parse(file: file, includeEvents: false)
-        guard let first = parsed.firstTimestamp,
-              let last = parsed.lastTimestamp,
-              last >= range.lowerBound,
-              first <= range.upperBound else {
+        let parsed = parse(file: file, includeEvents: false, range: range)
+        guard parsed.firstTimestamp != nil,
+              parsed.lastTimestamp != nil else {
             return nil
         }
 
         let family: ModelFamily = parsed.model.lowercased() == "openai"
             ? .gpt
             : ModelFamily.from(modelId: parsed.model)
-        let cost = Pricing.cost(
-            family: family,
-            inputTokens: parsed.inputTokens,
-            outputTokens: parsed.outputTokens + parsed.reasoningTokens,
-            cacheReadTokens: parsed.cacheReadTokens,
-            cacheWriteTokens: parsed.cacheWriteTokens
-        )
+        let quote = Pricing.quote(forModelId: parsed.model)
+        let cost = quote.map {
+            Pricing.cost(
+                quote: $0,
+                inputTokens: max(0, parsed.inputTokens - parsed.cacheReadTokens),
+                outputTokens: parsed.outputTokens,
+                cacheReadTokens: parsed.cacheReadTokens,
+                cacheWriteTokens: parsed.cacheWriteTokens
+            )
+        } ?? 0
+        let costBasis: UsageCostBasis = quote == nil ? .unavailable : .estimated
+        var warnings = parsed.dataWarnings
+        if quote == nil {
+            warnings.append("No versioned price quote for model '\(parsed.model)'; cost is unavailable.")
+        }
 
         return SessionSummary(
             id: parsed.sessionId,
@@ -62,19 +68,27 @@ public enum CodexJsonlParser {
             reasoningTokens: parsed.reasoningTokens,
             cacheReadTokens: parsed.cacheReadTokens,
             cacheWriteTokens: parsed.cacheWriteTokens,
-            cost: cost,
+            cost: costBasis == .unavailable ? 0 : cost,
             firstTimestamp: parsed.firstTimestamp,
             lastTimestamp: parsed.lastTimestamp,
             promptCount: parsed.promptCount,
             toolCallCount: parsed.toolCalls,
             fileURL: file,
             agentCount: parsed.isSubagent ? 1 : 0,
-            thinkingLevel: parsed.thinkingLevel
+            thinkingLevel: parsed.thinkingLevel,
+            tokenAccountingRule: .inclusiveBreakdowns,
+            costBasis: costBasis,
+            usageScope: parsed.usageScope,
+            dataWarnings: warnings
         )
     }
 
-    public static func parseSession(at file: URL) -> SessionStats {
-        let parsed = parse(file: file, includeEvents: true)
+    public static func parseSession(
+        at file: URL,
+        range: ClosedRange<Date>? = nil,
+        eventLimit: Int? = SessionStats.eventWindowSize
+    ) -> SessionStats {
+        let parsed = parse(file: file, includeEvents: true, range: range)
         var stats = SessionStats(
             sessionId: parsed.sessionId,
             projectSlug: parsed.projectDisplay,
@@ -85,24 +99,26 @@ public enum CodexJsonlParser {
         stats.startedAt = parsed.firstTimestampString
         stats.lastEventAt = parsed.lastTimestampString
         stats.messageCount = parsed.messageCount
+        stats.promptCount = parsed.promptCount
         stats.inputTokens = parsed.inputTokens
         stats.outputTokens = parsed.outputTokens
         stats.reasoningTokens = parsed.reasoningTokens
         stats.cacheReadTokens = parsed.cacheReadTokens
         stats.cacheWriteTokens = parsed.cacheWriteTokens
         stats.toolCalls = parsed.toolCalls
+        stats.tokenAccountingRule = .inclusiveBreakdowns
         stats.events = parsed.events
-        if stats.events.count > SessionStats.eventWindowSize {
-            stats.events = Array(stats.events.suffix(SessionStats.eventWindowSize))
+        if let eventLimit, stats.events.count > eventLimit {
+            stats.events = Array(stats.events.suffix(max(0, eventLimit)))
         }
         return stats
     }
 
     public static func extractPrompts(from file: URL,
                                       range: ClosedRange<Date>) -> [PromptRecord] {
-        let parsed = parse(file: file, includeEvents: false)
+        let parsed = parse(file: file, includeEvents: false, range: range)
         guard !parsed.isSubagent else { return [] }
-        return parsed.prompts.filter { range.contains($0.timestamp) }
+        return parsed.prompts
     }
 
     private struct Parsed {
@@ -125,9 +141,22 @@ public enum CodexJsonlParser {
         var toolCalls: Int
         var events: [SessionEvent]
         var prompts: [PromptRecord]
+        var usageScope: UsageScopePrecision
+        var dataWarnings: [String]
     }
 
-    private static func parse(file: URL, includeEvents: Bool) -> Parsed {
+    private struct UsageCheckpoint {
+        let timestamp: Date
+        let input: Int
+        let output: Int
+        let reasoning: Int
+        let cacheRead: Int
+        let cacheWrite: Int
+    }
+
+    private static func parse(file: URL,
+                              includeEvents: Bool,
+                              range: ClosedRange<Date>? = nil) -> Parsed {
         let fallbackId = file.deletingPathExtension().lastPathComponent
         var sessionId = fallbackId
         var cwd = "(unknown)"
@@ -137,16 +166,13 @@ public enum CodexJsonlParser {
         var isSubagent = false
         var firstTimestamp: Date?
         var lastTimestamp: Date?
+        var fullFirstTimestamp: Date?
         var firstTimestampString = ""
         var lastTimestampString = ""
         var messageCount = 0
         var promptCount = 0
         var toolCalls = 0
-        var inputTokens = 0
-        var outputTokens = 0
-        var reasoningTokens = 0
-        var cacheReadTokens = 0
-        var cacheWriteTokens = 0
+        var usageCheckpoints: [UsageCheckpoint] = []
         var events: [SessionEvent] = []
         var prompts: [PromptRecord] = []
         var pendingTools: [String: Int] = [:]
@@ -161,7 +187,17 @@ public enum CodexJsonlParser {
             }
 
             let tsString = obj["timestamp"] as? String ?? ""
-            if let ts = parseISO(tsString) {
+            let timestamp = parseISO(tsString)
+            if let ts = timestamp {
+                if fullFirstTimestamp == nil || ts < fullFirstTimestamp! {
+                    fullFirstTimestamp = ts
+                }
+            }
+            let belongsToRange = range == nil
+                || timestamp.map { range!.contains($0) } == true
+            let visibleAtRangeEnd = range == nil
+                || timestamp.map { $0 <= range!.upperBound } == true
+            if let ts = timestamp, belongsToRange {
                 if firstTimestamp == nil || ts < firstTimestamp! {
                     firstTimestamp = ts
                     firstTimestampString = tsString
@@ -171,6 +207,7 @@ public enum CodexJsonlParser {
                     lastTimestampString = tsString
                 }
             }
+            guard visibleAtRangeEnd else { return }
 
             let kind = obj["type"] as? String
             let payload = obj["payload"] as? [String: Any] ?? [:]
@@ -194,38 +231,41 @@ public enum CodexJsonlParser {
                 }
 
             case "event_msg":
-                applyEventMessage(
-                    payload,
-                    timestamp: tsString,
-                    timestampDate: parseISO(tsString),
-                    file: file,
-                    sessionId: sessionId,
-                    cwd: cwd,
-                    lineIndex: lineIndex,
-                    isSubagent: isSubagent,
-                    includeEvents: includeEvents,
-                    promptCount: &promptCount,
-                    inputTokens: &inputTokens,
-                    outputTokens: &outputTokens,
-                    reasoningTokens: &reasoningTokens,
-                    cacheReadTokens: &cacheReadTokens,
-                    cacheWriteTokens: &cacheWriteTokens,
-                    events: &events,
-                    prompts: &prompts,
-                    promptDedupe: &promptDedupe,
-                    eventCounter: &eventCounter
-                )
+                if payload["type"] as? String == "token_count",
+                   let timestamp,
+                   let checkpoint = usageCheckpoint(payload: payload, timestamp: timestamp) {
+                    usageCheckpoints.append(checkpoint)
+                } else {
+                    applyEventMessage(
+                        payload,
+                        timestamp: tsString,
+                        timestampDate: timestamp,
+                        file: file,
+                        sessionId: sessionId,
+                        cwd: cwd,
+                        lineIndex: lineIndex,
+                        isSubagent: isSubagent,
+                        capture: belongsToRange,
+                        includeEvents: includeEvents,
+                        promptCount: &promptCount,
+                        events: &events,
+                        prompts: &prompts,
+                        promptDedupe: &promptDedupe,
+                        eventCounter: &eventCounter
+                    )
+                }
 
             case "response_item":
                 applyResponseItem(
                     payload,
                     timestamp: tsString,
-                    timestampDate: parseISO(tsString),
+                    timestampDate: timestamp,
                     file: file,
                     sessionId: sessionId,
                     cwd: cwd,
                     lineIndex: lineIndex,
                     isSubagent: isSubagent,
+                    capture: belongsToRange,
                     includeEvents: includeEvents,
                     promptCount: &promptCount,
                     messageCount: &messageCount,
@@ -242,6 +282,12 @@ public enum CodexJsonlParser {
             }
         }
 
+        let scopedUsage = usage(
+            from: usageCheckpoints,
+            range: range,
+            fullFirstTimestamp: fullFirstTimestamp
+        )
+
         return Parsed(
             sessionId: sessionId,
             projectDisplay: cwd,
@@ -253,15 +299,17 @@ public enum CodexJsonlParser {
             firstTimestampString: firstTimestampString,
             lastTimestampString: lastTimestampString,
             messageCount: messageCount,
-            inputTokens: inputTokens,
-            outputTokens: outputTokens,
-            reasoningTokens: reasoningTokens,
-            cacheReadTokens: cacheReadTokens,
-            cacheWriteTokens: cacheWriteTokens,
+            inputTokens: scopedUsage.input,
+            outputTokens: scopedUsage.output,
+            reasoningTokens: scopedUsage.reasoning,
+            cacheReadTokens: scopedUsage.cacheRead,
+            cacheWriteTokens: scopedUsage.cacheWrite,
             promptCount: promptCount,
             toolCalls: toolCalls,
             events: events,
-            prompts: prompts
+            prompts: prompts,
+            usageScope: scopedUsage.precision,
+            dataWarnings: scopedUsage.warning.map { [$0] } ?? []
         )
     }
 
@@ -273,13 +321,9 @@ public enum CodexJsonlParser {
                                           cwd: String,
                                           lineIndex: Int,
                                           isSubagent: Bool,
+                                          capture: Bool,
                                           includeEvents: Bool,
                                           promptCount: inout Int,
-                                          inputTokens: inout Int,
-                                          outputTokens: inout Int,
-                                          reasoningTokens: inout Int,
-                                          cacheReadTokens: inout Int,
-                                          cacheWriteTokens: inout Int,
                                           events: inout [SessionEvent],
                                           prompts: inout [PromptRecord],
                                           promptDedupe: inout PromptDedupeState,
@@ -296,7 +340,8 @@ public enum CodexJsonlParser {
                 cwd: cwd,
                 lineIndex: lineIndex,
                 isSubagent: isSubagent,
-                includeEvents: includeEvents,
+                capture: capture,
+                includeEvents: includeEvents && capture,
                 promptCount: &promptCount,
                 events: &events,
                 prompts: &prompts,
@@ -305,7 +350,7 @@ public enum CodexJsonlParser {
             )
 
         case "agent_message":
-            guard includeEvents else { return }
+            guard capture, includeEvents else { return }
             let text = promptText(from: payload)
             guard !text.isEmpty else { return }
             eventCounter += 1
@@ -315,19 +360,6 @@ public enum CodexJsonlParser {
                 kind: .assistantText,
                 summary: short(text, max: 160)
             ))
-
-        case "token_count":
-            if let info = payload["info"] as? [String: Any],
-               let total = info["total_token_usage"] as? [String: Any] {
-                inputTokens = max(inputTokens, intValue(total["input_tokens"]))
-                outputTokens = max(outputTokens, intValue(total["output_tokens"]))
-                reasoningTokens = max(reasoningTokens, intValue(total["reasoning_output_tokens"]))
-                cacheReadTokens = max(cacheReadTokens, intValue(total["cached_input_tokens"]))
-                cacheWriteTokens = max(
-                    cacheWriteTokens,
-                    intValue(total["cache_write_input_tokens"])
-                )
-            }
 
         default:
             break
@@ -342,6 +374,7 @@ public enum CodexJsonlParser {
                                           cwd: String,
                                           lineIndex: Int,
                                           isSubagent: Bool,
+                                          capture: Bool,
                                           includeEvents: Bool,
                                           promptCount: inout Int,
                                           messageCount: inout Int,
@@ -365,7 +398,8 @@ public enum CodexJsonlParser {
                     cwd: cwd,
                     lineIndex: lineIndex,
                     isSubagent: isSubagent,
-                    includeEvents: includeEvents,
+                    capture: capture,
+                    includeEvents: includeEvents && capture,
                     promptCount: &promptCount,
                     events: &events,
                     prompts: &prompts,
@@ -373,6 +407,7 @@ public enum CodexJsonlParser {
                     eventCounter: &eventCounter
                 )
             } else if role == "assistant" {
+                guard capture else { return }
                 messageCount += 1
                 guard includeEvents, !text.isEmpty else { return }
                 eventCounter += 1
@@ -385,7 +420,7 @@ public enum CodexJsonlParser {
             }
 
         case "reasoning":
-            guard includeEvents else { return }
+            guard capture, includeEvents else { return }
             eventCounter += 1
             events.append(SessionEvent(
                 id: "codex-think-\(eventCounter)",
@@ -395,6 +430,7 @@ public enum CodexJsonlParser {
             ))
 
         case "function_call", "custom_tool_call":
+            guard capture else { return }
             toolCalls += 1
             guard includeEvents else { return }
             let id = payload["call_id"] as? String
@@ -414,7 +450,7 @@ public enum CodexJsonlParser {
             pendingTools[id] = events.count - 1
 
         case "function_call_output", "custom_tool_call_output":
-            guard includeEvents,
+            guard capture, includeEvents,
                   let id = payload["call_id"] as? String ?? payload["id"] as? String,
                   let idx = pendingTools[id] else { return }
             events[idx].completed = true
@@ -435,6 +471,7 @@ public enum CodexJsonlParser {
                                          cwd: String,
                                          lineIndex: Int,
                                          isSubagent: Bool,
+                                         capture: Bool,
                                          includeEvents: Bool,
                                          promptCount: inout Int,
                                          events: inout [SessionEvent],
@@ -451,6 +488,7 @@ public enum CodexJsonlParser {
         ) else {
             return
         }
+        guard capture else { return }
         promptCount += 1
         if includeEvents {
             eventCounter += 1
@@ -476,6 +514,90 @@ public enum CodexJsonlParser {
             score: PromptScorer.score(text),
             source: .codex
         ))
+    }
+
+    private static func usageCheckpoint(payload: [String: Any],
+                                        timestamp: Date) -> UsageCheckpoint? {
+        guard let info = payload["info"] as? [String: Any],
+              let total = info["total_token_usage"] as? [String: Any] else {
+            return nil
+        }
+        return UsageCheckpoint(
+            timestamp: timestamp,
+            input: intValue(total["input_tokens"]),
+            output: intValue(total["output_tokens"]),
+            reasoning: intValue(total["reasoning_output_tokens"]),
+            cacheRead: intValue(total["cached_input_tokens"]),
+            cacheWrite: intValue(total["cache_write_input_tokens"])
+        )
+    }
+
+    private static func usage(
+        from checkpoints: [UsageCheckpoint],
+        range: ClosedRange<Date>?,
+        fullFirstTimestamp: Date?
+    ) -> (
+        input: Int,
+        output: Int,
+        reasoning: Int,
+        cacheRead: Int,
+        cacheWrite: Int,
+        precision: UsageScopePrecision,
+        warning: String?
+    ) {
+        let ordered = checkpoints.sorted { $0.timestamp < $1.timestamp }
+        guard let range else {
+            guard let last = ordered.last else {
+                return (0, 0, 0, 0, 0, .wholeSession, nil)
+            }
+            return (
+                last.input, last.output, last.reasoning,
+                last.cacheRead, last.cacheWrite,
+                .wholeSession, nil
+            )
+        }
+
+        guard let ending = ordered.last(where: { $0.timestamp <= range.upperBound }) else {
+            return (
+                0, 0, 0, 0, 0, .partialRange,
+                "Codex log has no usage checkpoint at or before the selected range end."
+            )
+        }
+        guard ending.timestamp >= range.lowerBound else {
+            return (0, 0, 0, 0, 0, .exactRange, nil)
+        }
+
+        let baseline = ordered.last(where: { $0.timestamp < range.lowerBound })
+        let sessionStartedInsideRange = fullFirstTimestamp.map {
+            $0 >= range.lowerBound
+        } ?? false
+
+        if let baseline {
+            return (
+                max(0, ending.input - baseline.input),
+                max(0, ending.output - baseline.output),
+                max(0, ending.reasoning - baseline.reasoning),
+                max(0, ending.cacheRead - baseline.cacheRead),
+                max(0, ending.cacheWrite - baseline.cacheWrite),
+                .exactRange,
+                nil
+            )
+        }
+
+        if sessionStartedInsideRange {
+            return (
+                ending.input, ending.output, ending.reasoning,
+                ending.cacheRead, ending.cacheWrite,
+                .exactRange, nil
+            )
+        }
+
+        return (
+            ending.input, ending.output, ending.reasoning,
+            ending.cacheRead, ending.cacheWrite,
+            .partialRange,
+            "Codex cumulative usage has no checkpoint before the selected range; values may include earlier activity."
+        )
     }
 
     private struct PromptDedupeState {

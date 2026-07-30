@@ -16,21 +16,19 @@ struct SupervisorLockView: View {
         .padding(20)
         .frame(width: 460)
         .background(Claude.background)
-        .interactiveDismissDisabled(!lock.isLocked)
+        .interactiveDismissDisabled(lock.requiresStartupKey || !lock.isLocked)
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: lock.isLocked ? "lock.fill" : "lock.open.fill")
+            Image(systemName: lock.requiresStartupKey ? "key.fill" : (lock.isLocked ? "lock.fill" : "lock.open.fill"))
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(lock.isLocked ? Claude.orange : Claude.textMuted)
+                .foregroundStyle(lock.requiresStartupKey || lock.isLocked ? Claude.orange : Claude.textMuted)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Supervisor Lock")
                     .font(ClaudeFont.heading(18))
                     .foregroundStyle(Claude.textPrimary)
-                Text(lock.isLocked
-                     ? "Nhập unlock pass để tắt lock hoặc quit app."
-                     : "Nhập enrollment key được cấp cho máy này để bật lock.")
+                Text(headerDetail)
                     .font(ClaudeFont.body(11))
                     .foregroundStyle(Claude.textMuted)
             }
@@ -41,16 +39,14 @@ struct SupervisorLockView: View {
     private var statusCard: some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(lock.isLocked ? Claude.orange : Claude.done)
+                .fill(lock.requiresStartupKey || lock.isLocked ? Claude.orange : Claude.done)
                 .frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 2) {
                 Text(lock.statusLine)
                     .font(ClaudeFont.body(13))
                     .fontWeight(.semibold)
                     .foregroundStyle(Claude.textPrimary)
-                Text(lock.isLocked
-                     ? "Quit/Cmd+Q yêu cầu unlock pass riêng. Force quit sẽ bị ghi nhận theo heartbeat."
-                     : "App cần được enroll trước; bấm quit khi chưa enroll sẽ bị chặn và ghi audit.")
+                Text(statusDetail)
                     .font(ClaudeFont.body(11))
                     .foregroundStyle(Claude.textMuted)
             }
@@ -63,8 +59,8 @@ struct SupervisorLockView: View {
 
     private var secretInput: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionLabel(text: lock.isLocked ? "Unlock pass" : "Enrollment key")
-            SecureField(lock.isLocked ? "Unlock pass" : "AW-LOCK-XXXX-XXXX-XXXX", text: $secret)
+            SectionLabel(text: secretLabel)
+            SecureField(secretPlaceholder, text: $secret)
                 .textFieldStyle(.roundedBorder)
             if !message.isEmpty {
                 Text(message)
@@ -76,7 +72,21 @@ struct SupervisorLockView: View {
 
     private var actionRow: some View {
         HStack {
-            if lock.isLocked {
+            if lock.requiresStartupKey {
+                Button {
+                    if lock.verifyAppOpen(with: secret) {
+                        message = "OK - Đã ghi nhận thời gian mở app."
+                        secret = ""
+                        dismiss()
+                    } else {
+                        message = "Enrollment key không hợp lệ cho máy này."
+                    }
+                } label: {
+                    Label("Ghi nhận mở app", systemImage: "key.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Claude.orange)
+            } else if lock.isLocked {
                 Button {
                     if lock.disableLock(withUnlockPass: secret) {
                         message = "OK - Lock đã tắt. Nhập enrollment key để khóa lại."
@@ -118,5 +128,31 @@ struct SupervisorLockView: View {
                     .buttonStyle(.borderless)
             }
         }
+    }
+
+    private var headerDetail: String {
+        if lock.requiresStartupKey {
+            return "Nhập enrollment key để ghi log mở app và bắt đầu ngày làm việc."
+        }
+        return lock.isLocked
+            ? "Nhập unlock pass để tắt lock hoặc quit app."
+            : "Nhập enrollment key được cấp cho máy này để bật lock."
+    }
+
+    private var statusDetail: String {
+        if lock.requiresStartupKey {
+            return "Heartbeat chỉ được tính là hợp lệ sau khi nhập key. Quit/Cmd+Q vẫn bị chặn."
+        }
+        return lock.isLocked
+            ? "Quit/Cmd+Q yêu cầu unlock pass riêng. Force quit sẽ bị ghi nhận theo heartbeat."
+            : "App cần được enroll trước; bấm quit khi chưa enroll sẽ bị chặn và ghi audit."
+    }
+
+    private var secretLabel: String {
+        lock.requiresStartupKey || !lock.isLocked ? "Enrollment key" : "Unlock pass"
+    }
+
+    private var secretPlaceholder: String {
+        lock.requiresStartupKey || !lock.isLocked ? "AW-LOCK-XXXX-XXXX-XXXX" : "Unlock pass"
     }
 }

@@ -5,12 +5,82 @@
 
 import Foundation
 
+public enum TokenAccountingRule: String, Sendable, Codable, Equatable {
+    /// Claude and Pi report uncached input, cache reads/writes, and output as
+    /// additive buckets. Reasoning is a breakdown of output, not an extra bucket.
+    case additiveCacheBuckets
+    /// Codex/OpenAI report cached input inside input and reasoning inside output.
+    case inclusiveBreakdowns
+
+    public var label: String {
+        switch self {
+        case .additiveCacheBuckets:
+            return "input + output + cache read + cache write"
+        case .inclusiveBreakdowns:
+            return "input + output (cache/reasoning are included)"
+        }
+    }
+}
+
+public enum UsageCostBasis: String, Sendable, Codable, Equatable {
+    /// Cost persisted by the agent/provider in the source log.
+    case reported
+    /// Cost reconstructed from observed tokens and Agent Watch's price table.
+    case estimated
+    /// The source did not expose cost and no trustworthy estimate was available.
+    case unavailable
+
+    public var label: String {
+        switch self {
+        case .reported:    return "reported by source"
+        case .estimated:   return "estimated"
+        case .unavailable: return "unavailable"
+        }
+    }
+}
+
+public enum UsageScopePrecision: String, Sendable, Codable, Equatable {
+    /// Every counted prompt/tool/usage event falls inside the selected report range.
+    case exactRange
+    /// The source only exposed a cumulative checkpoint without a pre-range baseline.
+    case partialRange
+    /// A live/full-session snapshot; must not be presented as period-exact.
+    case wholeSession
+
+    public var label: String {
+        switch self {
+        case .exactRange:   return "exact selected range"
+        case .partialRange: return "partial selected range"
+        case .wholeSession: return "whole session"
+        }
+    }
+}
+
+public struct SessionTitleChange: Identifiable, Sendable, Equatable {
+    public let timestamp: Date?
+    public let timestampString: String
+    public let title: String
+
+    public init(timestamp: Date?, timestampString: String, title: String) {
+        self.timestamp = timestamp
+        self.timestampString = timestampString
+        self.title = title
+    }
+
+    public var id: String {
+        "\(timestampString)|\(title)"
+    }
+}
+
 /// Snapshot 1 session để hiển thị trong dashboard.
 public struct SessionSummary: Identifiable, Sendable, Equatable {
     public let id: String                  // session uuid
     /// Human task/session title set by the operator inside the agent UI.
     /// For PiAgent this is the canonical task axis used by Agent Watch reports.
     public let sessionTitle: String?
+    /// Ordered PiAgent session-title changes captured from `session_info`.
+    /// Empty for sources that do not expose a rename timeline.
+    public let titleHistory: [SessionTitleChange]
     public let projectDisplay: String
     public let source: SessionSource
     public let model: String
@@ -32,8 +102,17 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
     public let agentCount: Int
     /// Agent thinking/reasoning mode when the source exposes it.
     public let thinkingLevel: String?
+    /// Defines which usage buckets are additive for this source.
+    public let tokenAccountingRule: TokenAccountingRule
+    /// Distinguishes provider-reported cost from an Agent Watch estimate.
+    public let costBasis: UsageCostBasis
+    /// States whether the numbers are exact for the selected report period.
+    public let usageScope: UsageScopePrecision
+    /// Human-readable data-quality caveats carried into reports.
+    public let dataWarnings: [String]
 
     public init(id: String, sessionTitle: String? = nil,
+                titleHistory: [SessionTitleChange] = [],
                 projectDisplay: String, source: SessionSource,
                 model: String, modelFamily: ModelFamily,
                 inputTokens: Int, outputTokens: Int, reasoningTokens: Int = 0,
@@ -43,9 +122,21 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
                 promptCount: Int, toolCallCount: Int,
                 fileURL: URL? = nil,
                 agentCount: Int = 0,
-                thinkingLevel: String? = nil) {
+                thinkingLevel: String? = nil,
+                tokenAccountingRule: TokenAccountingRule? = nil,
+                costBasis: UsageCostBasis = .estimated,
+                usageScope: UsageScopePrecision = .wholeSession,
+                dataWarnings: [String] = []) {
         self.id = id
         self.sessionTitle = Self.cleanTitle(sessionTitle)
+        self.titleHistory = titleHistory.compactMap { change in
+            guard let clean = Self.cleanTitle(change.title) else { return nil }
+            return SessionTitleChange(
+                timestamp: change.timestamp,
+                timestampString: change.timestampString,
+                title: clean
+            )
+        }
         self.projectDisplay = projectDisplay; self.source = source
         self.model = model; self.modelFamily = modelFamily
         self.inputTokens = inputTokens; self.outputTokens = outputTokens
@@ -57,14 +148,29 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
         self.fileURL = fileURL
         self.agentCount = agentCount
         self.thinkingLevel = Self.cleanTitle(thinkingLevel)
+        self.tokenAccountingRule = tokenAccountingRule
+            ?? (source == .codex ? .inclusiveBreakdowns : .additiveCacheBuckets)
+        self.costBasis = costBasis
+        self.usageScope = usageScope
+        self.dataWarnings = dataWarnings
     }
 
     public var totalTokens: Int {
-        inputTokens + outputTokens + reasoningTokens + cacheReadTokens + cacheWriteTokens
+        switch tokenAccountingRule {
+        case .additiveCacheBuckets:
+            return inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+        case .inclusiveBreakdowns:
+            return inputTokens + outputTokens
+        }
     }
 
     public var displayTitle: String {
         sessionTitle ?? projectDisplay
+    }
+
+    /// Stable cross-agent identity for audit, risk and report joins.
+    public var auditKey: String {
+        "\(source.rawValue)|\(id)"
     }
 
     public var hasTaskSessionTitle: Bool {
@@ -72,11 +178,39 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
         return !Self.isGenericTaskTitle(sessionTitle)
     }
 
-    /// Cache hit rate = cacheRead / (input + cacheRead). High ratio = healthy
-    /// reuse, low = agent restart inefficiency (re-Read cùng file nhiều lần).
+    public var titleChangeCount: Int {
+        titleHistory.count
+    }
+
+    public var firstTitleSetAt: Date? {
+        titleHistory.compactMap(\.timestamp).first
+    }
+
+    public var lastTitleSetAt: Date? {
+        titleHistory.compactMap(\.timestamp).last
+    }
+
+    /// Cache hit rate follows the source schema:
+    /// - Claude/Pi: cacheRead is a separate input bucket.
+    /// - Codex: cached input is already included in input.
     public var cacheHitRate: Double {
-        let denom = inputTokens + cacheReadTokens
+        let denom: Int
+        switch tokenAccountingRule {
+        case .additiveCacheBuckets:
+            denom = inputTokens + cacheReadTokens
+        case .inclusiveBreakdowns:
+            denom = inputTokens
+        }
         return denom > 0 ? Double(cacheReadTokens) / Double(denom) : 0
+    }
+
+    public var cacheHitRateFormula: String {
+        switch tokenAccountingRule {
+        case .additiveCacheBuckets:
+            return "cache read / (input + cache read)"
+        case .inclusiveBreakdowns:
+            return "cached input / input"
+        }
     }
 
     /// Cost trung bình mỗi user prompt — dùng để detect outlier khi 1 prompt
@@ -109,6 +243,9 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
 public struct InventoryAggregate: Sendable, Equatable {
     public let sessionCount: Int
     public let totalCost: Double
+    public let reportedCost: Double
+    public let estimatedCost: Double
+    public let unavailableCostSessionCount: Int
     public let totalTokens: Int
     public let inputTokens: Int
     public let outputTokens: Int
@@ -118,7 +255,8 @@ public struct InventoryAggregate: Sendable, Equatable {
     public let totalToolCalls: Int
 
     public static let zero = InventoryAggregate(
-        sessionCount: 0, totalCost: 0, totalTokens: 0,
+        sessionCount: 0, totalCost: 0, reportedCost: 0, estimatedCost: 0,
+        unavailableCostSessionCount: 0, totalTokens: 0,
         inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheReadTokens: 0,
         cacheWriteTokens: 0, totalToolCalls: 0)
 }
@@ -150,6 +288,10 @@ public enum SessionInventory {
     public static func aggregate(_ sessions: [SessionSummary]) -> InventoryAggregate {
         var agg = InventoryAggregate.zero
         var input = 0, output = 0, reasoning = 0, cr = 0, cw = 0, tools = 0, cost = 0.0
+        var reportedCost = 0.0
+        var estimatedCost = 0.0
+        var unavailableCostSessionCount = 0
+        var totalTokens = 0
         for s in sessions {
             input  += s.inputTokens
             output += s.outputTokens
@@ -158,11 +300,23 @@ public enum SessionInventory {
             cw     += s.cacheWriteTokens
             tools  += s.toolCallCount
             cost   += s.cost
+            totalTokens += s.totalTokens
+            switch s.costBasis {
+            case .reported:
+                reportedCost += s.cost
+            case .estimated:
+                estimatedCost += s.cost
+            case .unavailable:
+                unavailableCostSessionCount += 1
+            }
         }
         agg = InventoryAggregate(
             sessionCount: sessions.count,
             totalCost: cost,
-            totalTokens: input + output + reasoning + cr + cw,
+            reportedCost: reportedCost,
+            estimatedCost: estimatedCost,
+            unavailableCostSessionCount: unavailableCostSessionCount,
+            totalTokens: totalTokens,
             inputTokens: input, outputTokens: output, reasoningTokens: reasoning,
             cacheReadTokens: cr, cacheWriteTokens: cw,
             totalToolCalls: tools
@@ -233,18 +387,11 @@ public enum SessionInventory {
     private static func summarize(file: URL, slug: String, display: String,
                                   source: SessionSource,
                                   range: ClosedRange<Date>) -> SessionSummary? {
-        let stats = JsonlParser.parseSession(at: file)
-        // Check: session có chạm range không? Dùng lastEventAt + startedAt;
-        // fallback file mtime nếu parse fail (e.g. Desktop audit format).
-        let mtime = ProjectPath.mtime(of: file)
-        let firstTs = parseISO(stats.startedAt) ?? mtime
-        let lastTs = parseISO(stats.lastEventAt) ?? mtime
-        guard lastTs >= range.lowerBound, firstTs <= range.upperBound else {
+        let stats = JsonlParser.parseSession(at: file, range: range)
+        guard let firstTs = parseISO(stats.startedAt),
+              let lastTs = parseISO(stats.lastEventAt) else {
             return nil
         }
-
-        // Đếm user prompt từ events (events đã bị cap 80 — fallback: 0 if not visible).
-        let promptCount = stats.events.filter { $0.kind == .userMessage }.count
 
         return SessionSummary(
             id: stats.sessionId,
@@ -257,12 +404,17 @@ public enum SessionInventory {
             cacheReadTokens: stats.cacheReadTokens,
             cacheWriteTokens: stats.cacheWriteTokens,
             cost: stats.cost,
-            firstTimestamp: firstTs as Date?,
-            lastTimestamp: lastTs as Date?,
-            promptCount: max(promptCount, stats.messageCount / 2),  // assistant + user
+            firstTimestamp: firstTs,
+            lastTimestamp: lastTs,
+            promptCount: stats.promptCount,
             toolCallCount: stats.toolCalls,
             fileURL: file,
-            agentCount: stats.agents.count
+            agentCount: stats.agents.count,
+            costBasis: stats.costBasis,
+            usageScope: .exactRange,
+            dataWarnings: stats.costBasis == .unavailable
+                ? ["No versioned price quote for model '\(stats.model)'; cost is unavailable."]
+                : []
         )
     }
 

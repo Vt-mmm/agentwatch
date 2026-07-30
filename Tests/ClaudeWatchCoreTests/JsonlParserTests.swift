@@ -142,6 +142,61 @@ final class JsonlParserTests: XCTestCase {
         XCTAssertEqual(s.modelFamily, .sonnet)
     }
 
+    func testRangeParserCountsOnlyInRangeUsagePromptsAndTools() throws {
+        let url = try writeFixture([
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-11T23:59:00.000Z",
+                "message": [
+                    "model": "claude-sonnet-4-6",
+                    "usage": ["input_tokens": 1_000, "output_tokens": 200],
+                    "content": [],
+                ],
+            ],
+            [
+                "type": "user",
+                "timestamp": "2026-06-12T00:01:00.000Z",
+                "message": ["content": "Implement range accounting"],
+            ],
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-12T00:02:00.000Z",
+                "message": [
+                    "model": "claude-sonnet-4-6",
+                    "usage": [
+                        "input_tokens": 100,
+                        "output_tokens": 20,
+                        "cache_read_input_tokens": 30,
+                        "cache_creation_input_tokens": 40,
+                    ],
+                    "content": [[
+                        "type": "tool_use",
+                        "id": "tool-range",
+                        "name": "Bash",
+                        "input": ["command": "swift test"],
+                    ]],
+                ],
+            ],
+        ])
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let range = (
+            formatter.date(from: "2026-06-12T00:00:00.000Z")!
+            ... formatter.date(from: "2026-06-12T01:00:00.000Z")!
+        )
+
+        let stats = JsonlParser.parseSession(at: url, range: range)
+
+        XCTAssertEqual(stats.model, "claude-sonnet-4-6")
+        XCTAssertEqual(stats.promptCount, 1)
+        XCTAssertEqual(stats.toolCalls, 1)
+        XCTAssertEqual(stats.inputTokens, 100)
+        XCTAssertEqual(stats.outputTokens, 20)
+        XCTAssertEqual(stats.cacheReadTokens, 30)
+        XCTAssertEqual(stats.cacheWriteTokens, 40)
+        XCTAssertEqual(stats.totalTokens, 190)
+    }
+
     func testSlugReplacesSlashUnderscoreAndDot() {
         XCTAssertEqual(
             ProjectPath.slug(for: URL(fileURLWithPath: "/Users/vtamm/Documents/Working")),

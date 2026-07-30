@@ -59,13 +59,45 @@ extension CoachingReportView {
                     .font(ClaudeFont.heading())
                     .foregroundStyle(Claude.textPrimary)
                 Spacer()
-                Text(TokenFormatter.usd(inventory.totalCost))
-                    .font(ClaudeFont.display(22).monospacedDigit())
-                    .foregroundStyle(Claude.orange)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(aggregateCostLabel)
+                        .font(ClaudeFont.display(22).monospacedDigit())
+                        .foregroundStyle(Claude.orange)
+                    Text(costBasisSummary)
+                        .font(ClaudeFont.mono(9))
+                        .foregroundStyle(Claude.textMuted)
+                }
             }
             statGridWithDelta(tokenCostItems)
+            Text("Total token dùng công thức theo schema từng agent; reasoning và cache chỉ cộng khi nguồn xác định đó là bucket độc lập. Cost Pi lấy từ log, cost Claude/Codex là ước tính.")
+                .font(ClaudeFont.body(10))
+                .foregroundStyle(Claude.textMuted)
         }
         .claudeCard()
+    }
+
+    var costBasisSummary: String {
+        var parts: [String] = []
+        if inventory.reportedCost > 0 {
+            parts.append("reported \(TokenFormatter.usd(inventory.reportedCost))")
+        }
+        if inventory.estimatedCost > 0 {
+            parts.append("est. \(TokenFormatter.usd(inventory.estimatedCost))")
+        }
+        if inventory.unavailableCostSessionCount > 0 {
+            parts.append("\(inventory.unavailableCostSessionCount) unavailable")
+        }
+        return parts.isEmpty ? "no billable cost data" : parts.joined(separator: " · ")
+    }
+
+    var aggregateCostLabel: String {
+        if inventory.reportedCost > 0 && inventory.estimatedCost > 0 {
+            return TokenFormatter.usd(inventory.totalCost) + " mix"
+        }
+        if inventory.estimatedCost > 0 {
+            return "~" + TokenFormatter.usd(inventory.totalCost)
+        }
+        return inventory.reportedCost > 0 ? TokenFormatter.usd(inventory.totalCost) : "—"
     }
 
     var tokenCostItems: [(String, String, delta: Double)] {

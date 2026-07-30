@@ -80,9 +80,20 @@ struct VendorBreakdownCard: View {
             if !thinking.isEmpty {
                 statRow(label: "Thinking", value: thinking)
             }
-            statRow(label: "Cost",     value: agg.totalCost > 0 ? TokenFormatter.usd(agg.totalCost) : "—")
+            statRow(label: "Cost", value: aggregateCostLabel(agg))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func aggregateCostLabel(_ aggregate: InventoryAggregate) -> String {
+        guard aggregate.totalCost > 0 else { return "—" }
+        if aggregate.estimatedCost > 0 && aggregate.reportedCost == 0 {
+            return "~" + TokenFormatter.usd(aggregate.totalCost)
+        }
+        if aggregate.estimatedCost > 0 && aggregate.reportedCost > 0 {
+            return TokenFormatter.usd(aggregate.totalCost) + " mix"
+        }
+        return TokenFormatter.usd(aggregate.totalCost)
     }
 
     @ViewBuilder

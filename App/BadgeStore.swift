@@ -31,7 +31,7 @@ final class BadgeStore {
         }
         for s in newSessions {
             totalSessions += 1
-            if !outlierIds.contains(s.id) {
+            if !outlierIds.contains(s.auditKey) {
                 totalCleanSessions += 1
             }
         }

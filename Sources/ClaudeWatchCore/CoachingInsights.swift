@@ -7,24 +7,43 @@ public enum CoachingInsights {
 
     public static let agentLoopThreshold: Int = 10
 
-    /// Outlier: cost của session > mean + 2σ TRONG TẬP đang xem. Trả về set
-    /// session id để view tô badge cảnh báo. Cần ≥3 session để có ý nghĩa
-    /// thống kê (nhỏ hơn dễ false positive).
+    /// Cost outliers are compared only inside a homogeneous cohort:
+    /// vendor + model family + cost basis. Mixing reported Pi cost with an
+    /// API-equivalent Codex estimate makes a shared baseline meaningless.
     public static func outlierSessions(_ sessions: [SessionSummary]) -> Set<String> {
-        guard sessions.count >= 3 else { return [] }
-        let costs = sessions.map(\.cost)
-        let mean = costs.reduce(0, +) / Double(costs.count)
-        let variance = costs
-            .map { pow($0 - mean, 2) }
-            .reduce(0, +) / Double(costs.count)
-        let stddev = sqrt(variance)
-        let threshold = mean + 2 * stddev
-        return Set(sessions.filter { $0.cost > threshold && $0.cost > 1.0 }.map(\.id))
+        let eligible = sessions.filter {
+            $0.costBasis != .unavailable && $0.cost > 0
+        }
+        let cohorts = Dictionary(grouping: eligible) {
+            CostCohort(
+                vendor: $0.source.vendor,
+                modelFamily: $0.modelFamily,
+                costBasis: $0.costBasis
+            )
+        }
+        var outliers: Set<String> = []
+        for cohort in cohorts.values where cohort.count >= 3 {
+            let costs = cohort.map(\.cost)
+            let cohortMedian = median(costs)
+            let mad = median(costs.map { abs($0 - cohortMedian) })
+            // 1.4826 makes MAD comparable to standard deviation for a normal
+            // distribution. A multiplicative floor handles identical low-cost
+            // baselines without dividing by zero.
+            let threshold = mad > 0
+                ? cohortMedian + 3 * 1.4826 * mad
+                : max(cohortMedian * 3, cohortMedian + 1)
+            outliers.formUnion(
+                cohort
+                    .filter { $0.cost > threshold && $0.cost > 1.0 }
+                    .map(\.auditKey)
+            )
+        }
+        return outliers
     }
 
-    /// Session có ≥ N lần spawn Agent → loop nguy hiểm. Trả về set id.
+    /// Session có ≥ N lần spawn Agent → loop nguy hiểm. Trả về source-aware key.
     public static func agentLoopSessions(_ sessions: [SessionSummary]) -> Set<String> {
-        Set(sessions.filter { $0.agentCount >= agentLoopThreshold }.map(\.id))
+        Set(sessions.filter { $0.agentCount >= agentLoopThreshold }.map(\.auditKey))
     }
 
     /// Burn rate trung bình $/ngày từ 7 bucket daily cost.
@@ -36,5 +55,21 @@ public enum CoachingInsights {
     /// Project chi phí tháng (30 ngày) từ burn rate hiện tại.
     public static func monthlyForecast(_ buckets: [Double]) -> Double {
         dailyBurnRate(buckets) * 30
+    }
+
+    private struct CostCohort: Hashable {
+        let vendor: AgentVendor
+        let modelFamily: ModelFamily
+        let costBasis: UsageCostBasis
+    }
+
+    private static func median(_ values: [Double]) -> Double {
+        guard !values.isEmpty else { return 0 }
+        let sorted = values.sorted()
+        let middle = sorted.count / 2
+        if sorted.count.isMultiple(of: 2) {
+            return (sorted[middle - 1] + sorted[middle]) / 2
+        }
+        return sorted[middle]
     }
 }

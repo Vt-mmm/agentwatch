@@ -14,12 +14,14 @@ public struct SessionStats: Sendable, Equatable {
     public var lastEventAt: String = ""
 
     public var messageCount: Int = 0
+    public var promptCount: Int = 0
     public var inputTokens: Int = 0
     public var outputTokens: Int = 0
     public var reasoningTokens: Int = 0
     public var cacheReadTokens: Int = 0
     public var cacheWriteTokens: Int = 0
     public var toolCalls: Int = 0
+    public var tokenAccountingRule: TokenAccountingRule = .additiveCacheBuckets
     public var agents: [AgentSpawn] = []
     /// Sliding window of the latest events (≤ `eventWindowSize`),
     /// chronological order (oldest first). 500 = đủ cho 1 phiên dài + paginate.
@@ -33,7 +35,12 @@ public struct SessionStats: Sendable, Equatable {
     }
 
     public var totalTokens: Int {
-        inputTokens + outputTokens + reasoningTokens + cacheReadTokens + cacheWriteTokens
+        switch tokenAccountingRule {
+        case .additiveCacheBuckets:
+            return inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+        case .inclusiveBreakdowns:
+            return inputTokens + outputTokens
+        }
     }
 
     public var modelFamily: ModelFamily {
@@ -41,13 +48,29 @@ public struct SessionStats: Sendable, Equatable {
     }
 
     public var cost: Double {
-        Pricing.cost(
-            family: modelFamily,
-            inputTokens: inputTokens,
+        guard let quote = Pricing.quote(forModelId: model) else { return 0 }
+        let billableInput: Int
+        switch tokenAccountingRule {
+        case .additiveCacheBuckets:
+            billableInput = inputTokens
+        case .inclusiveBreakdowns:
+            billableInput = max(0, inputTokens - cacheReadTokens)
+        }
+        return Pricing.cost(
+            quote: quote,
+            inputTokens: billableInput,
             outputTokens: outputTokens,
             cacheReadTokens: cacheReadTokens,
             cacheWriteTokens: cacheWriteTokens
         )
+    }
+
+    public var costBasis: UsageCostBasis {
+        Pricing.quote(forModelId: model) == nil ? .unavailable : .estimated
+    }
+
+    public var priceSourceLabel: String? {
+        Pricing.quote(forModelId: model)?.sourceLabel
     }
 
     public var activeAgents: [AgentSpawn] {

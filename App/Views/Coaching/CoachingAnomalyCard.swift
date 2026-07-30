@@ -85,7 +85,9 @@ extension CoachingReportView {
 
     @ViewBuilder
     private func riskRow(_ finding: RiskFinding) -> some View {
-        let session = allSessions.first { $0.id == finding.sessionId }
+        let session = allSessions.first {
+            $0.source == finding.source && $0.id == finding.sessionId
+        }
         let title = session?.displayTitle ?? finding.projectDisplay
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: finding.category.icon)

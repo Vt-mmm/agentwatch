@@ -26,24 +26,37 @@ public enum PiAgentInventory {
 
 public enum PiAgentJsonlParser {
     public static func summarize(file: URL, range: ClosedRange<Date>) -> SessionSummary? {
-        let parsed = parse(file: file, includeEvents: false)
-        let mtime = ProjectPath.mtime(of: file)
-        let first = parsed.firstTimestamp ?? mtime
-        let last = parsed.lastTimestamp ?? mtime
-        guard last >= range.lowerBound, first <= range.upperBound else { return nil }
+        let parsed = parse(file: file, includeEvents: false, range: range)
+        guard parsed.firstTimestamp != nil, parsed.lastTimestamp != nil else { return nil }
 
         let family = ModelFamily.from(modelId: parsed.model)
-        let estimatedCost = Pricing.cost(
-            family: family,
-            inputTokens: parsed.inputTokens,
-            outputTokens: parsed.outputTokens + parsed.reasoningTokens,
-            cacheReadTokens: parsed.cacheReadTokens,
-            cacheWriteTokens: parsed.cacheWriteTokens
-        )
+        let quote = Pricing.quote(forModelId: parsed.model)
+        let estimatedCost = quote.map {
+            Pricing.cost(
+                quote: $0,
+                inputTokens: parsed.inputTokens,
+                outputTokens: parsed.outputTokens,
+                cacheReadTokens: parsed.cacheReadTokens,
+                cacheWriteTokens: parsed.cacheWriteTokens
+            )
+        } ?? 0
+        let costBasis: UsageCostBasis
+        let cost: Double
+        if parsed.hasReportedCost {
+            costBasis = .reported
+            cost = parsed.exactCost
+        } else if quote != nil {
+            costBasis = .estimated
+            cost = estimatedCost
+        } else {
+            costBasis = .unavailable
+            cost = 0
+        }
 
         return SessionSummary(
             id: parsed.sessionId,
             sessionTitle: parsed.sessionTitle,
+            titleHistory: parsed.titleHistory,
             projectDisplay: parsed.projectDisplay,
             source: .piagent,
             model: parsed.model,
@@ -53,19 +66,29 @@ public enum PiAgentJsonlParser {
             reasoningTokens: parsed.reasoningTokens,
             cacheReadTokens: parsed.cacheReadTokens,
             cacheWriteTokens: parsed.cacheWriteTokens,
-            cost: parsed.exactCost > 0 ? parsed.exactCost : estimatedCost,
+            cost: cost,
             firstTimestamp: parsed.firstTimestamp,
             lastTimestamp: parsed.lastTimestamp,
             promptCount: parsed.promptCount,
             toolCallCount: parsed.toolCalls,
             fileURL: file,
             agentCount: parsed.agentCount,
-            thinkingLevel: parsed.thinkingLevel
+            thinkingLevel: parsed.thinkingLevel,
+            tokenAccountingRule: .additiveCacheBuckets,
+            costBasis: costBasis,
+            usageScope: .exactRange,
+            dataWarnings: parsed.hasReportedCost || quote != nil
+                ? []
+                : ["No source-reported cost or versioned price quote for model '\(parsed.model)'."]
         )
     }
 
-    public static func parseSession(at file: URL) -> SessionStats {
-        let parsed = parse(file: file, includeEvents: true)
+    public static func parseSession(
+        at file: URL,
+        range: ClosedRange<Date>? = nil,
+        eventLimit: Int? = SessionStats.eventWindowSize
+    ) -> SessionStats {
+        let parsed = parse(file: file, includeEvents: true, range: range)
         var stats = SessionStats(
             sessionId: parsed.sessionId,
             projectSlug: parsed.projectSlug,
@@ -77,15 +100,17 @@ public enum PiAgentJsonlParser {
         stats.startedAt = parsed.firstTimestampString
         stats.lastEventAt = parsed.lastTimestampString
         stats.messageCount = parsed.messageCount
+        stats.promptCount = parsed.promptCount
         stats.inputTokens = parsed.inputTokens
         stats.outputTokens = parsed.outputTokens
         stats.reasoningTokens = parsed.reasoningTokens
         stats.cacheReadTokens = parsed.cacheReadTokens
         stats.cacheWriteTokens = parsed.cacheWriteTokens
         stats.toolCalls = parsed.toolCalls
+        stats.tokenAccountingRule = .additiveCacheBuckets
         stats.events = parsed.events
-        if stats.events.count > SessionStats.eventWindowSize {
-            stats.events = Array(stats.events.suffix(SessionStats.eventWindowSize))
+        if let eventLimit, stats.events.count > eventLimit {
+            stats.events = Array(stats.events.suffix(max(0, eventLimit)))
         }
         return stats
     }
@@ -93,13 +118,14 @@ public enum PiAgentJsonlParser {
     public static func extractPrompts(from file: URL,
                                       range: ClosedRange<Date>) -> [PromptRecord] {
         guard !isSubagentFile(file) else { return [] }
-        let parsed = parse(file: file, includeEvents: false)
-        return parsed.prompts.filter { range.contains($0.timestamp) }
+        let parsed = parse(file: file, includeEvents: false, range: range)
+        return parsed.prompts
     }
 
     private struct Parsed {
         var sessionId: String
         var sessionTitle: String?
+        var titleHistory: [SessionTitleChange]
         var projectSlug: String
         var projectDisplay: String
         var model: String
@@ -115,6 +141,7 @@ public enum PiAgentJsonlParser {
         var cacheReadTokens: Int
         var cacheWriteTokens: Int
         var exactCost: Double
+        var hasReportedCost: Bool
         var promptCount: Int
         var toolCalls: Int
         var agentCount: Int
@@ -122,10 +149,13 @@ public enum PiAgentJsonlParser {
         var prompts: [PromptRecord]
     }
 
-    private static func parse(file: URL, includeEvents: Bool) -> Parsed {
+    private static func parse(file: URL,
+                              includeEvents: Bool,
+                              range: ClosedRange<Date>? = nil) -> Parsed {
         let fallbackId = file.deletingPathExtension().lastPathComponent
         var sessionId = fallbackId
         var sessionTitle: String?
+        var titleHistory: [SessionTitleChange] = []
         var cwd: String?
         var projectName: String?
         var model = ""
@@ -141,6 +171,7 @@ public enum PiAgentJsonlParser {
         var cacheReadTokens = 0
         var cacheWriteTokens = 0
         var exactCost = 0.0
+        var hasReportedCost = false
         var promptCount = 0
         var toolCalls = 0
         var agentCount = isSubagentFile(file) ? 1 : 0
@@ -157,7 +188,12 @@ public enum PiAgentJsonlParser {
             }
 
             let tsString = obj["timestamp"] as? String ?? ""
-            if let ts = parseISO(tsString) {
+            let timestamp = parseISO(tsString)
+            let belongsToRange = range == nil
+                || timestamp.map { range!.contains($0) } == true
+            let visibleAtRangeEnd = range == nil
+                || timestamp.map { $0 <= range!.upperBound } == true
+            if let ts = timestamp, belongsToRange {
                 if firstTimestamp == nil || ts < firstTimestamp! {
                     firstTimestamp = ts
                     firstTimestampString = tsString
@@ -167,6 +203,7 @@ public enum PiAgentJsonlParser {
                     lastTimestampString = tsString
                 }
             }
+            guard visibleAtRangeEnd else { return }
 
             switch obj["type"] as? String {
             case "session":
@@ -183,7 +220,16 @@ public enum PiAgentJsonlParser {
 
             case "session_info":
                 if let name = obj["name"] as? String, !name.isEmpty {
-                    sessionTitle = normalizedSessionTitle(name)
+                    let normalized = normalizedSessionTitle(name)
+                    sessionTitle = normalized
+                    if let normalized,
+                       titleHistory.last?.title != normalized {
+                        titleHistory.append(SessionTitleChange(
+                            timestamp: parseISO(tsString),
+                            timestampString: tsString,
+                            title: normalized
+                        ))
+                    }
                     if name.hasPrefix("pi:") {
                         projectName = String(name.dropFirst(3))
                     } else if name.hasPrefix("subagent-") {
@@ -197,6 +243,7 @@ public enum PiAgentJsonlParser {
                 if model.isEmpty, let m = msg["model"] as? String, !m.isEmpty {
                     model = m
                 }
+                guard belongsToRange else { return }
 
                 switch role {
                 case "user":
@@ -239,6 +286,7 @@ public enum PiAgentJsonlParser {
                         cacheReadTokens += intValue(usage["cacheRead"])
                         cacheWriteTokens += intValue(usage["cacheWrite"])
                         if let cost = usage["cost"] as? [String: Any] {
+                            hasReportedCost = hasReportedCost || cost["total"] != nil
                             exactCost += doubleValue(cost["total"])
                         }
                     }
@@ -274,6 +322,7 @@ public enum PiAgentJsonlParser {
         return Parsed(
             sessionId: sessionId,
             sessionTitle: sessionTitle,
+            titleHistory: titleHistory,
             projectSlug: cwd ?? projectName ?? file.deletingLastPathComponent().lastPathComponent,
             projectDisplay: displayProject(cwd: cwd, projectName: projectName),
             model: model,
@@ -289,6 +338,7 @@ public enum PiAgentJsonlParser {
             cacheReadTokens: cacheReadTokens,
             cacheWriteTokens: cacheWriteTokens,
             exactCost: exactCost,
+            hasReportedCost: hasReportedCost,
             promptCount: promptCount,
             toolCalls: toolCalls,
             agentCount: agentCount,

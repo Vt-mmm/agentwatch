@@ -25,6 +25,44 @@ extension CoachingReportView {
         .claudeCard()
     }
 
+    // MARK: - Snapshot hero
+
+    /// Manual snapshot mode: mở tab/đổi ngày không tự scan Claude/Codex/PiAgent
+    /// để app không nặng. Governance log vẫn chạy riêng ở SupervisorLockStore.
+    var coachingSnapshotHero: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Claude.orangeSoft)
+                    .frame(width: 110, height: 110)
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 42, weight: .medium))
+                    .foregroundStyle(Claude.orange)
+            }
+            VStack(spacing: 6) {
+                Text("Chưa đọc snapshot")
+                    .font(ClaudeFont.display(20))
+                    .foregroundStyle(Claude.textPrimary)
+                Text("Agent Watch vẫn đang ghi lock/key heartbeat nhẹ ở nền.\nBấm Đọc log khi cần xem Claude, Codex, PiAgent cho \(scopeRangeLabel).")
+                    .font(ClaudeFont.body(13))
+                    .foregroundStyle(Claude.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button {
+                reload()
+            } label: {
+                Label("Đọc log", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Claude.orange)
+            .disabled(isLoading)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(40)
+        .claudeCard()
+    }
+
     // MARK: - Empty hero
 
     /// Hero hiển thị khi không có session/record nào trong scope hiện tại.

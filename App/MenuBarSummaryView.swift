@@ -78,7 +78,7 @@ struct MenuBarSummaryView: View {
             }
             row("Cache R", TokenFormatter.compact(detail.cacheReadTokens))
             row("Cache W", TokenFormatter.compact(detail.cacheWriteTokens))
-            row("Cost", TokenFormatter.usd(detail.cost), color: detail.sourceColor, bold: true)
+            row("Cost", detail.costLabel, color: detail.sourceColor, bold: true)
             row("Prompts", "\(detail.promptCount)")
             row("Tools", "\(detail.toolCount)")
         }
@@ -94,6 +94,10 @@ struct MenuBarSummaryView: View {
             + codexSnapshot.totalReasoningTokens
             + piSnapshot.totalReasoningTokens
         let cost = (claude?.cost ?? 0) + codexSnapshot.totalCost + piSnapshot.totalCost
+        let reportedCost = piSnapshot.reportedCost
+        let estimatedCost = (claude?.costBasis == .estimated ? claude?.cost ?? 0 : 0)
+            + codexSnapshot.estimatedCost
+            + piSnapshot.estimatedCost
         let thinking = thinkingBreakdown()
         return VStack(alignment: .leading, spacing: 5) {
             row("Snapshot", "\(sessions) sessions", color: sessions > 0 ? Claude.live : Claude.textMuted)
@@ -104,7 +108,12 @@ struct MenuBarSummaryView: View {
             if !thinking.isEmpty {
                 row("Thinking", thinking, color: .purple)
             }
-            row("Cost", TokenFormatter.usd(cost), color: Claude.orange, bold: true)
+            row(
+                "Cost",
+                aggregateCostLabel(total: cost, reported: reportedCost, estimated: estimatedCost),
+                color: Claude.orange,
+                bold: true
+            )
             if codexSnapshot.sessionCount > 0 {
                 row("Codex", "\(codexSnapshot.sessionCount) · \(TokenFormatter.compact(codexSnapshot.totalTokens)) tok", color: .green)
             }
@@ -215,7 +224,8 @@ struct MenuBarSummaryView: View {
                 cacheReadTokens: s.cacheReadTokens,
                 cacheWriteTokens: s.cacheWriteTokens,
                 cost: s.cost,
-                promptCount: s.messageCount,
+                costBasis: s.costBasis,
+                promptCount: s.promptCount,
                 toolCount: s.toolCalls,
                 lastActivity: s.mtime,
                 sourceColor: Claude.orange
@@ -253,6 +263,18 @@ struct MenuBarSummaryView: View {
             .joined(separator: ", ")
     }
 
+    private func aggregateCostLabel(total: Double,
+                                    reported: Double,
+                                    estimated: Double) -> String {
+        if reported > 0 && estimated > 0 {
+            return TokenFormatter.usd(total) + " mix"
+        }
+        if estimated > 0 {
+            return "~" + TokenFormatter.usd(total)
+        }
+        return reported > 0 ? TokenFormatter.usd(total) : "—"
+    }
+
     private func row(_ label: String, _ value: String,
                      color: Color = Claude.textPrimary,
                      bold: Bool = false) -> some View {
@@ -282,6 +304,7 @@ private struct MenuLiveDetail {
     let cacheReadTokens: Int
     let cacheWriteTokens: Int
     let cost: Double
+    let costBasis: UsageCostBasis
     let promptCount: Int
     let toolCount: Int
     let lastActivity: Date
@@ -297,6 +320,7 @@ private struct MenuLiveDetail {
          cacheReadTokens: Int,
          cacheWriteTokens: Int,
          cost: Double,
+         costBasis: UsageCostBasis,
          promptCount: Int,
          toolCount: Int,
          lastActivity: Date,
@@ -311,6 +335,7 @@ private struct MenuLiveDetail {
         self.cacheReadTokens = cacheReadTokens
         self.cacheWriteTokens = cacheWriteTokens
         self.cost = cost
+        self.costBasis = costBasis
         self.promptCount = promptCount
         self.toolCount = toolCount
         self.lastActivity = lastActivity
@@ -329,10 +354,22 @@ private struct MenuLiveDetail {
             cacheReadTokens: session.cacheReadTokens,
             cacheWriteTokens: session.cacheWriteTokens,
             cost: session.cost,
+            costBasis: session.costBasis,
             promptCount: session.promptCount,
             toolCount: session.toolCallCount,
             lastActivity: session.lastTimestamp ?? session.firstTimestamp ?? .distantPast,
             sourceColor: sourceColor
         )
+    }
+
+    var costLabel: String {
+        switch costBasis {
+        case .reported:
+            return TokenFormatter.usd(cost)
+        case .estimated:
+            return "~" + TokenFormatter.usd(cost)
+        case .unavailable:
+            return "—"
+        }
     }
 }

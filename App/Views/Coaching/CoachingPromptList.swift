@@ -42,7 +42,12 @@ extension CoachingReportView {
                     Button {
                         selectedRecord = r
                     } label: {
-                        PromptRow(record: r, risk: riskByPrompt[r.id])
+                        PromptRow(
+                            record: r,
+                            risk: riskByPrompt[
+                                RiskScorer.promptKey(source: r.source, id: r.id)
+                            ]
+                        )
                     }
                     .buttonStyle(.plain)
                 }

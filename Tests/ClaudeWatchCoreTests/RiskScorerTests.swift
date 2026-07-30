@@ -96,6 +96,18 @@ final class RiskScorerTests: XCTestCase {
         XCTAssertTrue(findings.contains { $0.severity == .high })
     }
 
+    func testCostOutlierUsesRobustBaselineWithinSameCohort() {
+        let sessions = [
+            makeSession(id: "normal-1", cost: 1.0),
+            makeSession(id: "normal-2", cost: 1.1),
+            makeSession(id: "outlier", cost: 20.0),
+            makeSession(id: "other-vendor", source: .piagent, cost: 100.0),
+        ]
+
+        let outliers = CoachingInsights.outlierSessions(sessions)
+        XCTAssertEqual(outliers, ["codex|outlier"])
+    }
+
     func testSummaryAndHighestMaps() {
         let records = [
             makeRecord(id: "secret", text: "Dùng api key thật trong auth.json để debug."),
@@ -110,8 +122,8 @@ final class RiskScorerTests: XCTestCase {
 
         XCTAssertGreaterThanOrEqual(summary.totalFindings, 3)
         XCTAssertGreaterThanOrEqual(summary.highOrCriticalCount, 1)
-        XCTAssertNotNil(bySession["s-risk"])
-        XCTAssertNotNil(byPrompt["secret"])
+        XCTAssertNotNil(bySession[RiskScorer.sessionKey(source: .codex, id: "s-risk")])
+        XCTAssertNotNil(byPrompt[RiskScorer.promptKey(source: .codex, id: "secret")])
     }
 
     func testPiSessionNamingRiskUsesTaskNameOnly() {

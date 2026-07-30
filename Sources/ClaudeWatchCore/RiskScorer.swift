@@ -190,19 +190,28 @@ public enum RiskScorer {
                                 thresholds: RiskScoringThresholds = defaultThresholds,
                                 limit: Int = 100) -> [RiskFinding] {
         var out: [RiskFinding] = []
-        let promptsBySession = Dictionary(grouping: records, by: \.sessionUuid)
+        let promptsBySession = Dictionary(grouping: records) {
+            sessionKey(source: $0.source, id: $0.sessionUuid)
+        }
         let sessionsById = bestSessionsById(sessions)
         let costOutliers = CoachingInsights.outlierSessions(sessions)
 
         for session in sessions {
-            let prompts = promptsBySession[session.id] ?? []
+            let prompts = promptsBySession[
+                sessionKey(source: session.source, id: session.id)
+            ] ?? []
             out.append(contentsOf: sessionFindings(
                 session, prompts: prompts, costOutliers: costOutliers,
                 thresholds: thresholds))
         }
 
         for record in records {
-            out.append(contentsOf: promptFindings(record, session: sessionsById[record.sessionUuid]))
+            out.append(contentsOf: promptFindings(
+                record,
+                session: sessionsById[
+                    sessionKey(source: record.source, id: record.sessionUuid)
+                ]
+            ))
         }
 
         out.sort { a, b in
@@ -226,18 +235,24 @@ public enum RiskScorer {
             mediumCount: counts[.medium] ?? 0,
             lowCount: counts[.low] ?? 0,
             maxScore: findings.map(\.score).max() ?? 0,
-            affectedSessions: Set(findings.map(\.sessionId)).count,
-            affectedPrompts: Set(findings.compactMap(\.promptId)).count
+            affectedSessions: Set(findings.map {
+                sessionKey(source: $0.source, id: $0.sessionId)
+            }).count,
+            affectedPrompts: Set<String>(findings.compactMap { finding in
+                guard let promptId = finding.promptId else { return nil }
+                return promptKey(source: finding.source, id: promptId)
+            }).count
         )
     }
 
     public static func highestBySession(_ findings: [RiskFinding]) -> [String: RiskFinding] {
         var out: [String: RiskFinding] = [:]
         for finding in findings {
-            if let current = out[finding.sessionId] {
-                if ranksAbove(finding, current) { out[finding.sessionId] = finding }
+            let key = sessionKey(source: finding.source, id: finding.sessionId)
+            if let current = out[key] {
+                if ranksAbove(finding, current) { out[key] = finding }
             } else {
-                out[finding.sessionId] = finding
+                out[key] = finding
             }
         }
         return out
@@ -247,13 +262,22 @@ public enum RiskScorer {
         var out: [String: RiskFinding] = [:]
         for finding in findings {
             guard let promptId = finding.promptId else { continue }
-            if let current = out[promptId] {
-                if ranksAbove(finding, current) { out[promptId] = finding }
+            let key = promptKey(source: finding.source, id: promptId)
+            if let current = out[key] {
+                if ranksAbove(finding, current) { out[key] = finding }
             } else {
-                out[promptId] = finding
+                out[key] = finding
             }
         }
         return out
+    }
+
+    public static func sessionKey(source: SessionSource, id: String) -> String {
+        "\(source.rawValue)|\(id)"
+    }
+
+    public static func promptKey(source: SessionSource, id: String) -> String {
+        "\(source.rawValue)|\(id)"
     }
 
     private static func sessionFindings(_ s: SessionSummary,
@@ -263,11 +287,11 @@ public enum RiskScorer {
         var out: [RiskFinding] = []
         let ts = s.lastTimestamp ?? s.firstTimestamp
 
-        if costOutliers.contains(s.id) {
+        if costOutliers.contains(s.auditKey) {
             out.append(sessionFinding(
                 s, category: .costOutlier, severity: .high, score: 86,
                 title: "Cost vượt nền bình thường",
-                reason: "Cost session vượt mean + 2σ trong tập đang xem, nên cần mở timeline để xem agent đã làm gì.",
+                reason: "Cost session vượt robust median/MAD baseline trong cùng nhóm agent, model và loại cost, nên cần mở timeline để xem agent đã làm gì.",
                 evidence: sessionEvidence(s),
                 recommendation: "Review prompt đầu phiên, tool calls và subagent. Nếu task đúng nhưng tốn thật, đánh dấu thành baseline mới cho project đó.",
                 timestamp: ts
@@ -289,6 +313,10 @@ public enum RiskScorer {
             ))
         }
 
+        if let finding = piTitleTimingFinding(s, thresholds: thresholds) {
+            out.append(finding)
+        }
+
         if s.agentCount >= CoachingInsights.agentLoopThreshold {
             let critical = s.agentCount >= CoachingInsights.agentLoopThreshold * 2
             out.append(sessionFinding(
@@ -303,11 +331,15 @@ public enum RiskScorer {
             ))
         }
 
-        if s.totalTokens >= thresholds.mediumTokenSession || s.cost >= thresholds.mediumCostSession {
+        let hasUsableCost = s.costBasis != .unavailable
+        if s.totalTokens >= thresholds.mediumTokenSession
+            || (hasUsableCost && s.cost >= thresholds.mediumCostSession) {
             let severity: RiskSeverity
-            if s.totalTokens >= thresholds.criticalTokenSession || s.cost >= thresholds.criticalCostSession {
+            if s.totalTokens >= thresholds.criticalTokenSession
+                || (s.costBasis == .reported && s.cost >= thresholds.criticalCostSession) {
                 severity = .critical
-            } else if s.totalTokens >= thresholds.highTokenSession || s.cost >= thresholds.highCostSession {
+            } else if s.totalTokens >= thresholds.highTokenSession
+                || (hasUsableCost && s.cost >= thresholds.highCostSession) {
                 severity = .high
             } else {
                 severity = .medium
@@ -454,6 +486,48 @@ public enum RiskScorer {
         return avg <= 2.0 || weakCount >= 2
     }
 
+    private static func piTitleTimingFinding(_ s: SessionSummary,
+                                             thresholds: RiskScoringThresholds) -> RiskFinding? {
+        guard s.source.vendor == .piagent, !isPiSubagentRun(s) else { return nil }
+        let changes = s.titleHistory
+        guard !changes.isEmpty else { return nil }
+
+        if changes.count > 1 {
+            return sessionFinding(
+                s,
+                category: .sessionNaming,
+                severity: .high,
+                score: min(95, 78 + changes.count * 4 + s.totalTokens / 50_000),
+                title: "Pi session đổi tên sau khi bắt đầu",
+                reason: "Phiên PiAgent có nhiều lần set tên session. Tên cuối vẫn dùng để group report, nhưng timeline cho thấy task name đã bị sửa trong phiên.",
+                evidence: "name history: \(titleHistoryEvidence(changes))",
+                recommendation: "Đối chiếu phần đầu phiên với prompt/tool timeline. Yêu cầu member đặt đúng tên task ngay khi tạo session, trước khi bắt đầu làm.",
+                timestamp: changes.last?.timestamp ?? s.lastTimestamp ?? s.firstTimestamp
+            )
+        }
+
+        guard let firstTitleAt = changes.first?.timestamp,
+              let start = s.firstTimestamp else {
+            return nil
+        }
+        let delay = firstTitleAt.timeIntervalSince(start)
+        guard delay >= 120 else { return nil }
+        let severe = delay >= 300
+            || s.totalTokens >= thresholds.highTokenSession
+            || s.cost >= thresholds.highCostSession
+        return sessionFinding(
+            s,
+            category: .sessionNaming,
+            severity: severe ? .high : .medium,
+            score: min(92, 64 + Int(delay / 60) * 3 + s.totalTokens / 75_000),
+            title: "Pi session đặt tên muộn",
+            reason: "Tên session PiAgent được set sau \(humanMinutes(delay)) từ lúc phiên bắt đầu. Đây là dấu hiệu member mở Pi làm trước rồi mới đặt tên để hợp thức report.",
+            evidence: "first name: \(changes.first?.title ?? "") at \(changes.first?.timestampString ?? "")",
+            recommendation: "Yêu cầu member tạo session và set tên task ngay từ đầu; nếu có lý do đổi tên muộn thì ghi chú khi nộp report.",
+            timestamp: firstTitleAt
+        )
+    }
+
     private static func averageTaskStars(_ prompts: [PromptRecord]) -> Double {
         let taskPrompts = prompts.filter(\.score.isTaskPrompt)
         guard !taskPrompts.isEmpty else { return 0 }
@@ -470,7 +544,7 @@ public enum RiskScorer {
                                        recommendation: String,
                                        timestamp: Date?) -> RiskFinding {
         RiskFinding(
-            id: "session-\(category.rawValue)-\(s.id)",
+            id: "session-\(s.source.rawValue)-\(category.rawValue)-\(s.id)",
             category: category,
             severity: severity,
             score: score,
@@ -497,7 +571,7 @@ public enum RiskScorer {
                                       recommendation: String,
                                       suffix: String) -> RiskFinding {
         RiskFinding(
-            id: "prompt-\(category.rawValue)-\(r.id)-\(stableSuffix(suffix))",
+            id: "prompt-\(r.source.rawValue)-\(category.rawValue)-\(r.id)-\(stableSuffix(suffix))",
             category: category,
             severity: severity,
             score: score,
@@ -517,8 +591,22 @@ public enum RiskScorer {
         let title = s.sessionTitle.map { " · task \($0)" } ?? ""
         let thinking = s.thinkingLevel.map { " · thinking \($0)" } ?? ""
         return "\(s.source.label)\(title) · \(s.model.isEmpty ? "unknown model" : s.model)\(thinking) · "
-            + "\(s.totalTokens) tokens · \(String(format: "$%.4f", s.cost)) · "
+            + "\(s.totalTokens) tokens (\(s.tokenAccountingRule.label)) · "
+            + "\(String(format: "$%.4f", s.cost)) \(s.costBasis.label) · "
             + "\(s.promptCount) prompts · \(s.toolCallCount) tools · \(s.agentCount) agents"
+    }
+
+    private static func titleHistoryEvidence(_ changes: [SessionTitleChange]) -> String {
+        changes.map { change in
+            let stamp = change.timestampString.isEmpty ? "unknown-time" : change.timestampString
+            return "\(stamp)='\(change.title)'"
+        }
+        .joined(separator: " -> ")
+    }
+
+    private static func humanMinutes(_ interval: TimeInterval) -> String {
+        let minutes = max(1, Int(interval / 60))
+        return "\(minutes) phút"
     }
 
     private static func needsClearPiTaskName(_ s: SessionSummary) -> Bool {
@@ -544,13 +632,14 @@ public enum RiskScorer {
     private static func bestSessionsById(_ sessions: [SessionSummary]) -> [String: SessionSummary] {
         var out: [String: SessionSummary] = [:]
         for session in sessions {
-            guard let current = out[session.id] else {
-                out[session.id] = session
+            let key = sessionKey(source: session.source, id: session.id)
+            guard let current = out[key] else {
+                out[key] = session
                 continue
             }
             if session.cost > current.cost
                 || (session.cost == current.cost && session.totalTokens > current.totalTokens) {
-                out[session.id] = session
+                out[key] = session
             }
         }
         return out

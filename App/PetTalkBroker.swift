@@ -62,7 +62,7 @@ final class PetTalkBroker {
         let outliers = CoachingInsights.outlierSessions(sessions)
         for sid in outliers where !warnedOutliers.contains(sid) {
             warnedOutliers.insert(sid)
-            if let s = sessions.first(where: { $0.id == sid }) {
+            if let s = sessions.first(where: { $0.auditKey == sid }) {
                 emit(.outlierDetected(cost: s.cost))
             }
         }
@@ -71,7 +71,7 @@ final class PetTalkBroker {
         let loops = CoachingInsights.agentLoopSessions(sessions)
         for sid in loops where !warnedLoops.contains(sid) {
             warnedLoops.insert(sid)
-            if let s = sessions.first(where: { $0.id == sid }) {
+            if let s = sessions.first(where: { $0.auditKey == sid }) {
                 emit(.agentLoopDetected(agentCount: s.agentCount))
             }
         }

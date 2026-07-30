@@ -32,12 +32,12 @@ struct TokenStatsCard: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 0) {
-                Text(TokenFormatter.usd(stats.cost))
+                Text(stats.costBasis == .estimated ? "~" + TokenFormatter.usd(stats.cost) : "—")
                     .font(ClaudeFont.display(28).monospacedDigit())
                     .foregroundStyle(Claude.orange)
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.4), value: stats.cost)
-                Text("estimated · list price")
+                Text(stats.priceSourceLabel ?? "price unavailable")
                     .font(ClaudeFont.label(10))
                     .foregroundStyle(Claude.textMuted)
             }

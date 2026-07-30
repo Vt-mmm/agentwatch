@@ -131,7 +131,7 @@ struct SessionDetailSheet: View {
                     .keyboardShortcut(.escape)
                 Spacer()
                 Button("Lưu") {
-                    SessionAliasStore.shared.setAlias(aliasDraft, for: session.id)
+                    SessionAliasStore.shared.setAlias(aliasDraft, for: session.auditKey)
                     showAliasEditor = false
                 }
                 .keyboardShortcut(.defaultAction)
@@ -139,7 +139,7 @@ struct SessionDetailSheet: View {
         }
         .padding(20)
         .frame(width: 380)
-        .onAppear { aliasDraft = SessionAliasStore.shared.alias(for: session.id) ?? "" }
+        .onAppear { aliasDraft = SessionAliasStore.shared.alias(for: session.auditKey) ?? "" }
     }
 
     // MARK: - Async load
@@ -172,7 +172,7 @@ struct SessionDetailSheet: View {
                 .foregroundStyle(Claude.orange)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(SessionAliasStore.shared.alias(for: session.id) ?? session.displayTitle)
+                    Text(SessionAliasStore.shared.alias(for: session.auditKey) ?? session.displayTitle)
                         .font(ClaudeFont.heading())
                         .foregroundStyle(Claude.textPrimary)
                         .lineLimit(1)
@@ -231,6 +231,13 @@ struct SessionDetailSheet: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(Claude.textPrimary)
                     }
+                    if session.titleHistory.count > 1 {
+                        Text("Name history: \(titleHistoryLine)")
+                            .font(ClaudeFont.mono(10))
+                            .foregroundStyle(Claude.orange)
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                    }
                     Text(session.model.isEmpty ? "Unknown model" : session.model)
                         .font(ClaudeFont.mono(12, weight: .semibold))
                         .foregroundStyle(Claude.textPrimary)
@@ -248,19 +255,40 @@ struct SessionDetailSheet: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(TokenFormatter.usd(session.cost))
+                    Text(sessionCostLabel)
                         .font(ClaudeFont.display(28).monospacedDigit())
                         .foregroundStyle(Claude.orange)
+                    Text("\(session.costBasis.label) · \(session.usageScope.label)")
+                        .font(ClaudeFont.mono(10))
+                        .foregroundStyle(Claude.textMuted)
                     Text("\(session.promptCount) prompt · \(session.toolCallCount) tool · \(session.agentCount) agent")
                         .font(ClaudeFont.mono(11))
                         .foregroundStyle(Claude.textMuted)
-                    Text("cache \(Int(session.cacheHitRate * 100))% hit · reasoning \(TokenFormatter.compact(session.reasoningTokens)) · \(TokenFormatter.usd(session.costPerPrompt))/prompt")
+                    Text("cache \(Int(session.cacheHitRate * 100))% hit · reasoning \(TokenFormatter.compact(session.reasoningTokens)) · \(costPerPromptLabel)/prompt")
                         .font(ClaudeFont.mono(10))
                         .foregroundStyle(Claude.textMuted)
+                        .help("Cache formula: \(session.cacheHitRateFormula)")
                 }
             }
         }
         .claudeCard()
+    }
+
+    private var sessionCostLabel: String {
+        switch session.costBasis {
+        case .reported:
+            return TokenFormatter.usd(session.cost)
+        case .estimated:
+            return "~" + TokenFormatter.usd(session.cost)
+        case .unavailable:
+            return "—"
+        }
+    }
+
+    private var costPerPromptLabel: String {
+        guard session.costBasis != .unavailable else { return "—" }
+        let prefix = session.costBasis == .estimated ? "~" : ""
+        return prefix + TokenFormatter.usd(session.costPerPrompt)
     }
 
     private var sourcePill: some View {
@@ -272,6 +300,23 @@ struct SessionDetailSheet: View {
             .padding(.horizontal, 8).padding(.vertical, 2)
             .background(bg)
             .clipShape(Capsule())
+    }
+
+    private var titleHistoryLine: String {
+        session.titleHistory
+            .map { change in
+                let stamp = titleChangeTime(change)
+                return "\(stamp) \(change.title)"
+            }
+            .joined(separator: " → ")
+    }
+
+    private func titleChangeTime(_ change: SessionTitleChange) -> String {
+        guard let timestamp = change.timestamp else { return "?" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        formatter.timeZone = ReportTime.timeZone
+        return formatter.string(from: timestamp)
     }
 
     private func sourcePillColors(_ source: SessionSource) -> (Color, Color) {
@@ -303,21 +348,28 @@ struct SessionDetailSheet: View {
     // MARK: - Token breakdown
 
     private var tokenBreakdownCard: some View {
-        let price = Pricing.price(for: session.modelFamily)
-        let inCost  = Double(session.inputTokens)      / 1_000_000 * price.input
+        let quote = Pricing.quote(forModelId: session.model)
+        let price = quote?.price ?? Price(input: 0, output: 0, cacheRead: 0, cacheWrite: 0)
         let outCost = Double(session.outputTokens)     / 1_000_000 * price.output
         let crCost  = Double(session.cacheReadTokens)  / 1_000_000 * price.cacheRead
         let cwCost  = Double(session.cacheWriteTokens) / 1_000_000 * price.cacheWrite
         return VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "Breakdown chi phí token")
-            tokenRow("Input",       session.inputTokens,      inCost,  Color.blue)
-            tokenRow("Output",      session.outputTokens,     outCost, Color.green)
-            if session.reasoningTokens > 0 {
-                let reasonCost = Double(session.reasoningTokens) / 1_000_000 * price.output
-                tokenRow("Reasoning", session.reasoningTokens, reasonCost, Color.purple)
+            SectionLabel(text: "Token accounting · \(session.costBasis.label)")
+            if session.tokenAccountingRule == .inclusiveBreakdowns {
+                let uncachedInput = max(0, session.inputTokens - session.cacheReadTokens)
+                let uncachedCost = Double(uncachedInput) / 1_000_000 * price.input
+                tokenRow("Input uncached", uncachedInput, estimatedCostLabel(uncachedCost), Color.blue)
+                tokenRow("Input cached", session.cacheReadTokens, estimatedCostLabel(crCost), Color.purple)
+            } else {
+                let inCost = Double(session.inputTokens) / 1_000_000 * price.input
+                tokenRow("Input", session.inputTokens, estimatedCostLabel(inCost), Color.blue)
+                tokenRow("Cache read", session.cacheReadTokens, estimatedCostLabel(crCost), Color.purple)
+                tokenRow("Cache write", session.cacheWriteTokens, estimatedCostLabel(cwCost), Color.orange)
             }
-            tokenRow("Cache read",  session.cacheReadTokens,  crCost,  Color.purple)
-            tokenRow("Cache write", session.cacheWriteTokens, cwCost,  Color.orange)
+            tokenRow("Output", session.outputTokens, estimatedCostLabel(outCost), Color.green)
+            if session.reasoningTokens > 0 {
+                tokenRow("Reasoning", session.reasoningTokens, "included", Color.purple)
+            }
             Divider().background(Claude.border)
             HStack {
                 Text("Tổng")
@@ -326,16 +378,25 @@ struct SessionDetailSheet: View {
                 Text(TokenFormatter.compact(session.totalTokens))
                     .font(ClaudeFont.mono(12, weight: .semibold))
                     .foregroundStyle(Claude.textPrimary)
-                Text(TokenFormatter.usd(session.cost))
+                Text(sessionCostLabel)
                     .font(ClaudeFont.mono(12, weight: .semibold))
                     .foregroundStyle(Claude.orange)
                     .frame(width: 80, alignment: .trailing)
             }
+            Text("Formula: \(session.tokenAccountingRule.label). Component prices: \(quote?.sourceLabel ?? "unavailable") @ \(Pricing.versionLabel); total is \(session.costBasis.label).")
+                .font(ClaudeFont.body(10))
+                .foregroundStyle(Claude.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .claudeCard()
     }
 
-    private func tokenRow(_ label: String, _ tokens: Int, _ cost: Double, _ color: Color) -> some View {
+    private func estimatedCostLabel(_ cost: Double) -> String {
+        Pricing.quote(forModelId: session.model) == nil ? "—" : "~" + TokenFormatter.usd(cost)
+    }
+
+    private func tokenRow(_ label: String, _ tokens: Int,
+                          _ costLabel: String, _ color: Color) -> some View {
         HStack(spacing: 10) {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(label)
@@ -346,7 +407,7 @@ struct SessionDetailSheet: View {
             Text(TokenFormatter.compact(tokens))
                 .font(ClaudeFont.mono(12))
                 .foregroundStyle(Claude.textMuted)
-            Text(TokenFormatter.usd(cost))
+            Text(costLabel)
                 .font(ClaudeFont.mono(12))
                 .foregroundStyle(Claude.orange)
                 .frame(width: 80, alignment: .trailing)

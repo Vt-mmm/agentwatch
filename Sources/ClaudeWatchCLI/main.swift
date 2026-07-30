@@ -235,7 +235,7 @@ struct WatchCommand {
             for sid in CoachingInsights.outlierSessions(sessions)
                 where !warnedOutliers.contains(sid) {
                 warnedOutliers.insert(sid)
-                if let s = sessions.first(where: { $0.id == sid }) {
+                if let s = sessions.first(where: { $0.auditKey == sid }) {
                     variant += 1
                     lastTalk = PetTalkOracle.line(
                         for: .outlierDetected(cost: s.cost), variant: variant)
@@ -245,7 +245,7 @@ struct WatchCommand {
             for sid in CoachingInsights.agentLoopSessions(sessions)
                 where !warnedLoops.contains(sid) {
                 warnedLoops.insert(sid)
-                if let s = sessions.first(where: { $0.id == sid }) {
+                if let s = sessions.first(where: { $0.auditKey == sid }) {
                     variant += 1
                     lastTalk = PetTalkOracle.line(
                         for: .agentLoopDetected(agentCount: s.agentCount),
@@ -406,7 +406,7 @@ func renderInsights(_ sessions: [SessionSummary]) {
     print(colorize("[Cảnh báo]", Ansi.yellow))
     if !outliers.isEmpty {
         print(colorize("  🚨 \(outliers.count) outlier session", Ansi.red) +
-              " (cost > mean + 2σ)")
+              " (cost > cohort median/MAD baseline)")
     }
     if !loops.isEmpty {
         print(colorize("  ⚠️  \(loops.count) session có agent loop", Ansi.yellow) +

@@ -54,6 +54,7 @@ actor JsonlParseCache {
 public struct CoachingScanResult: Sendable {
     public let prompts: [PromptRecord]
     public let sessions: [SessionSummary]
+    public let candidateFileCount: Int
 }
 
 public enum CoachingScan {
@@ -89,7 +90,11 @@ public enum CoachingScan {
             if $0.cost != $1.cost { return $0.cost > $1.cost }
             return $0.totalTokens > $1.totalTokens
         }
-        return CoachingScanResult(prompts: prompts, sessions: sessions)
+        return CoachingScanResult(
+            prompts: prompts,
+            sessions: sessions,
+            candidateFileCount: candidates.count
+        )
     }
 
     // MARK: - File enumeration
@@ -219,14 +224,13 @@ public enum CoachingScan {
             return ScanOne(prompts: prompts, summary: summary)
         }
 
-        let stats = await cachedParseSession(at: file)
-        let mtime = ProjectPath.mtime(of: file)
-        let firstTs = parseISO(stats.startedAt) ?? mtime
-        let lastTs = parseISO(stats.lastEventAt) ?? mtime
+        let stats = JsonlParser.parseSession(at: file, range: range)
+        let firstTs = parseISO(stats.startedAt)
+        let lastTs = parseISO(stats.lastEventAt)
 
         // Session summary nếu session chạm range.
-        let summary: SessionSummary? = (lastTs >= range.lowerBound && firstTs <= range.upperBound)
-            ? SessionSummary(
+        let summary: SessionSummary? = if let firstTs, let lastTs {
+            SessionSummary(
                 id: stats.sessionId,
                 projectDisplay: display,
                 source: source,
@@ -239,13 +243,19 @@ public enum CoachingScan {
                 cost: stats.cost,
                 firstTimestamp: firstTs,
                 lastTimestamp: lastTs,
-                promptCount: max(stats.events.filter { $0.kind == .userMessage }.count,
-                                 stats.messageCount / 2),
+                promptCount: stats.promptCount,
                 toolCallCount: stats.toolCalls,
                 fileURL: file,
-                agentCount: stats.agents.count
+                agentCount: stats.agents.count,
+                costBasis: stats.costBasis,
+                usageScope: .exactRange,
+                dataWarnings: stats.costBasis == .unavailable
+                    ? ["No versioned price quote for model '\(stats.model)'; cost is unavailable."]
+                    : []
             )
-            : nil
+        } else {
+            nil
+        }
 
         // Prompts trong range — bao giờ cũng parse file 2 lần nay → đọc thêm 1 lần
         // RIÊNG cho prompt extraction để giữ full text (JsonlParser cap 160ch).

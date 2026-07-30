@@ -50,19 +50,18 @@ struct MainWindowView: View {
         .sheet(isPresented: $showPrivacy) { PrivacyView() }
         .sheet(isPresented: $showSupervisorLock) { SupervisorLockView() }
         .onAppear {
-            refreshAuditSnapshots()
             presentSupervisorLockIfNeeded()
-        }
-        .onChange(of: tab) { _, newTab in
-            if newTab == .live { refreshAuditSnapshots() }
         }
         .onChange(of: supervisorLock.isLocked) { _, locked in
             if !locked { presentSupervisorLockIfNeeded() }
         }
+        .onChange(of: supervisorLock.requiresStartupKey) { _, needsKey in
+            if needsKey { presentSupervisorLockIfNeeded() }
+        }
     }
 
     private func presentSupervisorLockIfNeeded() {
-        guard !supervisorLock.isLocked else { return }
+        guard supervisorLock.requiresStartupKey || !supervisorLock.isLocked else { return }
         DispatchQueue.main.async {
             showSupervisorLock = true
         }
@@ -113,12 +112,12 @@ struct MainWindowView: View {
             if tab == .coaching || tab == .pets {
                 HeaderPet()
             }
-            if supervisorLock.isLocked {
+            if supervisorLock.isLocked || supervisorLock.requiresStartupKey {
                 Button { showSupervisorLock = true } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "lock.fill")
+                        Image(systemName: supervisorLock.requiresStartupKey ? "key.fill" : "lock.fill")
                             .font(.system(size: 10, weight: .semibold))
-                        Text("Locked")
+                        Text(supervisorLock.requiresStartupKey ? "Key" : "Locked")
                             .font(ClaudeFont.label(10))
                     }
                     .foregroundStyle(Claude.orange)
@@ -376,6 +375,26 @@ private struct LiveOverviewCard: View {
         (claudeStats?.cost ?? 0) + codexSnapshot.totalCost + piSnapshot.totalCost
     }
 
+    private var reportedCost: Double {
+        piSnapshot.reportedCost
+    }
+
+    private var estimatedCost: Double {
+        (claudeStats?.costBasis == .estimated ? claudeStats?.cost ?? 0 : 0)
+            + codexSnapshot.estimatedCost
+            + piSnapshot.estimatedCost
+    }
+
+    private var totalCostLabel: String {
+        if reportedCost > 0 && estimatedCost > 0 {
+            return TokenFormatter.usd(totalCost) + " mix"
+        }
+        if estimatedCost > 0 {
+            return "~" + TokenFormatter.usd(totalCost)
+        }
+        return reportedCost > 0 ? TokenFormatter.usd(totalCost) : "—"
+    }
+
     private var totalTokens: Int {
         (claudeStats?.totalTokens ?? 0) + codexSnapshot.totalTokens + piSnapshot.totalTokens
     }
@@ -419,7 +438,7 @@ private struct LiveOverviewCard: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)],
                       alignment: .leading, spacing: 10) {
                 metric("Sessions", "\(activeSessions)")
-                metric("Cost", TokenFormatter.usd(totalCost))
+                metric("Cost", totalCostLabel)
                 metric("Tokens", TokenFormatter.compact(totalTokens))
                 if totalReasoningTokens > 0 {
                     metric("Reasoning", TokenFormatter.compact(totalReasoningTokens))
@@ -639,11 +658,11 @@ private struct ClaudeLiveSessionCard: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 0) {
-                Text(TokenFormatter.usd(stats.cost))
+                Text(stats.costBasis == .estimated ? "~" + TokenFormatter.usd(stats.cost) : "—")
                     .font(ClaudeFont.display(26).monospacedDigit())
                     .foregroundStyle(Claude.orange)
                     .contentTransition(.numericText())
-                Text("estimated · list price")
+                Text(stats.priceSourceLabel ?? "price unavailable")
                     .font(ClaudeFont.label(10))
                     .foregroundStyle(Claude.textMuted)
             }

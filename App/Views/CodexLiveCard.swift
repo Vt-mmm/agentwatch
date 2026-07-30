@@ -42,7 +42,7 @@ struct CodexLiveCard: View {
                 .background(Claude.surfaceAlt, in: Capsule())
             Spacer()
             VStack(alignment: .trailing, spacing: 0) {
-                Text(TokenFormatter.usd(snapshot.totalCost))
+                Text("~" + TokenFormatter.usd(snapshot.totalCost))
                     .font(ClaudeFont.display(24).monospacedDigit())
                     .foregroundStyle(isActive ? .green : Claude.textMuted)
                     .contentTransition(.numericText())
@@ -243,13 +243,21 @@ struct CodexLiveCard: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            Text(TokenFormatter.usd(session.cost))
+            Text(sessionCostLabel(session))
                 .font(ClaudeFont.mono(12, weight: .semibold))
                 .foregroundStyle(.green)
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
+    }
+
+    private func sessionCostLabel(_ session: SessionSummary) -> String {
+        switch session.costBasis {
+        case .reported:    return TokenFormatter.usd(session.cost)
+        case .estimated:   return "~" + TokenFormatter.usd(session.cost)
+        case .unavailable: return "—"
+        }
     }
 
     private func sessionBadge(for session: SessionSummary) -> some View {
@@ -320,7 +328,7 @@ struct PiAgentLiveCard: View {
                 .background(Claude.surfaceAlt, in: Capsule())
             Spacer()
             VStack(alignment: .trailing, spacing: 0) {
-                Text(TokenFormatter.usd(snapshot.totalCost))
+                Text(piCostLabel)
                     .font(ClaudeFont.display(24).monospacedDigit())
                     .foregroundStyle(isActive ? .purple : Claude.textMuted)
                     .contentTransition(.numericText())
@@ -401,6 +409,16 @@ struct PiAgentLiveCard: View {
             metric("Output", TokenFormatter.compact(snapshot.totalOutputTokens))
             metric("Tools", "\(snapshot.totalToolCalls)")
         }
+    }
+
+    private var piCostLabel: String {
+        if snapshot.reportedCost > 0 && snapshot.estimatedCost > 0 {
+            return TokenFormatter.usd(snapshot.totalCost) + " mix"
+        }
+        if snapshot.estimatedCost > 0 {
+            return "~" + TokenFormatter.usd(snapshot.totalCost)
+        }
+        return snapshot.reportedCost > 0 ? TokenFormatter.usd(snapshot.totalCost) : "—"
     }
 
     @ViewBuilder
@@ -495,13 +513,21 @@ struct PiAgentLiveCard: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            Text(TokenFormatter.usd(session.cost))
+            Text(sessionCostLabel(session))
                 .font(ClaudeFont.mono(12, weight: .semibold))
                 .foregroundStyle(.purple)
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
+    }
+
+    private func sessionCostLabel(_ session: SessionSummary) -> String {
+        switch session.costBasis {
+        case .reported:    return TokenFormatter.usd(session.cost)
+        case .estimated:   return "~" + TokenFormatter.usd(session.cost)
+        case .unavailable: return "—"
+        }
     }
 
     private func sessionBadge(for session: SessionSummary) -> some View {

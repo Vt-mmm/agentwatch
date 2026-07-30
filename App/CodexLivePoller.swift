@@ -1,6 +1,6 @@
 // One-shot Codex/PiAgent recent-log snapshot for the Sessions tab.
-// Không poll nền: Agent Watch là audit log viewer, chỉ scan khi user mở tab
-// hoặc bấm refresh.
+// Không poll nền: Agent Watch là audit log viewer, chỉ scan khi user bấm
+// refresh/export. App-open governance log chạy riêng trong SupervisorLockStore.
 
 import Foundation
 import SwiftUI
@@ -21,8 +21,13 @@ struct CodexLiveSnapshot: Sendable, Equatable {
         sessions.reduce(0) { $0 + $1.reasoningTokens }
     }
     var totalTokens: Int {
-        totalInputTokens + totalOutputTokens + totalReasoningTokens
-            + totalCacheReadTokens + totalCacheWriteTokens
+        sessions.reduce(0) { $0 + $1.totalTokens }
+    }
+    var reportedCost: Double {
+        sessions.filter { $0.costBasis == .reported }.reduce(0) { $0 + $1.cost }
+    }
+    var estimatedCost: Double {
+        sessions.filter { $0.costBasis == .estimated }.reduce(0) { $0 + $1.cost }
     }
 
     var latestSession: SessionSummary? {
@@ -165,8 +170,13 @@ struct PiAgentLiveSnapshot: Sendable, Equatable {
 
     var sessionCount: Int { sessions.count }
     var totalTokens: Int {
-        totalInputTokens + totalOutputTokens + totalReasoningTokens
-            + totalCacheReadTokens + totalCacheWriteTokens
+        sessions.reduce(0) { $0 + $1.totalTokens }
+    }
+    var reportedCost: Double {
+        sessions.filter { $0.costBasis == .reported }.reduce(0) { $0 + $1.cost }
+    }
+    var estimatedCost: Double {
+        sessions.filter { $0.costBasis == .estimated }.reduce(0) { $0 + $1.cost }
     }
 
     var latestSession: SessionSummary? {

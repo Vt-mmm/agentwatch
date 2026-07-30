@@ -21,6 +21,7 @@ struct CoachingReportView: View {
     @State var sessionSort: SessionSort = .recent
     @State var selectedRecord: PromptRecord?
     @State var selectedSession: SessionSummary?
+    @State var showLockAuditLog: Bool = false
     @State var promptPageSize: Int = 25
 
     // Pagination — 15 mỗi trang đủ rộng để xem mà không cuộn quá dài.
@@ -132,7 +133,7 @@ struct CoachingReportView: View {
         SessionInventory.aggregate(sessions)
     }
 
-    /// Session id outlier theo cost (>2σ avg) — view tô badge cảnh báo.
+    /// Source-aware session key vượt robust cost baseline — view tô cảnh báo.
     var outlierIds: Set<String> {
         CoachingInsights.outlierSessions(sessions)
     }
@@ -144,6 +145,12 @@ struct CoachingReportView: View {
 
     /// Chưa từng load lần nào (mount lần đầu, hoặc app vừa mở).
     var hasNeverLoaded: Bool { lastRefreshAt == .distantPast }
+
+    /// Snapshot hiện tại có khớp scope đang chọn không. Đổi ngày/tuần/tháng
+    /// không tự scan để giữ app nhẹ; user bấm Đọc log hoặc Export mới đọc.
+    var hasCurrentSnapshot: Bool {
+        data.isFresh(for: scopeFingerprint)
+    }
 
     /// True khi scope hiện tại empty SAU KHI đã load xong ít nhất 1 lần.
     /// KHÔNG check `isLoading` ở đây — manual refresh vẫn có thể đang chạy
@@ -166,8 +173,10 @@ struct CoachingReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 filterCard
-                if hasNeverLoaded {
+                if isLoading && !hasCurrentSnapshot {
                     coachingLoadingHero
+                } else if !hasCurrentSnapshot {
+                    coachingSnapshotHero
                 } else if isScopeEmpty {
                     coachingEmptyHero
                 } else {
@@ -185,7 +194,7 @@ struct CoachingReportView: View {
                     riskCard
                     anomalyCard
                     tokenCostCard
-                    trendCard
+                    if !dailyCostTrend.isEmpty { trendCard }
                     if dailyCostTrend.contains(where: { $0.cost > 0 }) { forecastCard }
                     if !sessions.isEmpty { topSessionsCard }
                     if !records.isEmpty { distributionCard }
@@ -208,19 +217,15 @@ struct CoachingReportView: View {
             .frame(width: 0, height: 0)
         }
         .onAppear {
-            if !data.isFresh(for: scopeFingerprint) {
-                data.reload(scope: currentScope, fingerprint: scopeFingerprint)
-            } else {
-                data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
-            }
+            data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
         }
         .onChange(of: scope) { _, _ in
             resetPages()
-            data.reload(scope: currentScope, fingerprint: scopeFingerprint)
+            data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
         }
         .onChange(of: anchor) { _, _ in
             resetPages()
-            data.reload(scope: currentScope, fingerprint: scopeFingerprint)
+            data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
         }
         .onChange(of: sourceFilter) { _, _ in resetPages() }
         .onChange(of: searchQuery) { _, _ in resetPages() }
@@ -235,9 +240,16 @@ struct CoachingReportView: View {
         .sheet(item: $selectedSession) { session in
             SessionDetailSheet(session: session)
         }
+        .sheet(isPresented: $showLockAuditLog) {
+            LockAuditLogSheet(
+                scopeLabel: scopeRangeLabel,
+                events: lockAuditEvents,
+                findings: supervisorLock.complianceFindings(scope: currentScope, sessions: allSessions)
+            )
+        }
     }
 
-    private func dedupedPromptRecords(_ input: [PromptRecord]) -> [PromptRecord] {
+    func dedupedPromptRecords(_ input: [PromptRecord]) -> [PromptRecord] {
         var lastTimestampByKey: [String: Date] = [:]
         return input.filter { record in
             let key = "\(record.source.rawValue)|\(record.sessionUuid)|\(normalizedPromptText(record.text))"
@@ -247,15 +259,15 @@ struct CoachingReportView: View {
         }
     }
 
-    private func sortedSessions(_ input: [SessionSummary]) -> [SessionSummary] {
+    func sortedSessions(_ input: [SessionSummary]) -> [SessionSummary] {
         switch sessionSort {
         case .recent:
             return input.sorted(by: recencySort)
         case .risk:
             let risks = riskBySession
             return input.sorted { a, b in
-                let ar = risks[a.id]
-                let br = risks[b.id]
+                let ar = risks[RiskScorer.sessionKey(source: a.source, id: a.id)]
+                let br = risks[RiskScorer.sessionKey(source: b.source, id: b.id)]
                 let aSeverity = ar?.severity.rawValue ?? 0
                 let bSeverity = br?.severity.rawValue ?? 0
                 if aSeverity != bSeverity { return aSeverity > bSeverity }

@@ -23,7 +23,7 @@ struct DailyGoalCard: View {
         let start = Calendar.current.startOfDay(for: Date())
         return sessions.filter { s in
             guard let t = s.firstTimestamp, t >= start else { return false }
-            return !outlierIds.contains(s.id) && !agentLoopIds.contains(s.id)
+            return !outlierIds.contains(s.auditKey) && !agentLoopIds.contains(s.auditKey)
         }.count
     }
 

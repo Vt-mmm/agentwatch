@@ -57,12 +57,22 @@ extension CoachingReportView {
 
                 Spacer(minLength: 8)
 
+                Button { reload() } label: {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Đọc log")
+                }
+                .buttonStyle(.bordered)
+                .disabled(isLoading)
+                .help("Đọc Claude/Codex/PiAgent logs một lần cho kỳ đang xem")
+
                 Button { exportMarkdown() } label: {
                     Image(systemName: "doc.text")
                     Text("MD")
                 }
                 .buttonStyle(.bordered)
                 .keyboardShortcut("e", modifiers: [.command])
+                .disabled(!canExportCurrentScope || isLoading)
+                .help(canExportCurrentScope ? "Export full Markdown report kỳ hiện tại" : exportGuardMessage)
 
                 Button { exportCSV() } label: {
                     Image(systemName: "tablecells")
@@ -70,6 +80,8 @@ extension CoachingReportView {
                 }
                 .buttonStyle(.bordered)
                 .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(!canExportCurrentScope || isLoading)
+                .help(canExportCurrentScope ? "Export full CSV report kỳ hiện tại" : exportGuardMessage)
 
                 Button { exportHTML() } label: {
                     Image(systemName: "globe")
@@ -77,6 +89,23 @@ extension CoachingReportView {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Claude.orange)
+                .disabled(!canExportCurrentScope || isLoading)
+                .help(canExportCurrentScope ? "Export full HTML report kỳ hiện tại" : exportGuardMessage)
+            }
+
+            if !canExportCurrentScope {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Claude.orange)
+                    Text(exportGuardMessage)
+                        .font(ClaudeFont.body(11))
+                        .foregroundStyle(Claude.textMuted)
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Claude.orangeSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
             HStack(spacing: 10) {

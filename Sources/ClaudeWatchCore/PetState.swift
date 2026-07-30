@@ -7,7 +7,7 @@ public enum PetState: String, Sendable, CaseIterable {
     case sleepy   // không có session active hoặc <5 prompt trong ngày
     case happy    // bình thường, burn rate thấp
     case excited  // avg ★ tăng so với kỳ trước (≥0.3)
-    case worried  // có outlier session ($ vượt mean+2σ)
+    case worried  // có cost outlier vượt robust cohort baseline
     case dizzy    // có agent loop (≥10 Agent invocation/session)
 
     /// Caption ngắn cho tooltip hoặc CLI line.
@@ -52,7 +52,7 @@ public enum PetState: String, Sendable, CaseIterable {
 /// (insights/outliers tính ở caller, pet logic chỉ pick state).
 public struct PetSignals: Sendable {
     public let hasActivity: Bool         // có session trong khoảng đang xem
-    public let outlierCount: Int         // số session vượt 2σ
+    public let outlierCount: Int         // số session vượt median/MAD baseline
     public let agentLoopCount: Int       // số session có ≥10 Agent
     public let avgStarsDelta: Double     // avg★ − previous avg★
 

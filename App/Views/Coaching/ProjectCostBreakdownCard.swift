@@ -72,7 +72,7 @@ struct ProjectCostBreakdownCard: View {
             HStack(spacing: 6) {
                 Image(systemName: "folder.fill.badge.gearshape")
                     .foregroundStyle(Claude.orange)
-                SectionLabel(text: "Cost theo task/folder")
+                SectionLabel(text: "Cost theo task/folder · reported + estimate")
                 Spacer()
                 Text("\(perProject.count) nhóm")
                     .font(ClaudeFont.mono(10))

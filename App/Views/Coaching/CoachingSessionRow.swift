@@ -8,12 +8,12 @@ extension CoachingReportView {
 
     // MARK: - Session intent classification
 
-    /// Map sessionUuid → SessionIntent, compute từ allRecords (first 3 prompts/session).
+    /// Map source + sessionUuid → intent from the first three prompts.
     /// v0.5.0: Cursor-style "Conversation Insights" but rule-based.
     var sessionIntents: [String: SessionIntent] {
         var bySession: [String: [PromptRecord]] = [:]
         for r in allRecords {
-            bySession[r.sessionUuid, default: []].append(r)
+            bySession[r.sessionAuditKey, default: []].append(r)
         }
         var result: [String: SessionIntent] = [:]
         for (uuid, recs) in bySession {
@@ -28,11 +28,11 @@ extension CoachingReportView {
     // MARK: - Session row
 
     func sessionRow(_ s: SessionSummary) -> some View {
-        let isOutlier = outlierIds.contains(s.id)
-        let isAgentLoop = agentLoopIds.contains(s.id)
-        let topRisk = riskBySession[s.id]
-        let intent = sessionIntents[s.id] ?? .general
-        let alias = SessionAliasStore.shared.alias(for: s.id)
+        let isOutlier = outlierIds.contains(s.auditKey)
+        let isAgentLoop = agentLoopIds.contains(s.auditKey)
+        let topRisk = riskBySession[RiskScorer.sessionKey(source: s.source, id: s.id)]
+        let intent = sessionIntents[s.auditKey] ?? .general
+        let alias = SessionAliasStore.shared.alias(for: s.auditKey)
         let title = alias ?? s.displayTitle
         return HStack(spacing: 10) {
             sessionSourcePill(s.source)
@@ -55,7 +55,7 @@ extension CoachingReportView {
                     }
                     if isOutlier {
                         badge("🚨 outlier", color: .red,
-                              help: "Cost vượt mean + 2σ — đáng review")
+                              help: "Cost vượt median/MAD baseline trong cùng agent, model và cost basis")
                     }
                     if isAgentLoop {
                         badge("⚠️ \(s.agentCount) agents", color: .orange,
@@ -84,9 +84,10 @@ extension CoachingReportView {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            Text(TokenFormatter.usd(s.cost))
+            Text(sessionCostLabel(s))
                 .font(ClaudeFont.mono(12, weight: .semibold))
                 .foregroundStyle(Claude.orange)
+                .help("Cost: \(s.costBasis.label)")
         }
         .padding(.vertical, 3)
     }
@@ -155,6 +156,17 @@ extension CoachingReportView {
         let cache = s.cacheHitRate
         let cacheStr = cache > 0 ? " · cache \(Int(cache * 100))%" : ""
         return "\(modelStr)\(thinking) · \(TokenFormatter.compact(s.totalTokens)) tok\(reasoning) · \(s.toolCallCount) tools\(cacheStr)"
+    }
+
+    func sessionCostLabel(_ session: SessionSummary) -> String {
+        switch session.costBasis {
+        case .reported:
+            return TokenFormatter.usd(session.cost)
+        case .estimated:
+            return "~" + TokenFormatter.usd(session.cost)
+        case .unavailable:
+            return "—"
+        }
     }
 
     /// Format: nếu cùng 1 ngày → "12/06 10:23 → 14:55", khác ngày → "12/06 10:23 → 13/06 14:55".

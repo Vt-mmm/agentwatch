@@ -88,7 +88,7 @@ public enum AnomalyScorer {
         prompts.compactMap { p in
             guard p.score.stars <= 1, p.text.count > 1000 else { return nil }
             return Anomaly(
-                id: "effort-\(p.id)",
+                id: "effort-\(p.auditKey)",
                 kind: .effortImbalance,
                 representative: p,
                 reason: "Prompt \(p.text.count) chars nhưng chỉ \(p.score.stars)★ — đầu tư công viết dài chưa đi kèm structure. Thử chia thành các section Mục tiêu / Input / DoD.",
@@ -106,7 +106,7 @@ public enum AnomalyScorer {
     private static let loopMinTextLength = 100
 
     private static func detectPromptLoops(_ prompts: [PromptRecord]) -> [Anomaly] {
-        let bySession = Dictionary(grouping: prompts, by: \.sessionUuid)
+        let bySession = Dictionary(grouping: prompts, by: \.sessionAuditKey)
         var out: [Anomaly] = []
         for (_, sessionPrompts) in bySession {
             // Chỉ xem xét prompt đủ dài — prompts ngắn có cùng mở đầu thường là
@@ -118,7 +118,7 @@ public enum AnomalyScorer {
             for (prefix, group) in byPrefix where group.count >= 3 && !prefix.isEmpty {
                 guard let rep = group.last else { continue }
                 out.append(Anomaly(
-                    id: "loop-\(rep.sessionUuid)-\(prefix.hashValue)",
+                    id: "loop-\(rep.sessionAuditKey)-\(prefix.hashValue)",
                     kind: .promptLoop,
                     representative: rep,
                     reason: "Lặp \(group.count) prompt dài (≥\(loopMinTextLength) char) cùng \(loopPrefixLength) ký tự đầu trong 1 session — khả năng AI fail hoặc thiếu context. Thử rewrite với codebase context + verification criteria.",
@@ -133,9 +133,9 @@ public enum AnomalyScorer {
 
     /// Session có ≥5 prompt và avg ★ ≤ 2 → session dài lê thê không productive.
     private static func detectDriftingSessions(_ prompts: [PromptRecord]) -> [Anomaly] {
-        let bySession = Dictionary(grouping: prompts, by: \.sessionUuid)
+        let bySession = Dictionary(grouping: prompts, by: \.sessionAuditKey)
         var out: [Anomaly] = []
-        for (sessionUuid, group) in bySession where group.count >= 5 {
+        for (sessionKey, group) in bySession where group.count >= 5 {
             let taskPrompts = group.filter { $0.score.isTaskPrompt }
             guard !taskPrompts.isEmpty else { continue }
             let avg = Double(taskPrompts.map(\.score.stars).reduce(0, +))
@@ -143,7 +143,7 @@ public enum AnomalyScorer {
             guard avg <= 2.0 else { continue }
             guard let rep = group.last else { continue }
             out.append(Anomaly(
-                id: "drift-\(sessionUuid)",
+                id: "drift-\(sessionKey)",
                 kind: .driftingSession,
                 representative: rep,
                 reason: "Session \(group.count) prompt, avg \(String(format: "%.1f", avg))★ — work session dài không có prompt structure. Khởi đầu session sau bằng 1 prompt 5★ rõ Mục tiêu + DoD để focus.",

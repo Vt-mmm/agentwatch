@@ -67,7 +67,7 @@ public enum XPEngine {
     public static func xpForSession(isOutlier: Bool, isAgentLoop: Bool) -> Int {
         var xp = 5  // session complete bonus
         if isAgentLoop { xp -= 10 }    // penalty agent loop ≥10 subagent
-        if isOutlier   { xp -= 15 }    // penalty cost outlier >mean+2σ
+        if isOutlier   { xp -= 15 }    // penalty for robust cohort cost outlier
         return xp
     }
 
@@ -105,8 +105,8 @@ public enum XPEngine {
         // Trainer XP: sessions + streak (penalty áp dụng tại session).
         let sessionXP = newSessions.reduce(0) {
             $0 + TrainerProgress.xpForSession(
-                isOutlier: outlierIds.contains($1.id),
-                isAgentLoop: agentLoopIds.contains($1.id)
+                isOutlier: outlierIds.contains($1.auditKey),
+                isAgentLoop: agentLoopIds.contains($1.auditKey)
             )
         }
         let streakXP = (!newSessions.isEmpty && streakDay >= 1)

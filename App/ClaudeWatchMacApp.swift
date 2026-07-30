@@ -63,6 +63,12 @@ struct ClaudeWatchMacApp: App {
                             agentLoopIds: loopIds
                         )
                     }
+                    coachingData.onScanStarted = { reason, scope in
+                        supervisorLock.recordScanStarted(reason: reason, scope: scope)
+                    }
+                    coachingData.onScanCompleted = { audit in
+                        supervisorLock.recordScanCompleted(audit)
+                    }
                 }
                 .onChange(of: petCollection.selectedId) { _, newId in
                     floatingPet.characterName = newId

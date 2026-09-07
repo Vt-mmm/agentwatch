@@ -1,7 +1,7 @@
 // Full window. Background uses Claude.background; content stacked in scroll.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct MainWindowView: View {
     @Environment(SessionWatcher.self) private var watcher
@@ -17,6 +17,7 @@ struct MainWindowView: View {
     @Environment(SupervisorLockStore.self) private var supervisorLock
     @State private var tab: Tab = .live
     @State private var liveFilter: LiveAgentFilter = .all
+    @State private var showGoogleSetup = false
     @State private var showPrivacy: Bool = false
     @State private var showSupervisorLock: Bool = false
     // Sync với @AppStorage trong SpritePet — toggle áp dụng cho mọi pet instance.
@@ -47,6 +48,7 @@ struct MainWindowView: View {
         .frame(minWidth: 620, minHeight: 560)
         .background(Claude.backgroundGradient)
         .background(shortcutKeys)
+        .sheet(isPresented: $showGoogleSetup) { GoogleSetupView() }
         .sheet(isPresented: $showPrivacy) { PrivacyView() }
         .sheet(isPresented: $showSupervisorLock) { SupervisorLockView() }
         .onAppear {
@@ -142,6 +144,8 @@ struct MainWindowView: View {
     private var settingsMenu: some View {
         @Bindable var petBinding = pet
         return Menu {
+            Button("Kết nối Google cho report…") { showGoogleSetup = true }
+            Divider()
             // Floating pet toggle — top of menu, most-used setting.
             Toggle("Floating pet trên desktop", isOn: $petBinding.isVisible)
             Toggle("Lật pet sang phải", isOn: $petFlipped)
@@ -169,7 +173,7 @@ struct MainWindowView: View {
             } label: {
                 Label("Privacy & Data Access…", systemImage: "lock.shield")
             }
-            Link(destination: URL(string: "https://github.com/Vt-mmm/claudewatch/releases")!) {
+            Link(destination: URL(string: "https://github.com/Vt-mmm/agentwatch/releases")!) {
                 Label("Mở GitHub Releases", systemImage: "link")
             }
             Divider()
@@ -243,6 +247,7 @@ struct MainWindowView: View {
     private func liveAgentSections(claudeStats: SessionStats?,
                                    codexSnapshot: CodexLiveSnapshot,
                                    piSnapshot: PiAgentLiveSnapshot) -> some View {
+        ProviderQuotaCard()
         switch liveFilter {
         case .all:
             ForEach(liveAgentOrder(claudeStats: claudeStats,
@@ -362,6 +367,7 @@ private struct LiveAgentOrderItem: Identifiable {
 }
 
 private struct LiveOverviewCard: View {
+    @Environment(CodexLivePoller.self) private var codexPoller
     let claudeStats: SessionStats?
     let codexSnapshot: CodexLiveSnapshot
     let piSnapshot: PiAgentLiveSnapshot
@@ -380,7 +386,7 @@ private struct LiveOverviewCard: View {
     }
 
     private var estimatedCost: Double {
-        (claudeStats?.costBasis == .estimated ? claudeStats?.cost ?? 0 : 0)
+        (claudeStats?.costBasis.isEstimate == true ? claudeStats?.cost ?? 0 : 0)
             + codexSnapshot.estimatedCost
             + piSnapshot.estimatedCost
     }
@@ -484,7 +490,8 @@ private struct LiveOverviewCard: View {
     }
 
     private var codexDetail: String {
-        guard codexSnapshot.sessionCount > 0 else { return "no log" }
+        if codexPoller.isLoading { return "Đang đọc log Codex…" }
+        guard codexSnapshot.sessionCount > 0 else { return "Chưa có snapshot Codex; bấm làm mới" }
         let reasoning = codexSnapshot.totalReasoningTokens > 0
             ? " · reason \(TokenFormatter.compact(codexSnapshot.totalReasoningTokens))"
             : ""
@@ -658,7 +665,7 @@ private struct ClaudeLiveSessionCard: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 0) {
-                Text(stats.costBasis == .estimated ? "~" + TokenFormatter.usd(stats.cost) : "—")
+                Text(stats.costBasis.isEstimate ? "~" + TokenFormatter.usd(stats.cost) : "—")
                     .font(ClaudeFont.display(26).monospacedDigit())
                     .foregroundStyle(Claude.orange)
                     .contentTransition(.numericText())

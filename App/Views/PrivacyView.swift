@@ -3,7 +3,7 @@
 // danh sách file app sẽ đọc khi compute coaching stats.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct PrivacyView: View {
     @Environment(\.dismiss) private var dismiss
@@ -75,14 +75,14 @@ struct PrivacyView: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.shield.fill")
                     .foregroundStyle(.green)
-                Text("Không có outbound network call NÀO ngoài check update.")
+                Text("Report được tổng hợp và xuất trên máy.")
                     .font(ClaudeFont.body(12))
                     .foregroundStyle(Claude.textPrimary)
             }
-            Text("Chỉ Sparkle update fetch `appcast.xml` + download zip từ GitHub Releases (HTTPS, EdDSA verify).")
+            Text("Kiểm tra cập nhật qua Sparkle. Quota có thể được làm mới từ provider theo yêu cầu; Drive/Gmail chỉ dùng khi đã kết nối và chọn gửi.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
-            Text("Không telemetry, không analytics, không gửi prompt / cost / project name đi đâu.")
+            Text("Report chi tiết có nội dung prompt đã lọc. Các mẫu thông tin xác thực phổ biến được che trước khi xuất; anh có thể xem file trước khi chia sẻ.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
         }
@@ -98,7 +98,7 @@ struct PrivacyView: View {
                     .font(ClaudeFont.heading(13))
                     .foregroundStyle(Claude.textPrimary)
             }
-            Text("Tất cả file ở các thư mục agent trên được parse ngay trong process app. Kết quả render local trên UI. Không có ổ đĩa cloud, không có server backend. Anh bấm Export MD/HTML/CSV → file save trực tiếp xuống máy anh chọn.")
+            Text("Log agent được đọc cục bộ. Máy đã gắn key ghi tên ứng dụng ở phía trước, thời gian và trạng thái có tương tác gần đây/không thao tác. AgentWatch tiếp tục ghi nền khi đóng cửa sổ hoặc đang chờ key mở khóa; dừng khi máy ngủ hoặc app thoát. Không thu nội dung cửa sổ, lịch sử web, ảnh màn hình hay phím gõ. Lịch sử trước khi bật thu thập không có sẵn.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
         }

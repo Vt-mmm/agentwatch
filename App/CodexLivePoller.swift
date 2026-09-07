@@ -1,10 +1,10 @@
 // One-shot Codex/PiAgent recent-log snapshot for the Sessions tab.
-// Không poll nền: Agent Watch là audit log viewer, chỉ scan khi user bấm
+// Không poll nền: AgentWatch là audit log viewer, chỉ scan khi user bấm
 // refresh/export. App-open governance log chạy riêng trong SupervisorLockStore.
 
 import Foundation
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 /// Lightweight snapshot của Codex log gần đây — không full session detail.
 struct CodexLiveSnapshot: Sendable, Equatable {
@@ -27,7 +27,7 @@ struct CodexLiveSnapshot: Sendable, Equatable {
         sessions.filter { $0.costBasis == .reported }.reduce(0) { $0 + $1.cost }
     }
     var estimatedCost: Double {
-        sessions.filter { $0.costBasis == .estimated }.reduce(0) { $0 + $1.cost }
+        sessions.filter { $0.costBasis.isEstimate }.reduce(0) { $0 + $1.cost }
     }
 
     var latestSession: SessionSummary? {
@@ -48,6 +48,7 @@ final class CodexLivePoller {
         totalToolCalls: 0, totalCost: 0
     )
 
+    private(set) var isLoading = false
     private var refreshTask: Task<Void, Never>?
     private var cache: [String: SummaryCacheEntry] = [:]
 
@@ -57,6 +58,7 @@ final class CodexLivePoller {
 
     private func refresh() {
         guard refreshTask == nil else { return }
+        isLoading = true
         let cacheSnapshot = cache
         refreshTask = Task.detached(priority: .utility) { [cacheSnapshot] in
             let result = Self.scanCodexSnapshot(cache: cacheSnapshot)
@@ -66,6 +68,7 @@ final class CodexLivePoller {
                 if self.snapshot != result.snapshot {
                     self.snapshot = result.snapshot
                 }
+                self.isLoading = false
                 self.refreshTask = nil
             }
         }
@@ -82,7 +85,7 @@ final class CodexLivePoller {
         cache: [String: SummaryCacheEntry]
     ) -> (snapshot: CodexLiveSnapshot, cache: [String: SummaryCacheEntry]) {
         let now = Date()
-        let range = Date.distantPast...now.addingTimeInterval(60)
+        let range = Date.distantPast..<now.addingTimeInterval(60)
         var nextCache = cache
         var sessions: [SessionSummary] = []
         let candidates = recentJsonlFiles(
@@ -176,7 +179,7 @@ struct PiAgentLiveSnapshot: Sendable, Equatable {
         sessions.filter { $0.costBasis == .reported }.reduce(0) { $0 + $1.cost }
     }
     var estimatedCost: Double {
-        sessions.filter { $0.costBasis == .estimated }.reduce(0) { $0 + $1.cost }
+        sessions.filter { $0.costBasis.isEstimate }.reduce(0) { $0 + $1.cost }
     }
 
     var latestSession: SessionSummary? {
@@ -230,7 +233,7 @@ final class PiAgentLivePoller {
         cache: [String: SummaryCacheEntry]
     ) -> (snapshot: PiAgentLiveSnapshot, cache: [String: SummaryCacheEntry]) {
         let now = Date()
-        let range = Date.distantPast...now.addingTimeInterval(60)
+        let range = Date.distantPast..<now.addingTimeInterval(60)
         var nextCache = cache
         var sessions: [SessionSummary] = []
         let candidates = recentJsonlFiles(

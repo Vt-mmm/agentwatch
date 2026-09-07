@@ -3,7 +3,7 @@
 // header pet — bubble nằm BÊN TRÁI pet, tail trỏ về phía pet bên phải).
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct ChatBubble: View {
     let talk: PetTalk

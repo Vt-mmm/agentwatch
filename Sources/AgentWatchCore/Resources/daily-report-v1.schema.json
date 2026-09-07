@@ -1,0 +1,810 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "rendererVersion": {
+      "const": "daily-v1"
+    },
+    "reportID": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "report": {
+      "$ref": "#/$defs/DailyReportDraft"
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "rendererVersion",
+    "reportID",
+    "revision",
+    "generatedAt",
+    "reviewedBy",
+    "report",
+    "contentHash"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentwatch.local/schemas/daily-report-v1.schema.json",
+  "title": "Local immutable daily report snapshot (not a share payload)",
+  "$defs": {
+    "EmployeeProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "organizationID": {
+          "type": "string"
+        },
+        "employeeID": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "timeZone": {
+          "type": "string"
+        },
+        "workEmail": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationID",
+        "employeeID",
+        "displayName",
+        "timeZone"
+      ]
+    },
+    "DailyReportPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "cutoff": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeZone": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "cutoff",
+        "timeZone"
+      ]
+    },
+    "UsageTokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "integer"
+        },
+        "cacheRead": {
+          "type": "integer"
+        },
+        "cacheWrite": {
+          "type": "integer"
+        },
+        "cacheWrite1h": {
+          "type": "integer"
+        },
+        "reasoning": {
+          "type": "integer"
+        },
+        "rule": {
+          "type": "string",
+          "enum": [
+            "additiveCacheBuckets",
+            "inclusiveBreakdowns"
+          ]
+        }
+      },
+      "required": [
+        "input",
+        "output",
+        "cacheRead",
+        "cacheWrite",
+        "cacheWrite1h",
+        "reasoning",
+        "rule"
+      ]
+    },
+    "WorkClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "toolVerified",
+            "humanConfirmed",
+            "agentReported",
+            "inferred"
+          ]
+        },
+        "evidenceIDs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "text",
+        "basis",
+        "evidenceIDs"
+      ]
+    },
+    "ReportWorkItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "taskRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "taskRunIDs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sessionRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "readyForReview",
+            "inProgress",
+            "blocked",
+            "cancelled",
+            "unknown"
+          ]
+        },
+        "activities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkClaim"
+          }
+        },
+        "evidenceIDs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blockers": {
+          "type": "string"
+        },
+        "nextActions": {
+          "type": "string"
+        },
+        "humanConfirmed": {
+          "type": "boolean"
+        },
+        "manualMinutes": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "project",
+        "title",
+        "taskRefs",
+        "taskRunIDs",
+        "sessionRefs",
+        "status",
+        "activities",
+        "claims",
+        "evidenceIDs",
+        "blockers",
+        "nextActions",
+        "humanConfirmed"
+      ]
+    },
+    "ReportEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sessionRef": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "sessionActivity",
+            "toolResult",
+            "artifact",
+            "taskJournal",
+            "humanConfirmation"
+          ]
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "localRef": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "shareableURL": {
+          "type": "string"
+        },
+        "appliesToDay": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "observedAt",
+        "summary",
+        "digest"
+      ]
+    },
+    "ReportUsageRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "modelID": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tokens": {
+          "$ref": "#/$defs/UsageTokens"
+        },
+        "knownUSD": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        },
+        "costBasis": {
+          "type": "string",
+          "enum": [
+            "reported",
+            "estimated",
+            "agentEstimated",
+            "unavailable"
+          ]
+        },
+        "pricingVersion": {
+          "type": "string"
+        },
+        "workItemID": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "agent",
+        "provider",
+        "modelID",
+        "timestamp",
+        "tokens",
+        "costBasis",
+        "pricingVersion"
+      ]
+    },
+    "QuotaWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "usedPercent": {
+          "type": "number",
+          "minimum": 0
+        },
+        "durationMinutes": {
+          "type": "integer"
+        },
+        "resetsAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "QuotaSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sourceVersion": {
+          "type": "string"
+        },
+        "accountKey": {
+          "type": "string"
+        },
+        "captureKey": {
+          "type": "string"
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "availability": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable",
+            "unsupported",
+            "unauthenticated",
+            "failed"
+          ]
+        },
+        "windows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuotaWindow"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "provider",
+        "source",
+        "captureKey",
+        "capturedAt",
+        "availability",
+        "windows",
+        "warnings"
+      ]
+    },
+    "SourceFileManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "byteCount": {
+          "type": "integer"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "modifiedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "malformedRecordCount": {
+          "type": "integer"
+        },
+        "readable": {
+          "type": "boolean"
+        },
+        "changedDuringRead": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "byteCount",
+        "malformedRecordCount",
+        "readable",
+        "changedDuringRead"
+      ]
+    },
+    "SourceRootManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "readable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "exists",
+        "readable"
+      ]
+    },
+    "DailyReportDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "employee": {
+          "$ref": "#/$defs/EmployeeProfile"
+        },
+        "period": {
+          "$ref": "#/$defs/DailyReportPeriod"
+        },
+        "workItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportWorkItem"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportEvidence"
+          }
+        },
+        "usage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportUsageRecord"
+          }
+        },
+        "quota": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuotaSnapshot"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sourceFiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceFileManifest"
+          }
+        },
+        "sourceRoots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRootManifest"
+          }
+        },
+        "summary": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "narrativeProvenance": {
+          "type": "string"
+        },
+        "dailyActivity": {
+          "$ref": "#/$defs/ReportDailyActivity"
+        },
+        "desktopActivity": {
+          "$ref": "#/$defs/DesktopActivityReport"
+        }
+      },
+      "required": [
+        "employee",
+        "period",
+        "workItems",
+        "evidence",
+        "usage",
+        "quota",
+        "warnings",
+        "sourceFiles",
+        "sourceRoots",
+        "summary",
+        "notes",
+        "narrativeProvenance"
+      ]
+    },
+    "ReportPromptActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "app": {
+          "type": "string"
+        },
+        "sessionRef": {
+          "type": "string"
+        },
+        "observedProject": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "workItemID": {
+          "type": "string"
+        },
+        "taskBasis": {
+          "type": "string",
+          "enum": [
+            "unassigned",
+            "taskJournal",
+            "humanConfirmed",
+            "sessionContext"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "inScope",
+            "outOfScope"
+          ]
+        },
+        "scopeReason": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "toolObservations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "toolObservationCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "employee",
+            "agentContinuation",
+            "context"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "app",
+        "sessionRef",
+        "observedProject",
+        "summary",
+        "taskBasis",
+        "scope",
+        "scopeReason"
+      ]
+    },
+    "ReportAppActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "firstObservedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastObservedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sessionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "promptCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "usageRecordCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "firstObservedAt",
+        "lastObservedAt",
+        "sessionCount",
+        "promptCount",
+        "usageRecordCount",
+        "tokens"
+      ]
+    },
+    "ReportDailyActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prompts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportPromptActivity"
+          }
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportAppActivity"
+          }
+        }
+      },
+      "required": [
+        "prompts",
+        "apps"
+      ]
+    },
+    "DesktopAppSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "seconds"
+      ]
+    },
+    "DesktopActivityReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "collectionStartedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "observedSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DesktopAppSummary"
+          }
+        },
+        "timeline": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DesktopActivitySpan"
+          }
+        }
+      },
+      "required": [
+        "observedSeconds",
+        "apps"
+      ]
+    },
+    "DesktopActivitySpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "interaction": {
+          "type": "string",
+          "enum": [
+            "recentInput",
+            "idle",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "start",
+        "end",
+        "interaction"
+      ]
+    }
+  }
+}

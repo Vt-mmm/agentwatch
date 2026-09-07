@@ -1,17 +1,17 @@
-name: ClaudeWatchMac
+name: AgentWatchMac
 options:
   bundleIdPrefix: com.vtamm.claudewatch
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
 packages:
-  ClaudeWatchCore:
+  AgentWatchCore:
     path: .
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.6.4
 targets:
-  ClaudeWatchMac:
+  AgentWatchMac:
     type: application
     platform: macOS
     sources:
@@ -25,8 +25,8 @@ targets:
         type: folder
         buildPhase: resources
     dependencies:
-      - package: ClaudeWatchCore
-        product: ClaudeWatchCore
+      - package: AgentWatchCore
+        product: AgentWatchCore
       - package: Sparkle
         product: Sparkle
     info:
@@ -34,7 +34,7 @@ targets:
       properties:
         LSUIElement: false
         LSMinimumSystemVersion: "14.0"
-        CFBundleDisplayName: Agent Watch
+        CFBundleDisplayName: AgentWatch
         # Template substitution — xcodebuild replace at build time từ
         # MARKETING_VERSION / CURRENT_PROJECT_VERSION build settings dưới.
         # Tránh xcodegen ghi đè Info.plist bằng giá trị hardcoded mỗi lần generate.
@@ -46,12 +46,13 @@ targets:
         SUScheduledCheckInterval: 3600
         SUPublicEDKey: "ynaSo3Ac+GxZgbfaRN57FgCzf9mXsbUWeKPXUzg8msE="
     settings:
-      MARKETING_VERSION: "0.9.10"
-      CURRENT_PROJECT_VERSION: "00910"
+      MARKETING_VERSION: "0.10.0"
+      CURRENT_PROJECT_VERSION: "01000"
       GENERATE_INFOPLIST_FILE: NO
       ENABLE_HARDENED_RUNTIME: NO
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_IDENTITY: "-"
+      # Preserve the released identity for Sparkle and existing preferences.
       PRODUCT_BUNDLE_IDENTIFIER: com.vtamm.claudewatch.ClaudeWatchMac
       SWIFT_VERSION: "6.0"
       MACOSX_DEPLOYMENT_TARGET: "14.0"

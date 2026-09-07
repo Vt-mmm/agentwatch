@@ -1,9 +1,9 @@
 // Shared helpers on CoachingReportView: scope/date logic, export actions, pagination reset, misc utils.
-// Dependency direction: extension on CoachingReportView ← AppKit (NSSavePanel), ClaudeWatchCore.
+// Dependency direction: extension on CoachingReportView ← AppKit (NSSavePanel), AgentWatchCore.
 
 import SwiftUI
 import AppKit
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
 
@@ -17,7 +17,7 @@ extension CoachingReportView {
         case .day:
             let f = DateFormatter()
             f.dateFormat = "EEEE, dd/MM/yyyy"
-            f.locale = Locale(identifier: "vi_VN")
+            f.locale = AgentWatchLocale.locale
             f.timeZone = ReportTime.timeZone
             return f.string(from: anchor).capitalized
         case .week:
@@ -96,7 +96,6 @@ extension CoachingReportView {
             let startDay = cal.date(from: comps) ?? cal.startOfDay(for: anchor)
             let nextMonth = cal.date(byAdding: .month, value: 1, to: startDay) ?? startDay
             let endOfDay = nextMonth
-                .addingTimeInterval(-1)
             let f = DateFormatter(); f.dateFormat = "MM/yyyy"; f.timeZone = ReportTime.timeZone
             let label = "Tháng \(f.string(from: startDay))"
             return .custom(start: startDay, end: endOfDay, label: label)
@@ -125,17 +124,18 @@ extension CoachingReportView {
     var exportGuardMessage: String {
         switch scope {
         case .day:
-            return "Chỉ được export report hôm nay theo giờ GMT+7. Ngày cũ chỉ xem trong app."
+            return "Chỉ được export report hôm nay theo giờ \(ReportTime.timeZoneLabel). Ngày cũ chỉ xem trong app."
         case .week:
-            return "Chỉ được export report tuần hiện tại theo giờ GMT+7. Tuần cũ chỉ xem trong app."
+            return "Chỉ được export report tuần hiện tại theo giờ \(ReportTime.timeZoneLabel). Tuần cũ chỉ xem trong app."
         case .month:
-            return "Chỉ được export report tháng hiện tại theo giờ GMT+7. Tháng cũ chỉ xem trong app."
+            return "Chỉ được export report tháng hiện tại theo giờ \(ReportTime.timeZoneLabel). Tháng cũ chỉ xem trong app."
         }
     }
 
     /// Fingerprint scope+anchor để store biết khi nào cần re-fetch.
     var scopeFingerprint: String {
-        "\(scope.rawValue)|\(Int(anchor.timeIntervalSinceReferenceDate))"
+        let range = ReportTime.range(for: currentScope)
+        return "\(scope.rawValue)|\(range.lowerBound.timeIntervalSince1970)|\(range.upperBound.timeIntervalSince1970)"
     }
 
     var reportRecords: [PromptRecord] {

@@ -1,7 +1,7 @@
 // Compact menu bar dropdown. Same theme tokens as the full window.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct MenuBarSummaryView: View {
     @Environment(SessionWatcher.self) private var watcher
@@ -51,7 +51,7 @@ struct MenuBarSummaryView: View {
                     .foregroundStyle(Claude.orange)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text("Agent Watch")
+                Text("AgentWatch")
                     .font(ClaudeFont.heading(14))
                     .foregroundStyle(Claude.textPrimary)
                 Text(subtitle)
@@ -95,7 +95,7 @@ struct MenuBarSummaryView: View {
             + piSnapshot.totalReasoningTokens
         let cost = (claude?.cost ?? 0) + codexSnapshot.totalCost + piSnapshot.totalCost
         let reportedCost = piSnapshot.reportedCost
-        let estimatedCost = (claude?.costBasis == .estimated ? claude?.cost ?? 0 : 0)
+        let estimatedCost = (claude?.costBasis.isEstimate == true ? claude?.cost ?? 0 : 0)
             + codexSnapshot.estimatedCost
             + piSnapshot.estimatedCost
         let thinking = thinkingBreakdown()
@@ -366,7 +366,7 @@ private struct MenuLiveDetail {
         switch costBasis {
         case .reported:
             return TokenFormatter.usd(cost)
-        case .estimated:
+        case .estimated, .agentEstimated:
             return "~" + TokenFormatter.usd(cost)
         case .unavailable:
             return "—"

@@ -1,7 +1,7 @@
 // Session-level header: project, session id, model family.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct SessionHeaderView: View {
     let stats: SessionStats

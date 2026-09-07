@@ -2,13 +2,13 @@
 // Nhận PetEvent JSON từ CLI hook, dispatch lên MainActor để cập nhật
 // FloatingPetController (state + talk bubble).
 //
-// Lifecycle: start() trong ClaudeWatchMacApp.init, stop() khi app terminate.
+// Lifecycle: start() trong AgentWatchMacApp.init, stop() khi app terminate.
 // Accept loop chạy trên background DispatchQueue để không block MainActor.
 
 import Foundation
 import AppKit
 import Observation
-import ClaudeWatchCore
+import AgentWatchCore
 
 @Observable
 @MainActor
@@ -20,7 +20,7 @@ final class PetSocketServer {
     private var listenFd: Int32 = -1
 
     /// Background queue xử lý accept + read loop.
-    private let queue = DispatchQueue(label: "com.vtamm.claudewatch.pet-socket",
+    private let queue = DispatchQueue(label: "com.vtamm.agentwatch.pet-socket",
                                       qos: .utility)
 
     /// Weak ref để cập nhật pet. Set sau khi attach.

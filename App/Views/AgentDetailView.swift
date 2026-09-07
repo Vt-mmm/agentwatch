@@ -3,7 +3,7 @@
 // duration, and the first 600 chars of the tool_result content.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct AgentDetailView: View {
     let agent: AgentSpawn

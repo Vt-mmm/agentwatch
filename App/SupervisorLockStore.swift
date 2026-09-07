@@ -3,7 +3,7 @@ import CryptoKit
 import Foundation
 import Observation
 import ServiceManagement
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct SupervisorLockKey: Identifiable, Sendable, Equatable {
     let label: String
@@ -117,18 +117,17 @@ final class SupervisorLockStore {
     static let shared = SupervisorLockStore()
 
     static let keys: [SupervisorLockKey] = [
-        .init(label: "Tài - BE", enrollmentHash: "6ff42c6e6263e081cf9bb1b94122e60ff0e0e51b593aa24018e9fcda91969e78", unlockPassHash: "4010a89e176c60586c541ef2423e50e1f8ca9e0b0cee8ca1cea2a526429d475f"),
-        .init(label: "Dũng - BE", enrollmentHash: "1be030ee5bb367e40aedfc33785b396afad77ebc34384deeed48c0840638c518", unlockPassHash: "2871942179b7125f335c43bd8ad19d7b0d327a2baa19810e7625e1c30a1281a3"),
-        .init(label: "Minh - BE", enrollmentHash: "e8f9d5d06e15b4c7c7d66bd5bc9137773953efd99a496decbaba7d1fc6f03f4e", unlockPassHash: "0419adae6bd2f48fba23248a4ce1d55099522a6a8740056b40899af041f43516"),
-        .init(label: "Ngọc - BE", enrollmentHash: "b0ce7c7f927a8c8a00fecdb28aad9626f6d97240b0263f1fec789cc371b7e86c", unlockPassHash: "ce3e67502801aa9f51886a50711ae34f34f85d07afe2f24d73cbeff0a0b44d4f"),
-        .init(label: "Bình - BE", enrollmentHash: "b710d1ca98b457196db400e5ca6b0d8cbaf7526ff1491a704cb0c4f0fadecad0", unlockPassHash: "fc97f2f20dcf017a931656f43ada0577c6ad5e9db1638d3b606e51e0de7298cb"),
-        .init(label: "Đức - FE", enrollmentHash: "d2bc7383ea49d527f93a7440fc9c7cabe1286fdb98e4b6429d8234b067083895", unlockPassHash: "27a8aa2ff8aa882e74f4c5a8f509197358b026a1391222eb462b089a8fdf40b8"),
-        .init(label: "Chiến - FE", enrollmentHash: "5f732d05e00e69b2d113041907c62fadb15740225ae8213608cd2ea04ebaab8e", unlockPassHash: "bab23d3e4d0e6c9ca109f936400f67c1f0605c0c3333d81b4c32f1f3bc453bab"),
-        .init(label: "Mac1", enrollmentHash: "2c679ecf6acf2ee33090698668c9a05ef53b2c5338f5596c6ed870f67e2d89bf", unlockPassHash: "c4e6b11b9f2b0532004b6a4f084bda64fe5265d83838b9467fe60cf9121ace8c"),
-        .init(label: "Mac2", enrollmentHash: "11af5c04015c9e651a3bd438bf9354056b317116cb61622ae2c7287983ae1e1a", unlockPassHash: "b9d7c91a98da34eacaa2db5a823d2479fa551aad155d7f2d67679c7ed32ba29f"),
-        .init(label: "Mac3", enrollmentHash: "5331a527a0982d030131f89f42ecf9802cc4cd8e21fd8f1f0f2a0852ef5bacdc", unlockPassHash: "e4833fd75b9edc29d6b3388a4178d12404acd8d702fd238231b46a1efae04793"),
-        .init(label: "Mac4", enrollmentHash: "62d6e1a881c89cd5c909622541f419da4b7a22b371518f65fd084761a2928080", unlockPassHash: "de0ce006288cb42456eafa0b1d1f428dfc016d309e75285524a8cd05cfa513b0"),
-        .init(label: "Mac5", enrollmentHash: "4e6dd66953ecc86aeb3c5e5e147ca43f35e771dffde4b3b4872a1a03ceb40187", unlockPassHash: "92722d2c13e5ceb29b9dfde18439e8c15bfdd142aba38e5ae9158204cd2029ff"),
+        .init(label: "Tài - TW - BE", enrollmentHash: "6ff42c6e6263e081cf9bb1b94122e60ff0e0e51b593aa24018e9fcda91969e78", unlockPassHash: "4010a89e176c60586c541ef2423e50e1f8ca9e0b0cee8ca1cea2a526429d475f"),
+        .init(label: "Dũng - TW - BE", enrollmentHash: "1be030ee5bb367e40aedfc33785b396afad77ebc34384deeed48c0840638c518", unlockPassHash: "2871942179b7125f335c43bd8ad19d7b0d327a2baa19810e7625e1c30a1281a3"),
+        .init(label: "Minh - TW - BE", enrollmentHash: "e8f9d5d06e15b4c7c7d66bd5bc9137773953efd99a496decbaba7d1fc6f03f4e", unlockPassHash: "0419adae6bd2f48fba23248a4ce1d55099522a6a8740056b40899af041f43516"),
+        .init(label: "Ngọc - HRM - BE", enrollmentHash: "b0ce7c7f927a8c8a00fecdb28aad9626f6d97240b0263f1fec789cc371b7e86c", unlockPassHash: "ce3e67502801aa9f51886a50711ae34f34f85d07afe2f24d73cbeff0a0b44d4f"),
+        .init(label: "Bình - HRM - BE", enrollmentHash: "b710d1ca98b457196db400e5ca6b0d8cbaf7526ff1491a704cb0c4f0fadecad0", unlockPassHash: "fc97f2f20dcf017a931656f43ada0577c6ad5e9db1638d3b606e51e0de7298cb"),
+        .init(label: "Chiến - TW - App", enrollmentHash: "5f732d05e00e69b2d113041907c62fadb15740225ae8213608cd2ea04ebaab8e", unlockPassHash: "bab23d3e4d0e6c9ca109f936400f67c1f0605c0c3333d81b4c32f1f3bc453bab"),
+        .init(label: "Quang - TW - FE", enrollmentHash: "2c679ecf6acf2ee33090698668c9a05ef53b2c5338f5596c6ed870f67e2d89bf", unlockPassHash: "c4e6b11b9f2b0532004b6a4f084bda64fe5265d83838b9467fe60cf9121ace8c"),
+        .init(label: "Duy - HUB - BE", enrollmentHash: "11af5c04015c9e651a3bd438bf9354056b317116cb61622ae2c7287983ae1e1a", unlockPassHash: "b9d7c91a98da34eacaa2db5a823d2479fa551aad155d7f2d67679c7ed32ba29f"),
+        .init(label: "Dũng - VN - BE", enrollmentHash: "5331a527a0982d030131f89f42ecf9802cc4cd8e21fd8f1f0f2a0852ef5bacdc", unlockPassHash: "e4833fd75b9edc29d6b3388a4178d12404acd8d702fd238231b46a1efae04793"),
+        .init(label: "Đại - VN - BE", enrollmentHash: "62d6e1a881c89cd5c909622541f419da4b7a22b371518f65fd084761a2928080", unlockPassHash: "de0ce006288cb42456eafa0b1d1f428dfc016d309e75285524a8cd05cfa513b0"),
+        .init(label: "Tâm - VN - FE", enrollmentHash: "4e6dd66953ecc86aeb3c5e5e147ca43f35e771dffde4b3b4872a1a03ceb40187", unlockPassHash: "92722d2c13e5ceb29b9dfde18439e8c15bfdd142aba38e5ae9158204cd2029ff"),
         .init(label: "Mac6", enrollmentHash: "24d3c0eb16190176d7e8135de76ff0e2bd16aa8336b688f09e3dd579ca8267eb", unlockPassHash: "9e97f349569e42d5b314d6a8fa547b2cca4a4bce334d7922118555fad006726b"),
         .init(label: "Mac7", enrollmentHash: "020e98465cfc1d5dd3d68f64c734a8f10706501b9c431d0961fbf8d7d14c8f9d", unlockPassHash: "32b477ab14a047d336dde23d4354919297dbe51d3da5d4235bffba3a8b9be12f"),
         .init(label: "Mac8", enrollmentHash: "da4f4621410e304f29eadd3edec751fb81866c49ae802660f10ed89da2f4913e", unlockPassHash: "b0e3017ee933a611a5cf12bff1d70af8bd100fbe6c3f32a3bab8a7c583cb24c4"),
@@ -138,6 +137,26 @@ final class SupervisorLockStore {
         .init(label: "Mac12", enrollmentHash: "9abd3239cd2d8f5efdc64624111d8a4ee6b45ab2a47944c7242bf3e9e42c27c7", unlockPassHash: "e1679fa8133fbcc224a219f59e1e6339d02380291340bc1d1dd0fb6ca0ec521a"),
         .init(label: "Mac13", enrollmentHash: "0b1d64a9380409442bad07dc527ff6b9719178bbf50815a933afd1c82fd46dea", unlockPassHash: "4ef064d3ec2bd1782e9a1aa8ca3c0fb823472541e706ed5855b4c6adc054db72")
     ]
+
+    // Preserve enrollment and unlock ownership across display-name changes.
+    // Retired keys are deliberately not reassigned to another employee.
+    static func currentKeyLabel(for savedLabel: String?) -> String? {
+        guard let savedLabel else { return nil }
+        let legacyLabels = [
+            "Tài - BE": "Tài - TW - BE",
+            "Dũng - BE": "Dũng - TW - BE",
+            "Minh - BE": "Minh - TW - BE",
+            "Bình - BE": "Bình - HRM - BE",
+            "Ngọc - BE": "Ngọc - HRM - BE",
+            "Chiến - FE": "Chiến - TW - App",
+            "Mac1": "Quang - TW - FE",
+            "Mac2": "Duy - HUB - BE",
+            "Mac3": "Dũng - VN - BE",
+            "Mac4": "Đại - VN - BE",
+            "Mac5": "Tâm - VN - FE",
+        ]
+        return legacyLabels[savedLabel] ?? savedLabel
+    }
 
     private struct HeartbeatState: Codable {
         let runId: UUID
@@ -175,7 +194,11 @@ final class SupervisorLockStore {
 
     private init() {
         isLocked = UserDefaults.standard.bool(forKey: lockedKey)
-        lockedByLabel = UserDefaults.standard.string(forKey: lockedByLabelKey)
+        let savedLabel = UserDefaults.standard.string(forKey: lockedByLabelKey)
+        lockedByLabel = Self.currentKeyLabel(for: savedLabel)
+        if lockedByLabel != savedLabel {
+            UserDefaults.standard.set(lockedByLabel, forKey: lockedByLabelKey)
+        }
     }
 
     var statusLine: String {
@@ -192,13 +215,35 @@ final class SupervisorLockStore {
         !startupVerified
     }
 
+    var reportIdentity: ReportEnrollmentIdentity? {
+        guard startupVerified, let key = Self.keys.first(where: { $0.label == lockedByLabel }) else { return nil }
+        return try? ReportEnrollmentIdentity(enrollmentHash: key.enrollmentHash, label: key.label)
+    }
+
+    // Collection belongs to the enrolled machine. Viewing/exporting still needs
+    // this run's key verification; restarting must not leave the morning unrecorded.
+    var collectionIdentity: ReportEnrollmentIdentity? {
+        guard isLocked, let key = Self.keys.first(where: { $0.label == lockedByLabel }) else { return nil }
+        return try? ReportEnrollmentIdentity(enrollmentHash: key.enrollmentHash, label: key.label)
+    }
+
+    var loginItemStatus: String {
+        switch SMAppService.mainApp.status {
+        case .enabled: "Tự mở khi đăng nhập: đã bật"
+        case .requiresApproval: "Tự mở khi đăng nhập: cần bật trong Cài đặt macOS"
+        default: "Tự mở khi đăng nhập: chưa bật; cần kiểm tra Mục đăng nhập"
+        }
+    }
+
+    func openLoginSettings() { SMAppService.openSystemSettingsLoginItems() }
+
     func start() {
         guard !started else { return }
         started = true
         recentEvents = loadAuditEvents(limit: 200)
         detectPreviousAbnormalShutdown()
         appendAudit(kind: .appStarted, keyLabel: lockedByLabel,
-                    message: "Agent Watch opened; enrollment key is required to record this app-open.")
+                    message: "AgentWatch opened; enrollment key is required to record this app-open.")
         ensureLaunchAtLogin()
         writeHeartbeat(cleanExit: false)
         installPowerObservers()
@@ -292,7 +337,7 @@ final class SupervisorLockStore {
 
         if requiresStartupKey {
             if let key = promptForEnrollmentKey(
-                title: "Agent Watch cần ghi nhận mở app",
+                title: "AgentWatch cần ghi nhận mở app",
                 message: "Nhập enrollment key của máy này để ghi log mở app trước khi tiếp tục."
             ) {
                 if lockedByLabel == nil || lockedByLabel == key.label {
@@ -312,7 +357,7 @@ final class SupervisorLockStore {
 
         if !isLocked {
             if let key = promptForEnrollmentKey(
-                title: "Agent Watch cần được khóa",
+                title: "AgentWatch cần được khóa",
                 message: "Nhập enrollment key được cấp cho máy này để bật lock trước khi tiếp tục."
             ) {
                 isLocked = true
@@ -330,7 +375,7 @@ final class SupervisorLockStore {
         }
 
         if let key = promptForUnlockPass(
-            title: "Agent Watch đang locked",
+            title: "AgentWatch đang locked",
             message: "Nhập unlock pass để cho phép quit."
         ) {
             terminationAuthorized = true
@@ -354,7 +399,7 @@ final class SupervisorLockStore {
         removePowerObservers()
         writeHeartbeat(cleanExit: true)
         appendAudit(kind: .cleanQuit, keyLabel: nil,
-                    message: "Agent Watch quit cleanly from \(source).")
+                    message: "AgentWatch quit cleanly from \(source).")
     }
 
     func events(in scope: ReportScope) -> [SupervisorLockAuditEvent] {
@@ -368,7 +413,7 @@ final class SupervisorLockStore {
         appendAudit(
             kind: .logReadStarted,
             keyLabel: lockedByLabel,
-            message: "reason=\(reason); scope=\(scope.label); timezone=GMT+7"
+            message: "reason=\(reason); scope=\(scope.label); language=\(AgentWatchLocale.languageCode); region=\(AgentWatchLocale.regionCode); locale=\(AgentWatchLocale.identifier); timezone=\(ReportTime.timeZoneLabel)"
         )
     }
 
@@ -421,9 +466,9 @@ final class SupervisorLockStore {
                 id: UUID(),
                 timestamp: range.lowerBound,
                 severity: "critical",
-                title: "No verified Agent Watch open",
+                title: "No verified AgentWatch open",
                 message: "Có agent sessions trong kỳ nhưng không có heartbeat nào sau khi nhập enrollment key.",
-                recommendation: "Yêu cầu member mở Agent Watch và nhập key trước khi bắt đầu task.",
+                recommendation: "Yêu cầu member mở AgentWatch và nhập key trước khi bắt đầu task.",
                 source: nil,
                 sessionId: nil
             ))
@@ -448,12 +493,12 @@ final class SupervisorLockStore {
                 let recommendation: String
                 if let firstVerifiedAt,
                    firstVerifiedAt > upper {
-                    title = "Session finished before Agent Watch opened"
-                    message = "\(session.source.label) session '\(session.displayTitle)' đã chạy xong trước khi Agent Watch được mở và nhập key."
-                    recommendation = "Đánh dấu vi phạm flow: member phải mở Agent Watch, nhập key, rồi mới bắt đầu agent task."
+                    title = "Session finished before AgentWatch opened"
+                    message = "\(session.source.label) session '\(session.displayTitle)' đã chạy xong trước khi AgentWatch được mở và nhập key."
+                    recommendation = "Đánh dấu vi phạm flow: member phải mở AgentWatch, nhập key, rồi mới bắt đầu agent task."
                 } else {
                     title = "Agent session outside app coverage"
-                    message = "\(session.source.label) session '\(session.displayTitle)' không có verified Agent Watch heartbeat trong lúc chạy."
+                    message = "\(session.source.label) session '\(session.displayTitle)' không có verified AgentWatch heartbeat trong lúc chạy."
                     recommendation = "Đối chiếu audit log và yêu cầu member giải trình nếu task được làm khi app chưa mở hoặc chưa nhập key."
                 }
                 findings.append(WorkComplianceFinding(
@@ -477,7 +522,7 @@ final class SupervisorLockStore {
 
     func markdownSection(scope: ReportScope) -> String {
         let scoped = events(in: scope)
-        var md = "\n## Agent Watch activity audit\n"
+        var md = "\n## AgentWatch activity audit\n"
         if scoped.isEmpty {
             md += "_Không có app activity event trong khoảng này._\n"
             return md
@@ -494,7 +539,7 @@ final class SupervisorLockStore {
     func complianceMarkdownSection(scope: ReportScope,
                                    sessions: [SessionSummary]) -> String {
         let findings = complianceFindings(scope: scope, sessions: sessions)
-        var md = "\n## Agent Watch compliance\n"
+        var md = "\n## AgentWatch compliance\n"
         if findings.isEmpty {
             md += "_Không có coverage violation trong kỳ này._\n"
             return md
@@ -502,7 +547,7 @@ final class SupervisorLockStore {
         md += "| Severity | Time | Source | Session | Finding | Recommendation |\n"
         md += "|---|---|---|---|---|---|\n"
         for finding in findings {
-            md += "| \(finding.severity) | \(Self.timestampFormatter.string(from: finding.timestamp)) | \(finding.source?.label ?? "Agent Watch") | \(finding.sessionId ?? "") | \(finding.message) | \(finding.recommendation) |\n"
+            md += "| \(finding.severity) | \(Self.timestampFormatter.string(from: finding.timestamp)) | \(finding.source?.label ?? "AgentWatch") | \(finding.sessionId ?? "") | \(finding.message) | \(finding.recommendation) |\n"
         }
         return md
     }
@@ -510,7 +555,7 @@ final class SupervisorLockStore {
     func htmlSection(scope: ReportScope) -> String {
         let scoped = events(in: scope)
         guard !scoped.isEmpty else {
-            return "<h2>Agent Watch activity audit</h2><p class=muted>Không có app activity event trong khoảng này.</p>"
+            return "<h2>AgentWatch activity audit</h2><p class=muted>Không có app activity event trong khoảng này.</p>"
         }
         let rows = scoped.map { event in
             let downtime = event.downtimeSeconds.map { humanDuration($0) } ?? ""
@@ -521,8 +566,8 @@ final class SupervisorLockStore {
                 + "<td>\(htmlEscape(event.message))</td></tr>"
         }.joined()
         return """
-        <h2>Agent Watch activity audit</h2>
-        <div class="table-scroll"><table class="wide-table"><thead><tr><th>Time (GMT+7)</th><th>Event</th><th>Key</th><th>Downtime</th><th>Message</th></tr></thead><tbody>\(rows)</tbody></table></div>
+        <h2>AgentWatch activity audit</h2>
+        <div class="table-scroll"><table class="wide-table"><thead><tr><th>Time (\(ReportTime.timeZoneLabel))</th><th>Event</th><th>Key</th><th>Downtime</th><th>Message</th></tr></thead><tbody>\(rows)</tbody></table></div>
         """
     }
 
@@ -530,19 +575,19 @@ final class SupervisorLockStore {
                                sessions: [SessionSummary]) -> String {
         let findings = complianceFindings(scope: scope, sessions: sessions)
         guard !findings.isEmpty else {
-            return "<h2>Agent Watch compliance</h2><p class=muted>Không có coverage violation trong kỳ này.</p>"
+            return "<h2>AgentWatch compliance</h2><p class=muted>Không có coverage violation trong kỳ này.</p>"
         }
         let rows = findings.map { finding in
             "<tr><td>\(htmlEscape(finding.severity))</td>"
                 + "<td>\(htmlEscape(Self.timestampFormatter.string(from: finding.timestamp)))</td>"
-                + "<td>\(htmlEscape(finding.source?.label ?? "Agent Watch"))</td>"
+                + "<td>\(htmlEscape(finding.source?.label ?? "AgentWatch"))</td>"
                 + "<td>\(htmlEscape(finding.sessionId ?? ""))</td>"
                 + "<td>\(htmlEscape(finding.message))</td>"
                 + "<td>\(htmlEscape(finding.recommendation))</td></tr>"
         }.joined()
         return """
-        <h2>Agent Watch compliance</h2>
-        <div class="table-scroll"><table class="wide-table risk-table"><thead><tr><th>Severity</th><th>Time (GMT+7)</th><th>Source</th><th>Session</th><th>Finding</th><th>Recommendation</th></tr></thead><tbody>\(rows)</tbody></table></div>
+        <h2>AgentWatch compliance</h2>
+        <div class="table-scroll"><table class="wide-table risk-table"><thead><tr><th>Severity</th><th>Time (\(ReportTime.timeZoneLabel))</th><th>Source</th><th>Session</th><th>Finding</th><th>Recommendation</th></tr></thead><tbody>\(rows)</tbody></table></div>
         """
     }
 
@@ -563,7 +608,7 @@ final class SupervisorLockStore {
                 "lock_audit",
                 Self.timestampFormatter.string(from: event.timestamp),
                 "agent_watch",
-                "Agent Watch",
+                "AgentWatch",
                 event.id.uuidString,
                 csvEscape(event.keyLabel ?? ""),
                 "",
@@ -607,7 +652,7 @@ final class SupervisorLockStore {
                 "compliance",
                 Self.timestampFormatter.string(from: finding.timestamp),
                 finding.source?.rawValue ?? "agent_watch",
-                finding.source?.label ?? "Agent Watch",
+                finding.source?.label ?? "AgentWatch",
                 finding.sessionId ?? finding.id.uuidString,
                 "",
                 "",
@@ -656,7 +701,7 @@ final class SupervisorLockStore {
         startupVerifiedAt = Date()
         persistLockState()
         appendAudit(kind: .appOpenVerified, keyLabel: key.label,
-                    message: "Agent Watch app-open recorded by \(key.label).")
+                    message: "AgentWatch app-open recorded by \(key.label).")
         writeHeartbeat(cleanExit: false)
     }
 
@@ -686,6 +731,10 @@ final class SupervisorLockStore {
         let defaults = UserDefaults.standard
         defaults.set(isLocked, forKey: lockedKey)
         defaults.set(lockedByLabel, forKey: lockedByLabelKey)
+        if let identity = reportIdentity {
+            defaults.set(identity.employeeID, forKey: "dailyReport.employeeID")
+            defaults.set(identity.name, forKey: "dailyReport.displayName")
+        }
     }
 
     private func detectPreviousAbnormalShutdown() {
@@ -707,18 +756,34 @@ final class SupervisorLockStore {
             let service = SMAppService.mainApp
             switch service.status {
             case .enabled:
+                // Moving out of a temporary build directory must update the
+                // registered URL, otherwise login may reopen the obsolete build.
+                let path = Bundle.main.bundleURL.resolvingSymlinksInPath().path
+                if UserDefaults.standard.string(forKey: "supervisor.login.registeredPath") != path {
+                    do {
+                        try service.unregister()
+                        try service.register()
+                        UserDefaults.standard.set(path, forKey: "supervisor.login.registeredPath")
+                        appendAudit(kind: .launchAtLoginEnabled, keyLabel: lockedByLabel,
+                                    message: "AgentWatch updated its login item to the current installed app.")
+                    } catch {
+                        appendAudit(kind: .launchAtLoginFailed, keyLabel: lockedByLabel,
+                                    message: "AgentWatch could not update its login item: \(error.localizedDescription)")
+                    }
+                }
                 return
             case .requiresApproval:
                 appendAudit(kind: .launchAtLoginNeedsApproval, keyLabel: lockedByLabel,
-                            message: "Agent Watch launch-at-login requires approval in macOS Login Items.")
+                            message: "AgentWatch launch-at-login requires approval in macOS Login Items.")
             default:
                 do {
                     try service.register()
+                    UserDefaults.standard.set(Bundle.main.bundleURL.resolvingSymlinksInPath().path, forKey: "supervisor.login.registeredPath")
                     appendAudit(kind: .launchAtLoginEnabled, keyLabel: lockedByLabel,
-                                message: "Agent Watch registered itself to open at macOS login.")
+                                message: "AgentWatch registered itself to open at macOS login.")
                 } catch {
                     appendAudit(kind: .launchAtLoginFailed, keyLabel: lockedByLabel,
-                                message: "Agent Watch could not register launch-at-login: \(error.localizedDescription)")
+                                message: "AgentWatch could not register launch-at-login: \(error.localizedDescription)")
                 }
             }
         }
@@ -750,7 +815,7 @@ final class SupervisorLockStore {
             try data.write(to: heartbeatURL, options: [.atomic])
             appendPresenceSample(at: state.heartbeatAt)
         } catch {
-            NSLog("Agent Watch heartbeat write failed: \(error)")
+            NSLog("AgentWatch heartbeat write failed: \(error)")
         }
     }
 
@@ -785,11 +850,11 @@ final class SupervisorLockStore {
                 try data.write(to: presenceURL, options: [.atomic])
             }
         } catch {
-            NSLog("Agent Watch presence write failed: \(error)")
+            NSLog("AgentWatch presence write failed: \(error)")
         }
     }
 
-    private func loadPresenceSamples(in range: ClosedRange<Date>) -> [AgentWatchPresenceSample] {
+    private func loadPresenceSamples(in range: Range<Date>) -> [AgentWatchPresenceSample] {
         guard let raw = try? String(contentsOf: presenceURL, encoding: .utf8) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -843,11 +908,11 @@ final class SupervisorLockStore {
         let message: String
         switch kind {
         case .systemWillSleep:
-            message = "Mac is going to sleep while Agent Watch is running."
+            message = "Mac is going to sleep while AgentWatch is running."
         case .systemDidWake:
-            message = "Mac woke while Agent Watch is running."
+            message = "Mac woke while AgentWatch is running."
         case .systemWillPowerOff:
-            message = "Mac is powering off while Agent Watch is running."
+            message = "Mac is powering off while AgentWatch is running."
         default:
             message = kind.label
         }
@@ -891,7 +956,7 @@ final class SupervisorLockStore {
                 recentEvents.removeLast(recentEvents.count - 200)
             }
         } catch {
-            NSLog("Agent Watch lock audit write failed: \(error)")
+            NSLog("AgentWatch lock audit write failed: \(error)")
         }
     }
 
@@ -953,9 +1018,7 @@ final class SupervisorLockStore {
     }
 
     private var supportDirectory: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-        return base.appendingPathComponent("Agent Watch", isDirectory: true)
+        AgentWatchIdentity.applicationSupportDirectory()
     }
 
     private var heartbeatURL: URL {
@@ -974,22 +1037,8 @@ final class SupervisorLockStore {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
     }
 
-    private func dateRange(for scope: ReportScope) -> ClosedRange<Date> {
-        let cal = ReportTime.calendar
-        switch scope {
-        case .day(let date):
-            let start = cal.startOfDay(for: date)
-            let end = (cal.date(byAdding: .day, value: 1, to: start) ?? start)
-                .addingTimeInterval(-1)
-            return start...end
-        case .week(let start):
-            let begin = cal.startOfDay(for: start)
-            let end = (cal.date(byAdding: .day, value: 7, to: begin) ?? begin)
-                .addingTimeInterval(-1)
-            return begin...end
-        case .custom(let start, let end, _):
-            return start...end
-        }
+    private func dateRange(for scope: ReportScope) -> Range<Date> {
+        ReportTime.range(for: scope)
     }
 
     private func humanDuration(_ seconds: TimeInterval) -> String {
@@ -1022,11 +1071,16 @@ final class SupervisorLockStore {
 
 @MainActor
 final class AgentWatchAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        SupervisorLockStore.shared.start()
+        DesktopAppActivityCollector.shared.start()
+    }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         SupervisorLockStore.shared.shouldTerminate(source: "application")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        DesktopAppActivityCollector.shared.stopAndFlush()
         SupervisorLockStore.shared.markCleanExit(source: "applicationWillTerminate")
     }
 }

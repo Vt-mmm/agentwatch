@@ -2,7 +2,7 @@
 // Place ở đầu PetCollectionView để user thấy progression chính khi vào tab Pets.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct TrainerLevelBadge: View {
     let level: Int

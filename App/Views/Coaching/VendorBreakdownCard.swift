@@ -1,7 +1,7 @@
 // Vendor breakdown: Total / Claude / Codex / PiAgent.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct VendorBreakdownCard: View {
     let sessions: [SessionSummary]

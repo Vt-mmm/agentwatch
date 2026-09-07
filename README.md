@@ -1,4 +1,4 @@
-# Claude Watch Mac
+# AgentWatch Mac
 
 Native macOS menu bar + window app audit Claude, Codex và PiAgent sessions. App đọc snapshot log local theo lần mở tab / bấm refresh, hiển thị prompts, tokens, cost, thinking mode và rủi ro usage theo phiên.
 
@@ -13,8 +13,8 @@ App chạy **local only** — không có hosted distribution, mỗi dev tự clo
 ## Setup lần đầu
 
 ```bash
-git clone <repo-url> claude-watch-mac
-cd claude-watch-mac
+git clone <repo-url> agentwatch-mac
+cd agentwatch-mac
 
 # 1. (Optional) Verify core library + unit tests
 swift build
@@ -24,16 +24,16 @@ swift test
 xcodegen generate
 
 # 3. Build the .app
-xcodebuild -project ClaudeWatchMac.xcodeproj \
-           -scheme ClaudeWatchMac \
+xcodebuild -project AgentWatchMac.xcodeproj \
+           -scheme AgentWatchMac \
            -configuration Debug build
 
 # 4. Copy built bundle vào Releases/ rồi mở
 SRC=$(find ~/Library/Developer/Xcode/DerivedData \
-       -name ClaudeWatchMac.app -path "*Debug*" | head -1)
-mkdir -p Releases && rm -rf Releases/ClaudeWatchMac.app
-ditto "$SRC" Releases/ClaudeWatchMac.app
-open Releases/ClaudeWatchMac.app
+       -name AgentWatchMac.app -path "*Debug*" | head -1)
+mkdir -p Releases && rm -rf Releases/AgentWatchMac.app
+ditto "$SRC" Releases/AgentWatchMac.app
+open Releases/AgentWatchMac.app
 ```
 
 Build ad-hoc signed (không cần Apple Developer account). Gatekeeper có thể prompt lần đầu → right-click `Open`.
@@ -42,7 +42,7 @@ Build ad-hoc signed (không cần Apple Developer account). Gatekeeper có thể
 
 ```bash
 xcodegen generate
-open ClaudeWatchMac.xcodeproj
+open AgentWatchMac.xcodeproj
 # ⌘R để run từ Xcode
 ```
 
@@ -59,7 +59,7 @@ open ClaudeWatchMac.xcodeproj
 ```bash
 # Sau khi sửa Swift code
 swift test                                              # core logic only
-xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac build
+xcodebuild -project AgentWatchMac.xcodeproj -scheme AgentWatchMac build
 # Hoặc Xcode ⌘R
 
 # Sau khi sửa project.yml
@@ -78,18 +78,18 @@ for s in 16 32 64 128 256 512 1024; do
        --out App/Assets.xcassets/AppIcon.appiconset/icon_${s}.png
 done
 # 4. Rebuild
-xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac build
+xcodebuild -project AgentWatchMac.xcodeproj -scheme AgentWatchMac build
 ```
 
 ## Architecture
 
 ```
-claude-watch-mac/
-├── Package.swift              # Swift package: ClaudeWatchCore (logic) + claude-watch-demo (CLI)
+agentwatch-mac/
+├── Package.swift              # Swift package: AgentWatchCore (logic) + agent-watch-demo (CLI)
 ├── project.yml                # XcodeGen config for the .app
 ├── scripts/app-icon.svg       # source SVG cho app icon
 ├── Sources/
-│   └── ClaudeWatchCore/        # Pure logic, no AppKit
+│   └── AgentWatchCore/        # Pure logic, no AppKit
 │       ├── Pricing.swift        # USD/Mtok lookup (opus/sonnet/haiku/fable)
 │       ├── SessionStats.swift   # aggregate model + session activity
 │       ├── SessionEvent.swift   # one timeline entry
@@ -98,7 +98,7 @@ claude-watch-mac/
 │       ├── JsonlParser.swift    # parse one transcript
 │       └── SessionWatcher.swift # @Observable snapshot loader + token history
 ├── App/                        # SwiftUI app target
-│   ├── ClaudeWatchMacApp.swift # @main, MenuBarExtra + WindowGroup
+│   ├── AgentWatchMacApp.swift # @main, MenuBarExtra + WindowGroup
 │   ├── ProjectStore.swift      # persists pinned / follow-latest mode
 │   ├── NotificationService.swift # subagent + cost threshold alerts
 │   ├── Theme.swift             # Claude palette + ClaudeFont + cards
@@ -114,12 +114,12 @@ claude-watch-mac/
 │       ├── EventDetailView.swift
 │       ├── AgentTreeList.swift
 │       └── AgentDetailView.swift
-└── Tests/ClaudeWatchCoreTests/   # parser + watcher tests
+└── Tests/AgentWatchCoreTests/   # parser + watcher tests
 ```
 
 ## Auto-update qua Sparkle
 
-App tích Sparkle 2 → user install xong sẽ tự pull update mỗi 1h, hoặc bấm **Menu Bar → Claude Watch → Check for Updates…**.
+App tích Sparkle 2 → user install xong sẽ tự pull update mỗi 1h, hoặc bấm **Menu Bar → AgentWatch → Check for Updates…**.
 
 ### Setup MỘT LẦN (maintainer)
 
@@ -139,7 +139,7 @@ App tích Sparkle 2 → user install xong sẽ tự pull update mỗi 1h, hoặc
 Script tự làm:
 1. Bump version (`project.yml` + `Info.plist`).
 2. `xcodebuild archive` → export `.app`.
-3. `ditto -c -k --keepParent` → `ClaudeWatchMac-0.2.0.zip`.
+3. `ditto -c -k --keepParent` → `AgentWatchMac-0.2.0.zip`.
 4. Sign EdDSA bằng key trong Keychain.
 5. Tag + push + tạo GitHub Release + upload zip qua `gh`.
 6. Prepend entry vào `appcast.xml`, commit + push.
@@ -148,19 +148,19 @@ User chạy bản cũ sẽ thấy popup update trong ≤1h, hoặc dùng menu Ch
 
 ### User install bản đầu (chia cho team)
 
-1. Tải `.zip` từ https://github.com/Vt-mmm/agentwatch/releases/latest → unzip → kéo `ClaudeWatchMac.app` vô `/Applications`.
+1. Tải `.zip` từ https://github.com/Vt-mmm/agentwatch/releases/latest → unzip → kéo `AgentWatchMac.app` vô `/Applications`.
 2. **Bypass Gatekeeper lần đầu** (app ad-hoc signed, không có Developer ID):
    ```bash
-   xattr -dr com.apple.quarantine /Applications/ClaudeWatchMac.app
+   xattr -dr com.apple.quarantine /Applications/AgentWatchMac.app
    ```
-   Hoặc qua UI: **System Settings → Privacy & Security** → kéo xuống cuối → **Open Anyway** cho ClaudeWatchMac.
+   Hoặc qua UI: **System Settings → Privacy & Security** → kéo xuống cuối → **Open Anyway** cho AgentWatchMac.
 3. Mở app bình thường.
 
 Từ version 2 trở đi, Sparkle tự update không cần bypass nữa vì update binary không bị macOS gắn quarantine.
 
 ## Privacy
 
-App **chỉ đọc data local** trên máy user, **không gửi gì lên Internet** ngoài việc check update.
+App đọc log và ghi nhận ứng dụng trên máy. Report lưu local; khi người dùng duyệt gửi, PDF và nội dung email được gửi trực tiếp đến Google Drive/Gmail bằng tài khoản đã kết nối. Không có máy chủ report trung gian.
 
 ### Folders app đọc
 
@@ -177,13 +177,17 @@ Click **Settings (gear) → Privacy & Data Access…** để xem **danh sách fi
 | Khi nào | Tới đâu | Data sent |
 |---|---|---|
 | Mỗi 1h (Sparkle auto-check) | `https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/appcast.xml` | Chỉ request — **không** kèm user agent identifier, project info, prompt, cost… |
+| Khi kết nối Google/chọn folder | Google OAuth và Drive API | Yêu cầu cấp quyền, danh tính tài khoản và folder được chọn |
+| Khi duyệt gửi report | Google Drive/Gmail API | PDF report; Gmail có người nhận, tiêu đề và nội dung email |
 | Khi user accept update | `https://github.com/Vt-mmm/agentwatch/releases/download/.../*.zip` | Chỉ request — verify bằng EdDSA pubkey hard-coded trong app |
 
-**Không** có analytics, telemetry, error reporting, hay bất kỳ outbound call nào khác. Source code public tại https://github.com/Vt-mmm/agentwatch để team tự kiểm tra.
+Kết nối Google dùng OAuth trong trình duyệt; token lưu ở Keychain. Khi làm mới quota Codex theo yêu cầu, app gọi Codex app-server và provider tương ứng. Tự động gửi theo lịch chỉ chạy với bản report đã được duyệt và chính sách cho phép. Source code public tại https://github.com/Vt-mmm/agentwatch để team tự kiểm tra.
 
 ### Export
 
 Khi user bấm **Export MD / HTML / CSV** trong tab Coaching → file lưu trực tiếp xuống ổ user chọn qua `NSSavePanel`. Không qua server trung gian.
+
+Xem [thiết lập Google cho team](docs/google-report-delivery.md). Mỗi người dùng Gmail riêng và chỉ chọn folder được chia sẻ cho mình; không cần chọn folder cha.
 
 ## Known limits
 

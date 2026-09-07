@@ -2,7 +2,7 @@
 // Dependency direction: extension on CoachingReportView ← CoachingSessionRow (sessionRow helper).
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
 

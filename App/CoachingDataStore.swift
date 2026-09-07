@@ -4,7 +4,7 @@
 
 import Foundation
 import Observation
-import ClaudeWatchCore
+import AgentWatchCore
 
 /// 1 cột trong 7-day cost chart. `date` = ngày của cột (0h00 local), `cost` = tổng cost.
 struct DailyCostBucket: Sendable, Equatable {
@@ -44,6 +44,8 @@ final class CoachingDataStore {
     var dailyCostTrend: [DailyCostBucket] = []
     var lastRefreshAt: Date = .distantPast
     var isLoading: Bool = false
+    var scanProgress: String = ""
+    private var scanGeneration = UUID()
 
     /// Pet mascot state — derive từ aggregate signals (avg★ delta, outlier
     /// count, agent loop count). Update mỗi lần reload xong.
@@ -79,6 +81,7 @@ final class CoachingDataStore {
     /// thấy data còn fresh nhưng vẫn cần giữ fingerprint hiện tại.
     func setActive(scope: ReportScope, fingerprint: String) {
         if activeFingerprint != fingerprint {
+            scanGeneration = UUID()
             loadTask?.cancel()
             loadTask = nil
             isLoading = false
@@ -96,15 +99,23 @@ final class CoachingDataStore {
         if shouldShowLoading {
             isLoading = true
         }
-        lastScopeFingerprint = fingerprint
+        scanGeneration = UUID()
+        let generation = scanGeneration
+        scanProgress = "Đang tìm file log…"
         let currentRange = Self.dateRange(for: scope)
         let startedAt = Date()
         onScanStarted?("manual", scope)
 
         loadTask = Task.detached(priority: showLoading ? .userInitiated : .utility) { [weak self] in
-            let result = await CoachingScan.scan(in: currentRange)
+            let result = await CoachingScan.scan(in: currentRange, progress: { [weak self] completed, total in
+                await MainActor.run { [weak self] in
+                    guard let self, self.scanGeneration == generation else { return }
+                    self.scanProgress = "Đã đọc \(completed)/\(total) file log. Lần đầu có thể lâu nếu lịch sử lớn."
+                }
+            })
             if Task.isCancelled { return }
             await MainActor.run { [weak self] in
+                guard self?.scanGeneration == generation else { return }
                 _ = self?.applyScanResult(
                     result,
                     scope: scope,
@@ -116,12 +127,18 @@ final class CoachingDataStore {
         }
     }
 
+    func cancelScan() {
+        scanGeneration = UUID()
+        loadTask?.cancel(); loadTask = nil; isLoading = false
+        scanProgress = "Đã dừng đọc log."
+    }
+
     @discardableResult
     func reloadForExport(scope: ReportScope, fingerprint: String) async -> Bool {
         setActive(scope: scope, fingerprint: fingerprint)
         loadTask?.cancel()
+        scanGeneration = UUID()
         isLoading = true
-        lastScopeFingerprint = fingerprint
         let currentRange = Self.dateRange(for: scope)
         let startedAt = Date()
         onScanStarted?("export", scope)
@@ -169,6 +186,7 @@ final class CoachingDataStore {
             agentLoopCount: CoachingInsights.agentLoopSessions(curS).count,
             avgStarsDelta: 0)
         petState = PetMood.resolve(signals)
+        lastScopeFingerprint = fingerprint
         lastRefreshAt = Date()
         isLoading = false
         loadTask = nil
@@ -198,20 +216,8 @@ final class CoachingDataStore {
 
     // MARK: - Range helpers (nonisolated để dùng từ Task.detached)
 
-    nonisolated static func dateRange(for scope: ReportScope) -> ClosedRange<Date> {
-        let cal = ReportTime.calendar
-        switch scope {
-        case .day(let d):
-            let start = cal.startOfDay(for: d)
-            let end = cal.date(byAdding: .day, value: 1, to: start) ?? start
-            return start...end.addingTimeInterval(-1)
-        case .week(let start):
-            let end = PromptHistory.currentMondayBased
-                .date(byAdding: .day, value: 7, to: start) ?? start
-            return start...end.addingTimeInterval(-1)
-        case .custom(let s, let e, _):
-            return s...e
-        }
+    nonisolated static func dateRange(for scope: ReportScope) -> Range<Date> {
+        ReportTime.range(for: scope)
     }
 
 }

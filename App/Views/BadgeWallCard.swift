@@ -2,7 +2,7 @@
 // Duolingo "Awards" pattern: visible progression beyond level numbers.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct BadgeWallCard: View {
     let badges: [Badge]

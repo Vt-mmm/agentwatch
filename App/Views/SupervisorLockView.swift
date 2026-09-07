@@ -49,6 +49,14 @@ struct SupervisorLockView: View {
                 Text(statusDetail)
                     .font(ClaudeFont.body(11))
                     .foregroundStyle(Claude.textMuted)
+                if lock.collectionIdentity != nil {
+                    Text("Máy đã gắn key: ứng dụng và trạng thái tương tác vẫn được ghi nền khi chờ mở khóa. Không ghi nội dung cửa sổ hoặc phím gõ.")
+                        .font(ClaudeFont.body(11))
+                        .foregroundStyle(Claude.textMuted)
+                    Text(lock.loginItemStatus)
+                        .font(ClaudeFont.body(11))
+                        .foregroundStyle(Claude.textMuted)
+                }
             }
             Spacer()
         }
@@ -132,7 +140,7 @@ struct SupervisorLockView: View {
 
     private var headerDetail: String {
         if lock.requiresStartupKey {
-            return "Nhập enrollment key để ghi log mở app và bắt đầu ngày làm việc."
+            return "Nhập enrollment key để mở màn hình báo cáo và xác nhận lượt mở app."
         }
         return lock.isLocked
             ? "Nhập unlock pass để tắt lock hoặc quit app."

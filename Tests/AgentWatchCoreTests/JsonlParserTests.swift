@@ -1,0 +1,282 @@
+// Smoke tests for the JSONL parser. Uses synthetic fixtures in a temp dir
+// to avoid depending on the user's real ~/.claude/projects.
+
+import XCTest
+@testable import AgentWatchCore
+
+final class JsonlParserTests: XCTestCase {
+
+    private func writeFixture(_ lines: [[String: Any]]) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agentwatch-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("session.jsonl")
+        let body = lines.map {
+            String(data: try! JSONSerialization.data(withJSONObject: $0), encoding: .utf8)!
+        }.joined(separator: "\n")
+        try body.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    func testAggregatesTokensAcrossAssistantMessages() throws {
+        let url = try writeFixture([
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-12T01:00:00.000Z",
+                "message": [
+                    "model": "claude-opus-4-7",
+                    "usage": [
+                        "input_tokens": 100,
+                        "output_tokens": 50,
+                        "cache_read_input_tokens": 1000,
+                        "cache_creation_input_tokens": 2000,
+                    ],
+                    "content": [["type": "text", "text": "hi"]],
+                ],
+            ],
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-12T01:00:10.000Z",
+                "message": [
+                    "model": "claude-opus-4-7",
+                    "usage": [
+                        "input_tokens": 5,
+                        "output_tokens": 200,
+                        "cache_read_input_tokens": 500,
+                        "cache_creation_input_tokens": 0,
+                    ],
+                    "content": [],
+                ],
+            ],
+        ])
+        let s = JsonlParser.parseSession(at: url)
+        XCTAssertEqual(s.messageCount, 2)
+        XCTAssertEqual(s.inputTokens, 105)
+        XCTAssertEqual(s.outputTokens, 250)
+        XCTAssertEqual(s.cacheReadTokens, 1500)
+        XCTAssertEqual(s.cacheWriteTokens, 2000)
+        XCTAssertEqual(s.model, "claude-opus-4-7")
+        XCTAssertEqual(s.modelFamily, .opus)
+        let expected = 0.020025 // Opus 4.7 exact standard input/output/cache rates.
+        XCTAssertEqual(s.cost, expected, accuracy: 1e-9)
+    }
+
+    func testTracksActiveVsCompletedAgents() throws {
+        let url = try writeFixture([
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-12T02:00:00.000Z",
+                "message": [
+                    "model": "claude-opus-4-7",
+                    "usage": ["input_tokens": 1, "output_tokens": 1],
+                    "content": [
+                        [
+                            "type": "tool_use",
+                            "id": "agent_1",
+                            "name": "Agent",
+                            "input": [
+                                "subagent_type": "Explore",
+                                "description": "scout",
+                                "prompt": "Find all files matching X",
+                            ],
+                        ],
+                        [
+                            "type": "tool_use",
+                            "id": "agent_2",
+                            "name": "Agent",
+                            "input": ["subagent_type": "code-reviewer", "description": "review"],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                "type": "user",
+                "timestamp": "2026-06-12T02:00:10.000Z",
+                "message": [
+                    "content": [[
+                        "type": "tool_result",
+                        "tool_use_id": "agent_1",
+                        "content": "Found 3 files",
+                    ]],
+                ],
+            ],
+        ])
+        let s = JsonlParser.parseSession(at: url)
+        XCTAssertEqual(s.agents.count, 2)
+        XCTAssertEqual(s.activeAgents.count, 1)
+        XCTAssertEqual(s.activeAgents.first?.subagentType, "code-reviewer")
+        let done = s.completedAgents.first
+        XCTAssertEqual(done?.subagentType, "Explore")
+        XCTAssertEqual(done?.prompt, "Find all files matching X")
+        XCTAssertEqual(done?.completedAt, "2026-06-12T02:00:10.000Z")
+        XCTAssertEqual(done?.resultSnippet, "Found 3 files")
+    }
+
+    func testModelFamilyDetection() {
+        XCTAssertEqual(ModelFamily.from(modelId: "claude-opus-4-7"), .opus)
+        XCTAssertEqual(ModelFamily.from(modelId: "claude-sonnet-4-6"), .sonnet)
+        XCTAssertEqual(ModelFamily.from(modelId: "claude-haiku-4-5-20251001"), .haiku)
+        XCTAssertEqual(ModelFamily.from(modelId: "claude-fable-5"), .fable)
+        XCTAssertEqual(ModelFamily.from(modelId: nil), .unknown)
+        XCTAssertEqual(ModelFamily.from(modelId: "gpt-4"), .gpt)
+    }
+
+    func testSkipsMalformedLines() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cw-malformed-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("session.jsonl")
+        let good = """
+        {"type":"assistant","timestamp":"2026-06-12T03:00:00Z","message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":10,"output_tokens":20},"content":[]}}
+        """
+        let body = "garbage not json\n\(good)\n{half broken\n\(good.replacingOccurrences(of: "03:00:00Z", with: "03:00:01Z"))\n"
+        try body.write(to: url, atomically: true, encoding: .utf8)
+
+        let s = JsonlParser.parseSession(at: url)
+        XCTAssertEqual(s.messageCount, 2)
+        XCTAssertEqual(s.inputTokens, 20)
+        XCTAssertEqual(s.outputTokens, 40)
+        XCTAssertEqual(s.modelFamily, .sonnet)
+    }
+
+    func testRangeParserCountsOnlyInRangeUsagePromptsAndTools() throws {
+        let url = try writeFixture([
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-11T23:59:00.000Z",
+                "message": [
+                    "model": "claude-sonnet-4-6",
+                    "usage": ["input_tokens": 1_000, "output_tokens": 200],
+                    "content": [],
+                ],
+            ],
+            [
+                "type": "user",
+                "timestamp": "2026-06-12T00:01:00.000Z",
+                "message": ["content": "Implement range accounting"],
+            ],
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-12T00:02:00.000Z",
+                "message": [
+                    "model": "claude-sonnet-4-6",
+                    "usage": [
+                        "input_tokens": 100,
+                        "output_tokens": 20,
+                        "cache_read_input_tokens": 30,
+                        "cache_creation_input_tokens": 40,
+                    ],
+                    "content": [[
+                        "type": "tool_use",
+                        "id": "tool-range",
+                        "name": "Bash",
+                        "input": ["command": "swift test"],
+                    ]],
+                ],
+            ],
+        ])
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let range = (
+            formatter.date(from: "2026-06-12T00:00:00.000Z")!
+            ..< formatter.date(from: "2026-06-12T01:00:00.000Z")!
+        )
+
+        let stats = JsonlParser.parseSession(at: url, range: range)
+
+        XCTAssertEqual(stats.model, "claude-sonnet-4-6")
+        XCTAssertEqual(stats.promptCount, 1)
+        XCTAssertEqual(stats.toolCalls, 1)
+        XCTAssertEqual(stats.inputTokens, 100)
+        XCTAssertEqual(stats.outputTokens, 20)
+        XCTAssertEqual(stats.cacheReadTokens, 30)
+        XCTAssertEqual(stats.cacheWriteTokens, 40)
+        XCTAssertEqual(stats.totalTokens, 190)
+    }
+
+    func testScanSessionReturnsFullPromptsAndStatsFromSamePass() throws {
+        let prompt = String(repeating: "Detailed requirement ", count: 20)
+        let url = try writeFixture([
+            [
+                "type": "user",
+                "timestamp": "2026-06-12T00:01:00.000Z",
+                "message": [
+                    "content": [
+                        ["type": "text", "text": prompt],
+                        ["type": "text", "text": "Acceptance: tests pass"],
+                    ],
+                ],
+            ],
+            [
+                "type": "assistant",
+                "timestamp": "2026-06-12T00:02:00.000Z",
+                "message": [
+                    "model": "claude-sonnet-4-6",
+                    "usage": ["input_tokens": 100, "output_tokens": 20],
+                    "content": [],
+                ],
+            ],
+        ])
+
+        let result = JsonlParser.scanSession(at: url)
+
+        XCTAssertEqual(result.stats.promptCount, 1)
+        XCTAssertEqual(result.stats.inputTokens, 100)
+        XCTAssertEqual(result.prompts.count, 1)
+        XCTAssertEqual(result.prompts.first?.text, "\(prompt)\nAcceptance: tests pass")
+        XCTAssertGreaterThan(result.prompts.first?.text.count ?? 0, 160)
+    }
+
+    func testCoachingCacheDoesNotHideRecentGrowthFromStrictExportScan() async {
+        let cache = JsonlParseCache()
+        let mtime = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let range = mtime..<mtime.addingTimeInterval(300)
+        let result = CoachingFileResult(prompts: [], summary: nil)
+
+        await cache.set(
+            path: "/tmp/live-session.jsonl",
+            mtime: mtime,
+            size: 100,
+            range: range,
+            source: .codex,
+            result: result
+        )
+
+        let uiHit = await cache.get(
+            path: "/tmp/live-session.jsonl",
+            mtime: mtime.addingTimeInterval(1),
+            size: 120,
+            range: range,
+            source: .codex,
+            allowRecentGrowth: true
+        )
+        XCTAssertNotNil(uiHit)
+
+        let exportMiss = await cache.get(
+            path: "/tmp/live-session.jsonl",
+            mtime: mtime.addingTimeInterval(1),
+            size: 120,
+            range: range,
+            source: .codex,
+            allowRecentGrowth: false
+        )
+        XCTAssertNil(exportMiss)
+    }
+
+    func testSlugReplacesSlashUnderscoreAndDot() {
+        XCTAssertEqual(
+            ProjectPath.slug(for: URL(fileURLWithPath: "/Users/vtamm/Documents/Working")),
+            "-Users-vtamm-Documents-Working"
+        )
+        // Underscore in folder name → hyphen in slug (Claude Code's actual rule).
+        XCTAssertEqual(
+            ProjectPath.slug(for: URL(fileURLWithPath: "/Users/vtamm/Documents/Claude_management")),
+            "-Users-vtamm-Documents-Claude-management"
+        )
+        // Dot too — explains the double hyphen in worktree paths like `.claude-worktrees`.
+        XCTAssertEqual(
+            ProjectPath.slug(for: URL(fileURLWithPath: "/x/.claude/y")),
+            "-x--claude-y"
+        )
+    }
+}

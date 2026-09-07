@@ -2,7 +2,7 @@
 // Claude/Codex group theo folder vì chưa có task title ổn định như Pi.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct ProjectCostBreakdownCard: View {
     let sessions: [SessionSummary]

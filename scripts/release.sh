@@ -4,7 +4,7 @@
 # Workflow:
 #  1. Bump MARKETING_VERSION + CFBundleShortVersionString → $1.
 #  2. xcodebuild archive (Release config).
-#  3. Export .app từ archive → Releases/ClaudeWatchMac-$1.zip.
+#  3. Export .app từ archive → Releases/AgentWatchMac-$1.zip.
 #  4. sign_update → EdDSA signature.
 #  5. Tạo GitHub Release + upload zip qua gh CLI.
 #  6. Generate entry vào appcast.xml (prepend mới nhất lên top).
@@ -29,7 +29,7 @@ cd "$ROOT"
 # với 0.1.x (major=0, minor=1, patch<100 trùng kết quả cũ).
 IFS=. read -r MAJ MIN PAT <<< "$VERSION"
 BUILD="$(printf "%d%02d%02d" "$MAJ" "$MIN" "$PAT")"
-ZIP="ClaudeWatchMac-$VERSION.zip"
+ZIP="AgentWatchMac-$VERSION.zip"
 APPCAST="$ROOT/appcast.xml"
 REL_DIR="$ROOT/Releases"
 mkdir -p "$REL_DIR"
@@ -42,15 +42,15 @@ sed -i '' "s|CURRENT_PROJECT_VERSION: \".*\"|CURRENT_PROJECT_VERSION: \"$BUILD\"
 xcodegen generate >/dev/null
 
 echo "→ [2/7] Archive"
-ARCHIVE="$REL_DIR/ClaudeWatchMac-$VERSION.xcarchive"
+ARCHIVE="$REL_DIR/AgentWatchMac-$VERSION.xcarchive"
 rm -rf "$ARCHIVE"
-xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac \
+xcodebuild -project AgentWatchMac.xcodeproj -scheme AgentWatchMac \
     -configuration Release -destination 'platform=macOS' \
     -archivePath "$ARCHIVE" archive >/tmp/archive.log 2>&1 || {
         tail -40 /tmp/archive.log; exit 1; }
 
-APP_SRC="$ARCHIVE/Products/Applications/ClaudeWatchMac.app"
-APP_DST="$REL_DIR/ClaudeWatchMac.app"
+APP_SRC="$ARCHIVE/Products/Applications/AgentWatchMac.app"
+APP_DST="$REL_DIR/AgentWatchMac.app"
 rm -rf "$APP_DST" "$REL_DIR/$ZIP"
 cp -R "$APP_SRC" "$APP_DST"
 
@@ -67,10 +67,10 @@ codesign --verify --deep --strict "$APP_DST" || { echo "✗ Signature verify fai
 
 echo "→ [4/7] Zip → $ZIP"
 # ditto giữ extended attributes + symlinks, Sparkle expect format này.
-(cd "$REL_DIR" && ditto -c -k --keepParent ClaudeWatchMac.app "$ZIP")
+(cd "$REL_DIR" && ditto -c -k --keepParent AgentWatchMac.app "$ZIP")
 
 echo "→ [5/7] Sign update (EdDSA)"
-DD="$(xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac \
+DD="$(xcodebuild -project AgentWatchMac.xcodeproj -scheme AgentWatchMac \
         -showBuildSettings 2>/dev/null \
         | awk -F' = ' '/BUILD_DIR/ {print $2; exit}')"
 DD_ROOT="$(dirname "$(dirname "$DD")")"
@@ -91,16 +91,16 @@ git push origin main "$TAG"
 
 # Build CLI release binary cùng release — user có thể download standalone.
 echo "   building CLI binary…"
-swift build -c release --product claudewatch >/tmp/cli-build.log 2>&1 || {
+swift build -c release --product agentwatch >/tmp/cli-build.log 2>&1 || {
     tail -20 /tmp/cli-build.log; exit 1; }
-cp .build/release/claudewatch "$REL_DIR/claudewatch"
+cp .build/release/agentwatch "$REL_DIR/agentwatch"
 # Strip debug symbols để giảm size binary (~30-50%). -S strip debug symbols
 # nhưng giữ symbol table cho crash report. -x strip local symbols thêm.
-strip -S -x "$REL_DIR/claudewatch" 2>/dev/null || true
-echo "   CLI size: $(du -h "$REL_DIR/claudewatch" | awk '{print $1}')"
+strip -S -x "$REL_DIR/agentwatch" 2>/dev/null || true
+echo "   CLI size: $(du -h "$REL_DIR/agentwatch" | awk '{print $1}')"
 
-gh release create "$TAG" "$REL_DIR/$ZIP" "$REL_DIR/claudewatch" \
-    --title "Claude Watch $VERSION" \
+gh release create "$TAG" "$REL_DIR/$ZIP" "$REL_DIR/agentwatch" \
+    --title "AgentWatch $VERSION" \
     --notes "Built from $TAG. Auto-update sẽ tự tải qua Sparkle. CLI binary có sẵn — chmod +x rồi copy vào /usr/local/bin/." \
     --latest
 

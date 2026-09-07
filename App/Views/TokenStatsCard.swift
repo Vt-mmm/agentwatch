@@ -1,7 +1,7 @@
 // Token & cost card — Claude-styled, large serif cost figure, mono digits per cell.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct TokenStatsCard: View {
     let stats: SessionStats
@@ -32,7 +32,7 @@ struct TokenStatsCard: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 0) {
-                Text(stats.costBasis == .estimated ? "~" + TokenFormatter.usd(stats.cost) : "—")
+                Text(stats.costBasis.isEstimate ? "~" + TokenFormatter.usd(stats.cost) : "—")
                     .font(ClaudeFont.display(28).monospacedDigit())
                     .foregroundStyle(Claude.orange)
                     .contentTransition(.numericText())

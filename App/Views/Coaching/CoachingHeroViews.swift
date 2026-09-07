@@ -2,7 +2,7 @@
 // Dependency direction: extension on CoachingReportView, no outward dependencies.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
 
@@ -16,10 +16,11 @@ extension CoachingReportView {
             ProgressView()
                 .controlSize(.large)
                 .frame(width: 110, height: 110)
-            Text("Đang tải coaching data…")
+            Text(data.scanProgress.isEmpty ? "Đang đọc log…" : data.scanProgress)
                 .font(ClaudeFont.body(13))
                 .foregroundStyle(Claude.textMuted)
         }
+        .overlay(alignment: .bottom) { Button("Dừng đọc") { data.cancelScan() }.padding(8) }
         .frame(maxWidth: .infinity)
         .padding(40)
         .claudeCard()
@@ -43,7 +44,7 @@ extension CoachingReportView {
                 Text("Chưa đọc snapshot")
                     .font(ClaudeFont.display(20))
                     .foregroundStyle(Claude.textPrimary)
-                Text("Agent Watch vẫn đang ghi lock/key heartbeat nhẹ ở nền.\nBấm Đọc log khi cần xem Claude, Codex, PiAgent cho \(scopeRangeLabel).")
+                Text("AgentWatch vẫn đang ghi lock/key heartbeat nhẹ ở nền.\nBấm Đọc log khi cần xem Claude, Codex, PiAgent cho \(scopeRangeLabel).")
                     .font(ClaudeFont.body(13))
                     .foregroundStyle(Claude.textMuted)
                     .multilineTextAlignment(.center)
@@ -81,7 +82,7 @@ extension CoachingReportView {
                 Text("Chưa có session nào")
                     .font(ClaudeFont.display(20))
                     .foregroundStyle(Claude.textPrimary)
-                Text("Khoảng \(scopeRangeLabel) chưa có hoạt động agent nào.\nMở Claude, Codex hoặc PiAgent để Agent Watch bắt đầu theo dõi.")
+                Text("Khoảng \(scopeRangeLabel) chưa có hoạt động agent nào.\nMở Claude, Codex hoặc PiAgent để AgentWatch bắt đầu theo dõi.")
                     .font(ClaudeFont.body(13))
                     .foregroundStyle(Claude.textMuted)
                     .multilineTextAlignment(.center)

@@ -1,7 +1,7 @@
 // List of subagent spawns. Rows are clickable — opens AgentDetailView in a sheet.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct AgentTreeList: View {
     let agents: [AgentSpawn]

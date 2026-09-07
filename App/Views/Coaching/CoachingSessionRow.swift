@@ -2,7 +2,7 @@
 // Dependency direction: extension on CoachingReportView, no outward dependencies.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
 
@@ -151,7 +151,7 @@ extension CoachingReportView {
         switch session.costBasis {
         case .reported:
             return TokenFormatter.usd(session.cost)
-        case .estimated:
+        case .estimated, .agentEstimated:
             return "~" + TokenFormatter.usd(session.cost)
         case .unavailable:
             return "—"

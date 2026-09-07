@@ -5,6 +5,7 @@ Packages/
 Package.resolved
 
 # Xcode-generated project (regenerate via `xcodegen generate`)
+AgentWatchMac.xcodeproj/
 ClaudeWatchMac.xcodeproj/
 
 # Xcode user state — never commit
@@ -37,3 +38,9 @@ secrets/
 
 # Local debug artifacts produced by iteration
 /tmp/cw-*.log
+
+# Local Google credentials and report exports
+client_secret*.json
+credentials.json
+auth.json
+*.xcarchive/

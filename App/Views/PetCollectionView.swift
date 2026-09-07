@@ -3,7 +3,7 @@
 // v0.4.0: thêm Trainer Level axis, tier-grouped sections.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct PetCollectionView: View {
     @Environment(PetCollectionStore.self) private var store

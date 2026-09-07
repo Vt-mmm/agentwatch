@@ -14,7 +14,7 @@
 // SF Symbols + SwiftUI shapes — không cần PNG asset mới.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 // MARK: - Tier
 

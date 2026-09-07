@@ -1,5 +1,5 @@
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
     var lockAuditCard: some View {
@@ -12,7 +12,7 @@ extension CoachingReportView {
             HStack(spacing: 8) {
                 Image(systemName: "lock.shield.fill")
                     .foregroundStyle(forceQuitCount > 0 ? .red : Claude.orange)
-                Text("Agent Watch audit")
+                Text("AgentWatch audit")
                     .font(ClaudeFont.heading())
                     .foregroundStyle(Claude.textPrimary)
                 Spacer()
@@ -232,7 +232,7 @@ struct LockAuditLogSheet: View {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundStyle(Claude.orange)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Agent Watch log")
+                    Text("AgentWatch log")
                         .font(ClaudeFont.heading(18))
                         .foregroundStyle(Claude.textPrimary)
                     Text(scopeLabel)
@@ -317,7 +317,7 @@ struct LockAuditLogSheet: View {
                     .foregroundStyle(Claude.orange)
                     .textSelection(.enabled)
                 HStack(spacing: 6) {
-                    Text(finding.source?.label ?? "Agent Watch")
+                    Text(finding.source?.label ?? "AgentWatch")
                     if let sessionId = finding.sessionId {
                         Text(String(sessionId.suffix(12)))
                     }

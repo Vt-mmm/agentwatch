@@ -4,7 +4,7 @@
 
 import Foundation
 import UserNotifications
-import ClaudeWatchCore
+import AgentWatchCore
 
 @Observable
 @MainActor

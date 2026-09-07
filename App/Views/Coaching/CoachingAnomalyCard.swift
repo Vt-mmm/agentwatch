@@ -3,7 +3,7 @@
 // PromptDetailSheet của representative prompt.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
 

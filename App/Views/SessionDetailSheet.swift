@@ -4,7 +4,7 @@
 
 import SwiftUI
 import AppKit
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct SessionDetailSheet: View {
     let session: SessionSummary
@@ -278,7 +278,7 @@ struct SessionDetailSheet: View {
         switch session.costBasis {
         case .reported:
             return TokenFormatter.usd(session.cost)
-        case .estimated:
+        case .estimated, .agentEstimated:
             return "~" + TokenFormatter.usd(session.cost)
         case .unavailable:
             return "—"
@@ -287,7 +287,7 @@ struct SessionDetailSheet: View {
 
     private var costPerPromptLabel: String {
         guard session.costBasis != .unavailable else { return "—" }
-        let prefix = session.costBasis == .estimated ? "~" : ""
+        let prefix = session.costBasis.isEstimate ? "~" : ""
         return prefix + TokenFormatter.usd(session.costPerPrompt)
     }
 

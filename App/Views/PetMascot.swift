@@ -2,7 +2,7 @@
 // Vẽ bằng SwiftUI shapes thuần, không Lottie/asset → ít dependency, animate mượt.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct PetMascot: View {
     let state: PetState

@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "workItemID": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "evidenceIDs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "workItemID",
+          "text",
+          "evidenceIDs"
+        ]
+      }
+    }
+  },
+  "required": [
+    "summary",
+    "items"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Optional report narrative suggestion"
+}

@@ -3,7 +3,7 @@
 // "Dữ liệu bám sát, minh bạch" — user verify được từng XP delta đến từ đâu.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct XPLedgerCard: View {
     /// Snapshot từ PetCollectionStore — newest-first, max 50 entries.
@@ -106,7 +106,7 @@ struct XPLedgerCard: View {
     private func relative(_ d: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
-        f.locale = Locale(identifier: "vi_VN")
+        f.locale = AgentWatchLocale.locale
         return f.localizedString(for: d, relativeTo: Date())
     }
 }

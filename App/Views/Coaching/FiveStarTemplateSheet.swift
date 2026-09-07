@@ -7,7 +7,7 @@
 
 import SwiftUI
 import AppKit
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct FiveStarTemplateSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -25,7 +25,7 @@ struct FiveStarTemplateSheet: View {
                 Button("Đóng") { dismiss() }.keyboardShortcut(.escape)
             }
 
-            Text("13 section chuẩn rubric — copy về điền content của anh. Skeleton dưới là khung trống; phía dưới là 1 prompt 5★ thực từ project ClaudeWatchMac để tham khảo phong cách.")
+            Text("13 section chuẩn rubric — copy về điền content của anh. Skeleton dưới là khung trống; phía dưới là 1 prompt 5★ thực từ project AgentWatchMac để tham khảo phong cách.")
                 .font(ClaudeFont.body(12))
                 .foregroundStyle(Claude.textMuted)
 
@@ -34,7 +34,7 @@ struct FiveStarTemplateSheet: View {
                     sectionHeader("Skeleton (copy + điền)", icon: "doc.text", action: copySkeleton, copied: copiedSkeleton)
                     codeBlock(FiveStarTemplate.skeleton)
 
-                    sectionHeader("Worked example (real prompt từ ClaudeWatchMac)",
+                    sectionHeader("Worked example (real prompt từ AgentWatchMac)",
                                   icon: "checkmark.seal.fill",
                                   action: copyExample, copied: copiedExample)
                     codeBlock(FiveStarTemplate.workedExample)
@@ -174,15 +174,15 @@ enum FiveStarTemplate {
 
     ## Codebase context
     - Tạo mới: `App/MetricsCollector.swift` (under 200 LoC)
-    - Edit: `App/ClaudeWatchMacApp.swift` (wire start() in init/onAppear)
+    - Edit: `App/AgentWatchMacApp.swift` (wire start() in init/onAppear)
     - Framework: MetricKit, macOS 14+ available
 
     ## Input
     Không có user input. Tự subscribe vào MXMetricManager.shared khi app start.
 
     ## Output
-    - File: `~/Library/Application Support/ClaudeWatch/metrics/<ISO>-metric.json`
-    - File: `~/Library/Application Support/ClaudeWatch/metrics/<ISO>-diagnostic.json`
+    - File: `~/Library/Application Support/AgentWatch/metrics/<ISO>-metric.json`
+    - File: `~/Library/Application Support/AgentWatch/metrics/<ISO>-diagnostic.json`
     - Format: payload.jsonRepresentation() (raw từ MetricKit)
 
     ## Flow chính
@@ -208,7 +208,7 @@ enum FiveStarTemplate {
     - [ ] Disk pruning cap ở 30 file
 
     ## Verification
-    Verify by chạy: `xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac build`
+    Verify by chạy: `xcodebuild -project AgentWatchMac.xcodeproj -scheme AgentWatchMac build`
     Expected: `** BUILD SUCCEEDED **`
 
     ## Motivation (Why)

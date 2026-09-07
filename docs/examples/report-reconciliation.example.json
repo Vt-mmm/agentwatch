@@ -1,0 +1,21 @@
+{
+  "id": "EF4DE47B-00C6-4C2A-BB23-F42E05A92251",
+  "organizationID": "synthetic-company",
+  "owner": "synthetic-reviewer",
+  "recordedAt": "2026-09-06T17:10:00.000Z",
+  "left": {
+    "provider": "openai", "accountKey": "synthetic-account",
+    "periodStart": "2026-09-05T17:00:00.000Z", "periodEnd": "2026-09-06T17:00:00.000Z",
+    "timeZone": "Asia/Ho_Chi_Minh", "metric": "cost", "unit": "USD", "basis": "list-price-estimate",
+    "scope": "synthetic-project-requests", "value": "1.25", "complete": true,
+    "source": "synthetic-local-ledger", "observedAt": "2026-09-06T17:05:00.000Z"
+  },
+  "right": {
+    "provider": "openai", "accountKey": "synthetic-account",
+    "periodStart": "2026-09-06T00:00:00.000Z", "periodEnd": "2026-09-07T00:00:00.000Z",
+    "timeZone": "Etc/UTC", "metric": "cost", "unit": "USD", "basis": "invoice",
+    "scope": "synthetic-provider-account", "value": "1.40", "complete": true,
+    "source": "synthetic-provider-export", "observedAt": "2026-09-07T02:00:00.000Z"
+  },
+  "note": "Dữ liệu giả lập: hai số khác kỳ, phạm vi và cơ sở tính nên không tính chênh lệch trực tiếp."
+}

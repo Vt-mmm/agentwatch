@@ -1,10 +1,11 @@
 // MetricsCollector.swift
 // Thu thập MetricKit payloads hàng ngày từ macOS và lưu vào disk để phân tích offline.
 // SILENT / NO-UI — không có giao diện người dùng, chỉ ghi file nền.
-// Dữ liệu lưu tại: ~/Library/Application Support/ClaudeWatch/metrics/
+// Dữ liệu lưu tại: ~/Library/Application Support/AgentWatch/metrics/
 // Yêu cầu macOS 12+. Project target macOS 14 → không cần @available guard.
 
 import Foundation
+import AgentWatchCore
 import MetricKit
 import os.log
 
@@ -19,19 +20,16 @@ final class MetricsCollector: NSObject, MXMetricManagerSubscriber {
 
     // MARK: - Private state
 
-    private let logger = Logger(subsystem: "com.claudewatch.mac", category: "metrics")
+    private let logger = Logger(subsystem: "com.agentwatch.mac", category: "metrics")
 
-    /// Thư mục lưu payload: ~/Library/Application Support/ClaudeWatch/metrics/
+    /// Thư mục lưu payload: ~/Library/Application Support/AgentWatch/metrics/
     private let metricsDir: URL
 
     // MARK: - Init
 
     override init() {
-        let support = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first!
-        self.metricsDir = support.appendingPathComponent("ClaudeWatch/metrics", isDirectory: true)
+        self.metricsDir = AgentWatchIdentity.applicationSupportDirectory()
+            .appendingPathComponent("metrics", isDirectory: true)
         // Tạo thư mục nếu chưa có; bỏ qua lỗi nếu đã tồn tại.
         try? FileManager.default.createDirectory(
             at: metricsDir,

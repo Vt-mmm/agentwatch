@@ -15,11 +15,11 @@ PROJYML="$ROOT/project.yml"
 echo "→ Resolving SPM dependencies (cần để fetch Sparkle binaries)…"
 cd "$ROOT"
 xcodebuild -resolvePackageDependencies \
-    -project ClaudeWatchMac.xcodeproj \
-    -scheme ClaudeWatchMac >/dev/null
+    -project AgentWatchMac.xcodeproj \
+    -scheme AgentWatchMac >/dev/null
 
 # Sparkle ship binary trong artifactbundle. Path depend vào DerivedData.
-DD="$(xcodebuild -project ClaudeWatchMac.xcodeproj -scheme ClaudeWatchMac \
+DD="$(xcodebuild -project AgentWatchMac.xcodeproj -scheme AgentWatchMac \
         -showBuildSettings 2>/dev/null \
         | awk -F' = ' '/BUILD_DIR/ {print $2; exit}')"
 DD_ROOT="$(dirname "$(dirname "$DD")")"

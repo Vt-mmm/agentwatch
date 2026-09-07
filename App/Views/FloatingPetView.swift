@@ -5,7 +5,7 @@
 // Phase 3 (v0.2.2): Thêm level param để SpritePet render visual tier đúng.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct FloatingPetView: View {
     let state: PetState

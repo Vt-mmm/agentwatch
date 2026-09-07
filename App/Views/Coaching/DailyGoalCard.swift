@@ -3,7 +3,7 @@
 // 2 metric chính: prompts ≥3★ và sessions không-outlier.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct DailyGoalCard: View {
     let records: [PromptRecord]

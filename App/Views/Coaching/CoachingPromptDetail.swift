@@ -2,7 +2,7 @@
 // Dependency direction: standalone structs, no dependency on CoachingReportView.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 // MARK: - PromptDetailSheet
 

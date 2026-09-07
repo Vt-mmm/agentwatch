@@ -3,7 +3,7 @@
 
 import SwiftUI
 import AppKit
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
 

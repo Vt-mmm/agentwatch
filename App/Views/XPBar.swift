@@ -2,7 +2,7 @@
 // Dùng GeometryReader để fill chiều ngang theo tỷ lệ thực tế.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct XPBar: View {
     let totalXP: Int

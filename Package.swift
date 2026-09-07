@@ -2,32 +2,33 @@
 import PackageDescription
 
 let package = Package(
-    name: "ClaudeWatchCore",
+    name: "AgentWatchCore",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "ClaudeWatchCore", targets: ["ClaudeWatchCore"]),
-        .executable(name: "claude-watch-demo", targets: ["ClaudeWatchDemo"]),
-        .executable(name: "claudewatch", targets: ["ClaudeWatchCLI"]),
+        .library(name: "AgentWatchCore", targets: ["AgentWatchCore"]),
+        .executable(name: "agent-watch-demo", targets: ["AgentWatchDemo"]),
+        .executable(name: "agentwatch", targets: ["AgentWatchCLI"]),
     ],
     targets: [
         .target(
-            name: "ClaudeWatchCore",
-            path: "Sources/ClaudeWatchCore"
+            name: "AgentWatchCore",
+            path: "Sources/AgentWatchCore",
+            resources: [.process("Resources")]
         ),
         .executableTarget(
-            name: "ClaudeWatchDemo",
-            dependencies: ["ClaudeWatchCore"],
-            path: "Sources/ClaudeWatchDemo"
+            name: "AgentWatchDemo",
+            dependencies: ["AgentWatchCore"],
+            path: "Sources/AgentWatchDemo"
         ),
         .executableTarget(
-            name: "ClaudeWatchCLI",
-            dependencies: ["ClaudeWatchCore"],
-            path: "Sources/ClaudeWatchCLI"
+            name: "AgentWatchCLI",
+            dependencies: ["AgentWatchCore"],
+            path: "Sources/AgentWatchCLI"
         ),
         .testTarget(
-            name: "ClaudeWatchCoreTests",
-            dependencies: ["ClaudeWatchCore"],
-            path: "Tests/ClaudeWatchCoreTests"
+            name: "AgentWatchCoreTests",
+            dependencies: ["AgentWatchCore"],
+            path: "Tests/AgentWatchCoreTests"
         ),
     ]
 )

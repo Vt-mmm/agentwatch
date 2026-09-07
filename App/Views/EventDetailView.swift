@@ -3,7 +3,7 @@
 // complete summary with text selection, and a scrollable result preview.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct EventDetailView: View {
     let event: SessionEvent

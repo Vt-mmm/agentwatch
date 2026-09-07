@@ -4,7 +4,7 @@
 
 import Foundation
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 @MainActor
 @Observable

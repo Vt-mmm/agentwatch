@@ -2,7 +2,7 @@
 // the user switch scope. Refresh is one-shot, not realtime polling.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 import AppKit
 
 struct ProjectPickerView: View {
@@ -116,7 +116,7 @@ struct ProjectPickerView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Audit"
-        panel.message = "Select a project folder to pin. Agent Watch will read the latest session log once when refreshed."
+        panel.message = "Select a project folder to pin. AgentWatch will read the latest session log once when refreshed."
         if panel.runModal() == .OK, let url = panel.url {
             projectStore.pinFolder(url)
             watcher.loadPinned(folder: url)

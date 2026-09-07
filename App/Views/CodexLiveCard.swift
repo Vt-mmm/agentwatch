@@ -2,7 +2,7 @@
 // Keep them lightweight: render aggregate metrics + capped recent-session lists.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct CodexLiveCard: View {
     let snapshot: CodexLiveSnapshot
@@ -255,7 +255,7 @@ struct CodexLiveCard: View {
     private func sessionCostLabel(_ session: SessionSummary) -> String {
         switch session.costBasis {
         case .reported:    return TokenFormatter.usd(session.cost)
-        case .estimated:   return "~" + TokenFormatter.usd(session.cost)
+        case .estimated, .agentEstimated:   return "~" + TokenFormatter.usd(session.cost)
         case .unavailable: return "—"
         }
     }
@@ -285,7 +285,7 @@ struct CodexLiveCard: View {
     private func relative(_ date: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
-        f.locale = Locale(identifier: "vi_VN")
+        f.locale = AgentWatchLocale.locale
         return f.localizedString(for: date, relativeTo: Date())
     }
 }
@@ -525,7 +525,7 @@ struct PiAgentLiveCard: View {
     private func sessionCostLabel(_ session: SessionSummary) -> String {
         switch session.costBasis {
         case .reported:    return TokenFormatter.usd(session.cost)
-        case .estimated:   return "~" + TokenFormatter.usd(session.cost)
+        case .estimated, .agentEstimated:   return "~" + TokenFormatter.usd(session.cost)
         case .unavailable: return "—"
         }
     }
@@ -555,7 +555,7 @@ struct PiAgentLiveCard: View {
     private func relative(_ date: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
-        f.locale = Locale(identifier: "vi_VN")
+        f.locale = AgentWatchLocale.locale
         return f.localizedString(for: date, relativeTo: Date())
     }
 }

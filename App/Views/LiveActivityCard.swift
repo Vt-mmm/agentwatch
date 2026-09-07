@@ -2,7 +2,7 @@
 // user prompts, assistant replies, thinking, and tool invocations.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct LiveActivityCard: View {
     let stats: SessionStats

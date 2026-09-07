@@ -7,7 +7,7 @@
 // bên trái là khoảng trống/đường dẫn project → bubble trái đỡ che nút.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct HeaderPet: View {
     @Environment(FloatingPetController.self) private var pet

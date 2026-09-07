@@ -2,7 +2,7 @@
 // Dependency direction: extension on CoachingReportView; PromptRow is internal (used here only).
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
 

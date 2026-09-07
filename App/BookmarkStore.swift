@@ -1,10 +1,10 @@
 // Lưu danh sách prompt anh đánh dấu là "mẫu hay" để dùng cho team.
-// Persist qua file sidecar ~/Library/Application Support/ClaudeWatchMac/bookmarks.json.
+// Persist qua file sidecar ~/Library/Application Support/AgentWatch/bookmarks.json.
 // File-based (chứ không UserDefaults) vì có thể chứa text dài + grow theo thời gian.
 
 import Foundation
 import Observation
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct BookmarkedPrompt: Codable, Identifiable, Equatable, Hashable {
     let id: String                  // PromptRecord.id (sessionUuid-lineIndex)
@@ -27,9 +27,7 @@ final class BookmarkStore {
     private let fileURL: URL
 
     init() {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory,
-                                                in: .userDomainMask).first!
-        let dir = support.appendingPathComponent("ClaudeWatchMac", isDirectory: true)
+        let dir = AgentWatchIdentity.applicationSupportDirectory()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.fileURL = dir.appendingPathComponent("bookmarks.json")
         load()

@@ -2,7 +2,7 @@
 // Auto-claim khi đạt target (không cần user nhấn).
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct DailyQuestCard: View {
     let quests: [DailyQuest]

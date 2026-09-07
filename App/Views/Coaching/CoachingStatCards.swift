@@ -2,7 +2,7 @@
 // Dependency direction: extension on CoachingReportView ← CostTrendChart (separate view file).
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 extension CoachingReportView {
 

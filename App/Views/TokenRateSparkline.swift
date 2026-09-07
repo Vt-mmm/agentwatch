@@ -2,7 +2,7 @@
 // No Apple Charts framework dependency — uses GeometryReader + Path directly.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct TokenRateSparkline: View {
     let samples: [TokenSample]

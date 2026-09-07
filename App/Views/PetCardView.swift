@@ -3,7 +3,7 @@
 // Locked (v0.4.0): grayscale + lock icon overlay + dim opacity.
 
 import SwiftUI
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct PetCardView: View {
     let pet: PetProgress

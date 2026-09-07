@@ -7,7 +7,7 @@
 import AppKit
 import SwiftUI
 import Observation
-import ClaudeWatchCore
+import AgentWatchCore
 
 @Observable
 @MainActor

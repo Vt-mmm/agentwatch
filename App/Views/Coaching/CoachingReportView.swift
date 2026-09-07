@@ -3,7 +3,7 @@
 
 import SwiftUI
 import AppKit
-import ClaudeWatchCore
+import AgentWatchCore
 
 struct CoachingDerivedData {
     var records: [PromptRecord] = []
@@ -40,6 +40,7 @@ struct CoachingReportView: View {
     @State var selectedRecord: PromptRecord?
     @State var selectedSession: SessionSummary?
     @State var showLockAuditLog: Bool = false
+    @State var showDailyReport: Bool = false
     @State var promptPageSize: Int = 25
     @State var derived = CoachingDerivedData()
 
@@ -148,6 +149,12 @@ struct CoachingReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 filterCard
+                HStack {
+                    Text("Xuất tự động toàn bộ log và ứng dụng đã ghi nhận theo ngày đang chọn").foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Chỉnh sửa report…") { showDailyReport = true }
+                    AutomaticDailyReportExportButton(day: anchor)
+                }
                 if isLoading && !hasCurrentSnapshot {
                     coachingLoadingHero
                 } else if !hasCurrentSnapshot {
@@ -212,6 +219,7 @@ struct CoachingReportView: View {
         .onChange(of: data.lastRefreshAt) { _, _ in rebuildDerivedData() }
         .onChange(of: bookmarks.items) { _, _ in rebuildDerivedData() }
         .onChange(of: promptPageSize) { _, _ in promptPage = 0 }
+        .sheet(isPresented: $showDailyReport) { DailyReportEditor(day: anchor) }
         .sheet(item: $selectedRecord) { record in
             PromptDetailSheet(record: record)
         }

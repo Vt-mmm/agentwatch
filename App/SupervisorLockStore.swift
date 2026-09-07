@@ -128,7 +128,7 @@ final class SupervisorLockStore {
         .init(label: "Dũng - VN - BE", enrollmentHash: "5331a527a0982d030131f89f42ecf9802cc4cd8e21fd8f1f0f2a0852ef5bacdc", unlockPassHash: "e4833fd75b9edc29d6b3388a4178d12404acd8d702fd238231b46a1efae04793"),
         .init(label: "Đại - VN - BE", enrollmentHash: "62d6e1a881c89cd5c909622541f419da4b7a22b371518f65fd084761a2928080", unlockPassHash: "de0ce006288cb42456eafa0b1d1f428dfc016d309e75285524a8cd05cfa513b0"),
         .init(label: "Tâm - VN - FE", enrollmentHash: "4e6dd66953ecc86aeb3c5e5e147ca43f35e771dffde4b3b4872a1a03ceb40187", unlockPassHash: "92722d2c13e5ceb29b9dfde18439e8c15bfdd142aba38e5ae9158204cd2029ff"),
-        .init(label: "Mac6", enrollmentHash: "24d3c0eb16190176d7e8135de76ff0e2bd16aa8336b688f09e3dd579ca8267eb", unlockPassHash: "9e97f349569e42d5b314d6a8fa547b2cca4a4bce334d7922118555fad006726b"),
+        .init(label: "Quý - VN - BE", enrollmentHash: "24d3c0eb16190176d7e8135de76ff0e2bd16aa8336b688f09e3dd579ca8267eb", unlockPassHash: "9e97f349569e42d5b314d6a8fa547b2cca4a4bce334d7922118555fad006726b"),
         .init(label: "Mac7", enrollmentHash: "020e98465cfc1d5dd3d68f64c734a8f10706501b9c431d0961fbf8d7d14c8f9d", unlockPassHash: "32b477ab14a047d336dde23d4354919297dbe51d3da5d4235bffba3a8b9be12f"),
         .init(label: "Mac8", enrollmentHash: "da4f4621410e304f29eadd3edec751fb81866c49ae802660f10ed89da2f4913e", unlockPassHash: "b0e3017ee933a611a5cf12bff1d70af8bd100fbe6c3f32a3bab8a7c583cb24c4"),
         .init(label: "Mac9", enrollmentHash: "cf80bd890c5cfe105f508d13a2c0d9ad92516e49229c321cf05456dd0199d696", unlockPassHash: "ca725bacfdd771f4e44f3acaa2f20a347afdcf0d7021eb8aad8633ac23d4e4e1"),
@@ -154,6 +154,7 @@ final class SupervisorLockStore {
             "Mac3": "Dũng - VN - BE",
             "Mac4": "Đại - VN - BE",
             "Mac5": "Tâm - VN - FE",
+            "Mac6": "Quý - VN - BE",
         ]
         return legacyLabels[savedLabel] ?? savedLabel
     }

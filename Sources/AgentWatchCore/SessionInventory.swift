@@ -60,7 +60,7 @@ public enum UsageScopePrecision: String, Sendable, Codable, Equatable {
     }
 }
 
-public struct SessionTitleChange: Identifiable, Sendable, Equatable {
+public struct SessionTitleChange: Identifiable, Sendable, Equatable, Codable {
     public let timestamp: Date?
     public let timestampString: String
     public let title: String
@@ -77,7 +77,7 @@ public struct SessionTitleChange: Identifiable, Sendable, Equatable {
 }
 
 /// Snapshot 1 session để hiển thị trong dashboard.
-public struct SessionSummary: Identifiable, Sendable, Equatable {
+public struct SessionSummary: Identifiable, Sendable, Equatable, Codable {
     public let id: String                  // session uuid
     /// Human task/session title set by the operator inside the agent UI.
     /// For PiAgent this is the canonical task axis used by AgentWatch reports.
@@ -251,7 +251,7 @@ public struct SessionSummary: Identifiable, Sendable, Equatable {
 }
 
 /// Aggregate metrics cho dashboard.
-public struct InventoryAggregate: Sendable, Equatable {
+public struct InventoryAggregate: Sendable, Equatable, Codable {
     public let sessionCount: Int
     public let totalCost: Double
     public let reportedCost: Double

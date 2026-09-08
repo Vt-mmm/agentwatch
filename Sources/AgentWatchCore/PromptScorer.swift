@@ -10,7 +10,7 @@ import Foundation
 /// + 2 tiêu chí từ Anthropic Claude Code expertise research (2026-06):
 /// - codebaseContext (Domain Knowledge Integration), verification (Verification Requests).
 /// Ref: https://www.anthropic.com/research/claude-code-expertise
-public enum SpecSection: String, CaseIterable, Sendable {
+public enum SpecSection: String, CaseIterable, Sendable, Codable {
     case mucTieu          // Mục tiêu / Goal
     case userRole         // User Role
     case input            // Input
@@ -45,7 +45,7 @@ public enum SpecSection: String, CaseIterable, Sendable {
 }
 
 /// Kết quả chấm 1 prompt.
-public struct PromptScore: Sendable, Equatable {
+public struct PromptScore: Sendable, Equatable, Codable {
     /// 0–5★. 0 = follow-up/quá ngắn, 5 = đủ Spec.
     public let stars: Int
     /// Số section đã hiện diện.

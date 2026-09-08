@@ -4,14 +4,14 @@
 
 import Foundation
 
-public enum SessionEventKind: String, Sendable {
+public enum SessionEventKind: String, Sendable, Codable {
     case userMessage         // user typed something
     case assistantText       // Claude wrote a reply
     case assistantThinking   // a `thinking` content block on an assistant msg
     case toolUse             // Claude invoked a tool
 }
 
-public struct SessionEvent: Identifiable, Sendable, Equatable {
+public struct SessionEvent: Identifiable, Sendable, Equatable, Codable {
     public let id: String           // tool_use id if available, else timestamp+index
     public let timestamp: String
     public let kind: SessionEventKind
@@ -27,13 +27,16 @@ public struct SessionEvent: Identifiable, Sendable, Equatable {
     public var imageMimeType: String?
     /// Khi tool_result content là URL ảnh thay vì base64.
     public var imageURL: String?
+    public var inputDigest: String?
+    public var outputDigest: String?
+    public var toolIsError: Bool?
 
     public init(id: String, timestamp: String, kind: SessionEventKind,
                 toolName: String? = nil, toolUseId: String? = nil,
                 summary: String, completed: Bool = false,
                 completedAt: String? = nil, resultPreview: String? = nil,
                 imageBase64: String? = nil, imageMimeType: String? = nil,
-                imageURL: String? = nil) {
+                imageURL: String? = nil, inputDigest: String? = nil, outputDigest: String? = nil, toolIsError: Bool? = nil) {
         self.id = id
         self.timestamp = timestamp
         self.kind = kind
@@ -46,5 +49,6 @@ public struct SessionEvent: Identifiable, Sendable, Equatable {
         self.imageBase64 = imageBase64
         self.imageMimeType = imageMimeType
         self.imageURL = imageURL
+        self.inputDigest = inputDigest; self.outputDigest = outputDigest; self.toolIsError = toolIsError
     }
 }

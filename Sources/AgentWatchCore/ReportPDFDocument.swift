@@ -13,6 +13,7 @@ enum ReportPDFDocument {
         let teal = CGColor(red: 0.04, green: 0.43, blue: 0.46, alpha: 1)
         let muted = CGColor(red: 0.36, green: 0.41, blue: 0.47, alpha: 1)
         let pale = CGColor(red: 0.94, green: 0.96, blue: 0.97, alpha: 1)
+        let compact = report.narrativeProvenance == "automatic-local-v1"
         let margin: CGFloat = 44, width: CGFloat = 507
         var number = 0, y: CGFloat = 0
         let day = DailyReportRenderer.dateLabel(report.period.start, zone: report.period.timeZone)
@@ -67,17 +68,21 @@ enum ReportPDFDocument {
                 guard visible.length > 0 else { begin(); continue }
                 context.saveGState(); context.textMatrix = .identity
                 CTFrameDraw(frame, context); context.restoreGState()
-                offset += visible.length; y -= height + 5
+                offset += visible.length; y -= height + (compact ? 3 : 5)
                 if offset < value.length {
                     begin(); label("Tiếp theo", x: margin, y: y, size: 8, color: muted); y -= 15
                 }
             }
         }
         func metrics() {
-            let prompts = report.dailyActivity?.prompts ?? []
-            let values = [("PROMPT NHÂN VIÊN", String(prompts.filter { ($0.origin ?? .employee) == .employee }.count)), ("PHIÊN AGENT", String(Set(prompts.map(\.sessionRef)).count)),
-                          ("ỨNG DỤNG", String(report.desktopActivity?.apps.count ?? 0)),
-                          ("PHÚT QUAN SÁT", String(Int((report.desktopActivity?.observedSeconds ?? 0) / 60)))]
+            let prompts = (report.dailyActivity?.prompts ?? []).filter { ($0.origin ?? .employee) == .employee }
+            let paths: [String] = prompts.flatMap { prompt in
+                (prompt.fileActivities ?? []).map { $0.path.hasPrefix("/") ? $0.path : prompt.observedProject + "/" + $0.path }
+            }
+            let values: [(String, String)] = [("PROMPT ĐÃ GỬI", String(prompts.count)),
+                ("FILE GHI NHẬN", String(Set(paths).count)),
+                ("ỨNG DỤNG", String(report.desktopActivity?.apps.count ?? 0)),
+                ("PHÚT QUAN SÁT", String(Int((report.desktopActivity?.observedSeconds ?? 0) / 60)))]
             for (index, value) in values.enumerated() {
                 let x = margin + CGFloat(index) * 129
                 context.setFillColor(pale); context.fill(CGRect(x: x, y: y - 68, width: 120, height: 63))
@@ -89,10 +94,10 @@ enum ReportPDFDocument {
         begin()
         for (index, block) in DailyReportRenderer.blocks(report, revision: revision).enumerated() {
             let isHero = index == 0
-            let titleSize: CGFloat = isHero ? 23 : block.kind == .section ? 12 : 12
+            let titleSize: CGFloat = isHero ? (compact ? 20 : 23) : (compact ? 11 : 12)
             let headingHeight = block.title.map { measuredHeight($0, size: titleSize, bold: true) } ?? 0
             let blockHeight = headingHeight + measuredHeight(block.text, size: block.kind == .appUsage ? 9 : 10.5) + 45
-            if y < min(250, headingHeight + 125) || (blockHeight < 600 && y - 64 < blockHeight) { begin() }
+            if y < min(250, headingHeight + (compact ? 60 : 125)) || (blockHeight < 600 && y - 64 < blockHeight) { begin() }
             if block.kind == .section {
                 context.setFillColor(pale); context.fill(CGRect(x: margin - 9, y: y - headingHeight - 13, width: width + 18, height: headingHeight + 22))
                 context.setFillColor(teal); context.fill(CGRect(x: margin - 9, y: y - headingHeight - 13, width: 3, height: headingHeight + 22))
@@ -107,7 +112,7 @@ enum ReportPDFDocument {
                 context.setFillColor(teal); context.fill(CGRect(x: margin, y: y - 3, width: width * max(0, min(1, block.fraction)), height: 5)); y -= 14
             }
             paragraph(block.text, size: block.kind == .appUsage ? 9 : 10.5, color: isHero ? muted : navy)
-            y -= block.kind == .prompt ? 18 : 13
+            y -= compact ? 6 : (block.kind == .prompt ? 18 : 13)
             if isHero && report.narrativeProvenance == "automatic-local-v1" { metrics() }
         }
         finish(); context.closePDF()

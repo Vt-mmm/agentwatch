@@ -42,6 +42,10 @@ public enum ReportValidator {
             guard Set(activity.prompts.map(\.id)).count == activity.prompts.count,
                   Set(activity.apps.map(\.id)).count == activity.apps.count else { throw invalid("Hoạt động ngày có mã trùng.") }
             for prompt in activity.prompts {
+                for file in prompt.fileActivities ?? [] {
+                    guard draft.period.contains(file.timestamp), file.timestamp >= prompt.timestamp,
+                          !file.action.isEmpty, !file.path.isEmpty else { throw invalid("Ghi nhận file không hợp lệ hoặc ngoài ngày.") }
+                }
                 if let count = prompt.toolObservationCount {
                     guard count >= 0, count >= (prompt.toolObservations?.count ?? 0) else { throw invalid("Số ghi nhận công cụ không hợp lệ.") }
                 }

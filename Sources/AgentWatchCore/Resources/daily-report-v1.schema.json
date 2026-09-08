@@ -642,6 +642,33 @@
             "agentContinuation",
             "context"
           ]
+        },
+        "sessionTitle": {
+          "type": "string"
+        },
+        "fileActivities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "timestamp",
+              "action",
+              "path"
+            ],
+            "properties": {
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "action": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          }
         }
       },
       "required": [

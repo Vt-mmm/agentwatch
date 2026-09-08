@@ -3,74 +3,44 @@ import AppKit
 import AgentWatchCore
 
 struct AutomaticDailyReportExportButton: View {
-    let day: Date
+    var day: Date? = nil
     @State private var busy = false
     @State private var progress = ""
-    @State private var output: URL?
-    @State private var draft: DailyReportDraft?
-    private enum Presentation: Identifiable {
-        case google
-        case report(DailyReportDraft, ReportSnapshot?)
-        var id: String { switch self { case .google: "google"; case .report(let draft, let snapshot): snapshot?.id ?? draft.reportID } }
-    }
-    @State private var presentation: Presentation?
-    @State private var history: [ReportSnapshot] = []
     @State private var error: String?
-    @State private var collector = DesktopAppActivityCollector.shared
+    @State private var preparingDelivery = false
+    private struct Delivery: Identifiable {
+        let report: DailyReportDraft
+        var id: String { report.reportID }
+    }
+    @State private var delivery: Delivery?
     var body: some View {
-        VStack(alignment: .trailing, spacing: 5) {
-            HStack {
-                if let output { Button("Mở report") { NSWorkspace.shared.open(output) } }
-                if let draft { Button("Gửi report…") { presentation = .report(draft, nil) }.disabled(busy) }
-                if !history.isEmpty {
-                    Menu("Report đã chốt") {
-                        ForEach(history) { saved in
-                            Button("Bản \(saved.revision) · chốt \(DailyReportRenderer.dateLabel(saved.report.period.cutoff, zone: saved.report.period.timeZone, format: "HH:mm:ss"))") {
-                                presentation = .report(saved.report, saved)
-                            }
-                        }
-                    }.disabled(busy)
-                }
-                Button("Kết nối Google…") { presentation = .google }.disabled(busy)
-                Button(busy ? "Đang tạo report…" : "Xuất report ngày") { export() }
-                    .buttonStyle(.borderedProminent).disabled(busy)
+        VStack(alignment: .trailing, spacing: 3) {
+            HStack(spacing: 8) {
+            Button { export() } label: {
+                Label(busy && !preparingDelivery ? "Đang xuất…" : (day == nil ? "Xuất báo cáo hôm nay" : "Xuất báo cáo ngày này"), systemImage: "arrow.down.doc")
             }
-            Text("PDF gồm nội dung prompt đã che mẫu thông tin xác thực, công cụ và lịch sử ứng dụng.").font(.caption).foregroundStyle(.secondary)
-            Text(collector.status).font(.caption).foregroundStyle(collector.error == nil ? Color.secondary : Color.red)
-            HStack {
-                Text(SupervisorLockStore.shared.loginItemStatus).font(.caption).foregroundStyle(.secondary)
-                Button("Cài đặt tự mở") { SupervisorLockStore.shared.openLoginSettings() }.font(.caption)
+            .buttonStyle(.borderedProminent).disabled(busy)
+            .help("Tự lấy dữ liệu đã chuẩn bị, lưu PDF và mở ngay")
+            Button { export(forDelivery: true) } label: {
+                Label(busy && preparingDelivery ? "Đang chuẩn bị…" : "Gửi Google", systemImage: "paperplane")
             }
-            if let collectionError = collector.error { Text("Ghi nhận ứng dụng có lỗi: " + collectionError).font(.caption).foregroundStyle(.red) }
-            if busy { Text(progress).font(.caption).foregroundStyle(.secondary) }
-            if let output, !busy { Text("Đã lưu: " + output.lastPathComponent).font(.caption).textSelection(.enabled) }
-            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+            .buttonStyle(.bordered).disabled(busy)
+            .help("Tự chuẩn bị báo cáo để gửi qua Google Drive hoặc Gmail")
+            }
+            if busy { Text(progress).font(.caption2).foregroundStyle(.secondary) }
+            if let error { Text(error).font(.caption).foregroundStyle(.red).frame(maxWidth: 260) }
         }
-        .sheet(item: $presentation, onDismiss: loadHistory) { value in
-            switch value {
-            case .google: GoogleSetupView()
-            case .report(let draft, let snapshot): AutomaticReportDeliveryView(draft: draft, savedSnapshot: snapshot)
-            }
+        .sheet(item: $delivery) { item in
+            AutomaticReportDeliveryView(draft: item.report)
         }
-        .onAppear { loadHistory() }
-        .onChange(of: day) { _, _ in output = nil; draft = nil; loadHistory() }
     }
-    private func loadHistory() {
-        guard let identity = SupervisorLockStore.shared.reportIdentity else { history = []; return }
-        do {
-            history = try ReportSnapshotStore.local.history().filter {
-                $0.report.employee.employeeID == identity.employeeID &&
-                DailyReportRenderer.dateLabel($0.report.period.start, zone: $0.report.period.timeZone, format: "yyyy-MM-dd") ==
-                DailyReportRenderer.dateLabel(day, zone: $0.report.period.timeZone, format: "yyyy-MM-dd")
-            }
-        } catch { self.error = error.localizedDescription }
-    }
-    private func export() {
+    private func export(forDelivery: Bool = false) {
         guard let identity = SupervisorLockStore.shared.reportIdentity else {
             error = "Nhập key mở app trước khi xuất report."; return
         }
-        busy = true; error = nil; output = nil; draft = nil; progress = "Đang chuẩn bị dữ liệu theo ngày…"
-        let selectedDay = day
+        preparingDelivery = forDelivery
+        busy = true; error = nil; progress = "Đang chuẩn bị dữ liệu theo ngày…"
+        let selectedDay = day ?? Date()
         let defaults = UserDefaults.standard
         let organization = defaults.string(forKey: "dailyReport.organizationID")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let zone = defaults.string(forKey: "dailyReport.timeZone") ?? "Asia/Ho_Chi_Minh"
@@ -78,40 +48,37 @@ struct AutomaticDailyReportExportButton: View {
             employeeID: identity.employeeID, displayName: identity.name, timeZone: zone)
         Task {
             do {
-                await DesktopAppActivityCollector.shared.flush()
-                let collectionError = DesktopAppActivityCollector.shared.error
                 let period = try DailyReportPeriod(day: selectedDay, timeZone: zone, cutoff: Date())
-                let scan = await CoachingScan.scan(in: period.scanRange, allowRecentGrowth: false, progress: { done, total in
-                    await MainActor.run { progress = "Đã đọc \(done)/\(total) file log…" }
-                })
-                progress = "Đang tổng hợp công việc, ứng dụng và tạo PDF…"
+                let cached = try await DailyActivityQuery.shared.cached(profile: profile, day: selectedDay)
+                var report: DailyReportDraft
+                if let cached, cached.period.cutoff >= period.end || Date().timeIntervalSince(cached.period.cutoff) < 90 {
+                    report = cached
+                } else {
+                    progress = "Đang cập nhật nhật ký ngày…"
+                    await DesktopAppActivityCollector.shared.flush()
+                    report = try await DailyActivityQuery.shared.refresh(profile: profile, day: selectedDay)
+                }
+                let collectionError = DesktopAppActivityCollector.shared.error
+                if let collectionError { report.warnings.append("Thu thập ứng dụng có lỗi: " + collectionError) }
+                if forDelivery {
+                    delivery = Delivery(report: report)
+                    busy = false
+                    return
+                }
+                progress = "Đang tạo PDF…"
+                let preparedReport = report
                 let result = try await Task.detached(priority: .userInitiated) {
-                    var extraWarnings: [String] = []
-                    let projects = Set(scan.sessions.filter { $0.source == .piagent && $0.projectDisplay.hasPrefix("/") }.map(\.projectDisplay))
-                    let journals = projects.sorted().compactMap { path -> PiTaskJournalResult? in
-                        let project = URL(fileURLWithPath: path)
-                        guard FileManager.default.fileExists(atPath: project.appendingPathComponent(".pi/piagent-state/task-journal/events.jsonl").path) else { return nil }
-                        return PiTaskJournal.read(project: project, period: period)
-                    }
-                    let desktop: DesktopActivityReport?
-                    do { desktop = try DesktopAppActivityStore.local.report(employeeID: profile.employeeID, period: period) }
-                    catch { desktop = nil; extraWarnings.append("Chưa tổng hợp được lịch sử ứng dụng: " + error.localizedDescription) }
-                    var quotas: [QuotaSnapshot] = []
-                    do { quotas = try QuotaSnapshotStore.local.load().filter { period.contains($0.capturedAt) } }
-                    catch { extraWarnings.append("Chưa đọc được quota đã lưu.") }
-                    var report = AutomaticDailyReport.build(employee: profile, period: period, scan: scan, journals: journals, quota: quotas, desktop: desktop)
-                    if let collectionError { extraWarnings.append("Thu thập ứng dụng có lỗi: " + collectionError) }
-                    report.warnings += extraWarnings
-                    try ReportValidator.validate(report)
                     let directory = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AgentWatch Reports")
-                    return (try AutomaticDailyReport.savePDF(report, directory: directory), report)
+                    return (try AutomaticDailyReport.savePDF(preparedReport, directory: directory), preparedReport)
                 }.value
                 let url = result.0
-                output = url; draft = result.1
+                if !NSWorkspace.shared.open(url) {
+                    self.error = "Đã lưu PDF tại " + url.path + "; chưa mở được ứng dụng đọc PDF."
+                }
                 SupervisorLockStore.shared.recordReportExport(format: "automatic-pdf", scope: .day(selectedDay), url: url)
             } catch {
                 self.error = error.localizedDescription
-                SupervisorLockStore.shared.recordReportExportFailure(format: "automatic-pdf", scope: .day(selectedDay), error: error)
+                if !forDelivery { SupervisorLockStore.shared.recordReportExportFailure(format: "automatic-pdf", scope: .day(selectedDay), error: error) }
             }
             busy = false
         }

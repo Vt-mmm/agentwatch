@@ -37,6 +37,11 @@ public enum PiAgentJsonlParser {
         return AgentLogScanResult(summary: summary, prompts: prompts)
     }
 
+    static func scanIndexed(file: URL, range: Range<Date>, input: IncrementalLogInput) -> AgentLogScanResult {
+        let parsed = parse(file: file, includeEvents: false, range: range, input: input)
+        return AgentLogScanResult(summary: makeSummary(from: parsed, file: file), prompts: isSubagentFile(file) ? [] : parsed.prompts)
+    }
+
     private static func makeSummary(from parsed: Parsed, file: URL) -> SessionSummary? {
         guard parsed.firstTimestamp != nil, parsed.lastTimestamp != nil else { return nil }
 
@@ -139,41 +144,76 @@ public enum PiAgentJsonlParser {
         var prompts: [PromptRecord]
     }
 
-    private static func parse(file: URL,
-                              includeEvents: Bool,
-                              range: Range<Date>? = nil) -> Parsed {
-        let fallbackId = file.deletingPathExtension().lastPathComponent
-        var sessionId = fallbackId
+    private struct ScanCheckpoint: Codable {
+        var sessionId: String
         var sessionTitle: String?
-        var titleHistory: [SessionTitleChange] = []
+        var titleHistory: [SessionTitleChange]
         var cwd: String?
         var projectName: String?
-        var model = ""
+        var model: String
         var thinkingLevel: String?
         var firstTimestamp: Date?
         var lastTimestamp: Date?
-        var firstTimestampString = ""
-        var lastTimestampString = ""
-        var messageCount = 0
-        var inputTokens = 0
-        var outputTokens = 0
-        var reasoningTokens = 0
-        var cacheReadTokens = 0
-        var cacheWriteTokens = 0
-        var ledger = UsageLedger()
-        var provider = "unknown"
-        var promptCount = 0
-        var toolCalls = 0
-        var agentCount = isSubagentFile(file) ? 1 : 0
-        var events: [SessionEvent] = []
-        var prompts: [PromptRecord] = []
-        var pendingTools: [String: Int] = [:]
-        var eventCounter = 0
-        var lineIndex = 0
-        var isFork = false
+        var firstTimestampString: String
+        var lastTimestampString: String
+        var messageCount: Int
+        var inputTokens: Int
+        var outputTokens: Int
+        var reasoningTokens: Int
+        var cacheReadTokens: Int
+        var cacheWriteTokens: Int
+        var ledger: UsageLedger
+        var provider: String
+        var promptCount: Int
+        var toolCalls: Int
+        var agentCount: Int
+        var events: [SessionEvent]
+        var prompts: [PromptRecord]
+        var pendingTools: [String: Int]
+        var eventCounter: Int
+        var lineIndex: Int
+        var isFork: Bool
         var forkCreatedAt: Date?
+    }
 
-        JsonlLineReader.forEachLineData(at: file) { lineData in
+    private static func parse(file: URL,
+                              includeEvents: Bool,
+                              range: Range<Date>? = nil,
+                              input: IncrementalLogInput? = nil) -> Parsed {
+        let saved = input?.restore(ScanCheckpoint.self)
+        let fallbackId = file.deletingPathExtension().lastPathComponent
+        var sessionId: String = saved.map { $0.sessionId } ?? fallbackId
+        var sessionTitle: String? = saved.map { $0.sessionTitle } ?? nil
+        var titleHistory: [SessionTitleChange] = saved.map { $0.titleHistory } ?? []
+        var cwd: String? = saved.map { $0.cwd } ?? nil
+        var projectName: String? = saved.map { $0.projectName } ?? nil
+        var model: String = saved.map { $0.model } ?? ""
+        var thinkingLevel: String? = saved.map { $0.thinkingLevel } ?? nil
+        var firstTimestamp: Date? = saved.map { $0.firstTimestamp } ?? nil
+        var lastTimestamp: Date? = saved.map { $0.lastTimestamp } ?? nil
+        var firstTimestampString: String = saved.map { $0.firstTimestampString } ?? ""
+        var lastTimestampString: String = saved.map { $0.lastTimestampString } ?? ""
+        var messageCount: Int = saved.map { $0.messageCount } ?? 0
+        var inputTokens: Int = saved.map { $0.inputTokens } ?? 0
+        var outputTokens: Int = saved.map { $0.outputTokens } ?? 0
+        var reasoningTokens: Int = saved.map { $0.reasoningTokens } ?? 0
+        var cacheReadTokens: Int = saved.map { $0.cacheReadTokens } ?? 0
+        var cacheWriteTokens: Int = saved.map { $0.cacheWriteTokens } ?? 0
+        var ledger: UsageLedger = saved.map { $0.ledger } ?? UsageLedger()
+        var provider: String = saved.map { $0.provider } ?? "unknown"
+        var promptCount: Int = saved.map { $0.promptCount } ?? 0
+        var toolCalls: Int = saved.map { $0.toolCalls } ?? 0
+        var agentCount: Int = saved.map { $0.agentCount } ?? (isSubagentFile(file) ? 1 : 0)
+        var events: [SessionEvent] = saved.map { $0.events } ?? []
+        var prompts: [PromptRecord] = saved.map { $0.prompts } ?? []
+        var pendingTools: [String: Int] = saved.map { $0.pendingTools } ?? [:]
+        var eventCounter: Int = saved.map { $0.eventCounter } ?? 0
+        var lineIndex: Int = saved.map { $0.lineIndex } ?? 0
+        var isFork: Bool = saved.map { $0.isFork } ?? false
+        var forkCreatedAt: Date? = saved.map { $0.forkCreatedAt } ?? nil
+
+        let consume: (Data) -> Void = { lineData in
+            guard !lineData.isEmpty else { return }
             lineIndex += 1
             guard let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
                 ledger.recordWarning("Malformed JSONL records excluded; source coverage is partial.")
@@ -182,6 +222,7 @@ public enum PiAgentJsonlParser {
 
             let tsString = obj["timestamp"] as? String ?? ""
             let timestamp = parseISO(tsString)
+            input?.observe(timestamp)
             if obj["type"] as? String == "session", obj["parentSession"] as? String != nil {
                 isFork = true; forkCreatedAt = timestamp
                 ledger.recordWarning("Pi fork inherited history is excluded; boundary or missing timestamps are uncertain.")
@@ -318,9 +359,8 @@ public enum PiAgentJsonlParser {
                 case "toolResult":
                     guard includeEvents,
                           let id = msg["toolCallId"] as? String,
-                          let idx = pendingTools[id] else { return }
-                    events[idx].completed = true
-                    events[idx].completedAt = tsString
+                          let idx = pendingTools[id] ?? events.lastIndex(where: { $0.kind == .toolUse && $0.toolUseId == id }) else { return }
+                    guard ToolEvidenceDigest.update(&events[idx], output: msg["content"], error: msg["isError"], timestamp: tsString) else { return }
                     events[idx].resultPreview = extractResult(from: msg["content"])
                     pendingTools.removeValue(forKey: id)
 
@@ -331,6 +371,43 @@ public enum PiAgentJsonlParser {
             default:
                 break
             }
+        }
+
+        if let input {
+            input.read(state: {
+                IncrementalLogInput.encode(ScanCheckpoint(
+                    sessionId: sessionId,
+                    sessionTitle: sessionTitle,
+                    titleHistory: titleHistory,
+                    cwd: cwd,
+                    projectName: projectName,
+                    model: model,
+                    thinkingLevel: thinkingLevel,
+                    firstTimestamp: firstTimestamp,
+                    lastTimestamp: lastTimestamp,
+                    firstTimestampString: firstTimestampString,
+                    lastTimestampString: lastTimestampString,
+                    messageCount: messageCount,
+                    inputTokens: inputTokens,
+                    outputTokens: outputTokens,
+                    reasoningTokens: reasoningTokens,
+                    cacheReadTokens: cacheReadTokens,
+                    cacheWriteTokens: cacheWriteTokens,
+                    ledger: ledger,
+                    provider: provider,
+                    promptCount: promptCount,
+                    toolCalls: toolCalls,
+                    agentCount: agentCount,
+                    events: events,
+                    prompts: prompts,
+                    pendingTools: pendingTools,
+                    eventCounter: eventCounter,
+                    lineIndex: lineIndex,
+                    isFork: isFork,
+                    forkCreatedAt: forkCreatedAt))
+            }, line: consume)
+        } else {
+            JsonlLineReader.forEachLineData(at: file, consume)
         }
 
         let totals = ledger.normalizedTokens
@@ -421,7 +498,7 @@ public enum PiAgentJsonlParser {
                     toolName: name,
                     toolUseId: id,
                     summary: summarizeTool(name: name, arguments: block["arguments"]),
-                    completed: false
+                    completed: false, inputDigest: ToolEvidenceDigest.arguments(block["arguments"])
                 ))
                 if !id.isEmpty { pendingTools[id] = events.count - 1 }
 

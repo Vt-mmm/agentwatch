@@ -87,8 +87,8 @@ final class AutomaticReportTests: XCTestCase {
         }
         let report = AutomaticDailyReport.build(employee: EmployeeProfile(organizationID: "company", employeeID: "e", displayName: "Mẫu"), period: try period(), scan: CoachingScanResult(prompts: prompts, sessions: [], candidateFileCount: 0, sourceFiles: [], sourceRoots: []))
         let text = DailyReportRenderer.plainText(report)
-        XCTAssertTrue(text.contains("1 prompt nhân viên; 1 lượt tự động/ngữ cảnh"))
-        XCTAssertTrue(text.contains("AGENT TỰ CHẠY"))
+        XCTAssertTrue(text.contains("1 prompt đã gửi"))
+        XCTAssertFalse(text.contains("AGENT TỰ CHẠY"))
         XCTAssertFalse(text.contains("REPEATED BOILERPLATE"))
         XCTAssertFalse(text.contains("P002"))
         XCTAssertTrue(text.contains("P001"))

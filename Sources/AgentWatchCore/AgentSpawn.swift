@@ -2,7 +2,7 @@
 
 import Foundation
 
-public struct AgentSpawn: Identifiable, Sendable, Equatable {
+public struct AgentSpawn: Identifiable, Sendable, Equatable, Codable {
     public let id: String              // tool_use_id from the JSONL block
     public let subagentType: String    // e.g. "Explore", "code-reviewer"
     public let description: String     // full description from input.description

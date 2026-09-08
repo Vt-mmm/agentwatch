@@ -44,3 +44,6 @@ client_secret*.json
 credentials.json
 auth.json
 *.xcarchive/
+
+# Generated local report previews
+output/

@@ -28,7 +28,7 @@ extension CoachingReportView {
 
     // MARK: - Snapshot hero
 
-    /// Manual snapshot mode: mở tab/đổi ngày không tự scan Claude/Codex/PiAgent
+    /// First preparation before a saved snapshot is available.
     /// để app không nặng. Governance log vẫn chạy riêng ở SupervisorLockStore.
     var coachingSnapshotHero: some View {
         VStack(spacing: 14) {
@@ -44,7 +44,7 @@ extension CoachingReportView {
                 Text("Chưa đọc snapshot")
                     .font(ClaudeFont.display(20))
                     .foregroundStyle(Claude.textPrimary)
-                Text("AgentWatch vẫn đang ghi lock/key heartbeat nhẹ ở nền.\nBấm Đọc log khi cần xem Claude, Codex, PiAgent cho \(scopeRangeLabel).")
+                Text("AgentWatch đang tự chuẩn bị dữ liệu Claude, Codex và PiAgent cho \(scopeRangeLabel).")
                     .font(ClaudeFont.body(13))
                     .foregroundStyle(Claude.textMuted)
                     .multilineTextAlignment(.center)

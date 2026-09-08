@@ -3,7 +3,7 @@ import Foundation
 public enum DailyReportBuilder {
     public static func build(employee: EmployeeProfile, period: DailyReportPeriod,
                              scan: CoachingScanResult, journals: [PiTaskJournalResult] = [],
-                             quota: [QuotaSnapshot] = []) -> DailyReportDraft {
+                             quota: [QuotaSnapshot] = [], includeToolEvidence: Bool = true) -> DailyReportDraft {
         let sessions = SessionAccounting.canonical(scan.sessions)
         let links = journals.flatMap(\.links).sorted { $0.recordedAt < $1.recordedAt }
         var evidence = journals.flatMap(\.evidence)
@@ -26,7 +26,7 @@ public enum DailyReportBuilder {
                                                localRef: session.fileURL?.path,
                                                digest: ReportEncoding.digest(Data("\(session.auditKey)|\(date.timeIntervalSince1970)|\(session.totalTokens)".utf8))))
             }
-            evidence.append(contentsOf: EvidenceExtractor.extract(session: session, period: period))
+            if includeToolEvidence { evidence.append(contentsOf: EvidenceExtractor.extract(session: session, period: period)) }
             let sessionEvidence = evidence.filter { $0.sessionRef == session.auditKey }.map(\.id)
             items[itemKey] = ReportWorkItem(id: itemKey, project: projectLabel,
                                            title: ShareText.clean(session.sessionTitle ?? "Công việc tại \(projectLabel)"),

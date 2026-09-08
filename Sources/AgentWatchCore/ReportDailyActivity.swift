@@ -21,10 +21,12 @@ public struct ReportPromptActivity: Codable, Sendable, Equatable, Identifiable {
     public let timestamp: Date
     public let app: String
     public let sessionRef: String
-    public let observedProject: String
+    public var observedProject: String
     public var summary: String = ""
     public var content: String?
     public var origin: ReportPromptOrigin?
+    public var fileActivities: [ReportFileActivity]?
+    public var sessionTitle: String?
     public var toolObservations: [String]?
     public var toolObservationCount: Int?
     public var workItemID: String?

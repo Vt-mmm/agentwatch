@@ -124,8 +124,7 @@ struct CoachingReportView: View {
     /// Chưa từng load lần nào (mount lần đầu, hoặc app vừa mở).
     var hasNeverLoaded: Bool { lastRefreshAt == .distantPast }
 
-    /// Snapshot hiện tại có khớp scope đang chọn không. Đổi ngày/tuần/tháng
-    /// không tự scan để giữ app nhẹ; user bấm Đọc log hoặc Export mới đọc.
+    /// Snapshot belongs to the selected period while the next refresh runs.
     var hasCurrentSnapshot: Bool {
         data.isFresh(for: scopeFingerprint)
     }
@@ -197,6 +196,13 @@ struct CoachingReportView: View {
                     .keyboardShortcut("f", modifiers: .command).opacity(0)
             }
             .frame(width: 0, height: 0)
+        }
+        .task(id: scopeFingerprint) {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { return }
+                if !data.isLoading { data.reload(scope: currentScope, fingerprint: scopeFingerprint, showLoading: false, reason: "automatic") }
+            }
         }
         .onAppear {
             data.setActive(scope: currentScope, fingerprint: scopeFingerprint)
@@ -331,7 +337,10 @@ struct CoachingReportView: View {
             sessions: sessions,
             projectOptions: projectNames.sorted(),
             modelOptions: Set(allSessions.map(\.model)).filter { !$0.isEmpty }.sorted(),
-            inventory: SessionInventory.aggregate(sessions),
+            inventory: modelFilter.isEmpty
+                ? data.aggregateGroups[CoachingAggregateKey(vendor: sourceFilter == .all ? "" : sourceFilter.rawValue,
+                                                           project: projectFilter)] ?? SessionInventory.aggregate(sessions)
+                : SessionInventory.aggregate(sessions),
             outlierIds: CoachingInsights.outlierSessions(sessions),
             agentLoopIds: CoachingInsights.agentLoopSessions(sessions),
             stats: ReportGenerator.stats(for: records),

@@ -3,7 +3,7 @@
 
 import Foundation
 
-public struct JsonlUserPrompt: Sendable, Equatable {
+public struct JsonlUserPrompt: Sendable, Equatable, Codable {
     public let timestamp: Date
     public let text: String
     public let lineIndex: Int
@@ -42,16 +42,29 @@ public enum JsonlParser {
         )
     }
 
+    static func scanIndexed(at url: URL, range: Range<Date>, input: IncrementalLogInput) -> JsonlSessionScanResult {
+        parseSessionData(at: url, range: range, eventLimit: 0, capturePrompts: true, input: input)
+    }
+
+    private struct ScanCheckpoint: Codable {
+        let stats: SessionStats
+        let prompts: [JsonlUserPrompt]
+        let lineIndex: Int
+        let eventCounter: Int
+    }
+
     private static func parseSessionData(at url: URL,
                                          range: Range<Date>?,
                                          eventLimit: Int?,
-                                         capturePrompts: Bool) -> JsonlSessionScanResult {
-        var stats = SessionStats(
+                                         capturePrompts: Bool,
+                                         input: IncrementalLogInput? = nil) -> JsonlSessionScanResult {
+        let saved = input?.restore(ScanCheckpoint.self)
+        var stats = saved?.stats ?? SessionStats(
             sessionId: url.deletingPathExtension().lastPathComponent,
             projectSlug: url.deletingLastPathComponent().lastPathComponent,
             filePath: url
         )
-        var prompts: [JsonlUserPrompt] = []
+        var prompts: [JsonlUserPrompt] = saved?.prompts ?? []
         stats.hasUsageLedger = true
 
         guard let handle = try? FileHandle(forReadingFrom: url) else {
@@ -62,62 +75,40 @@ public enum JsonlParser {
 
         var pendingAgentIds: Set<String> = []
         var pendingToolUseIds: [String: Int] = [:]  // tool_use_id → events[index]
-        var eventCounter = 0
-        var lineIndex = 0
+        var eventCounter = saved?.eventCounter ?? 0
+        var lineIndex = saved?.lineIndex ?? 0
 
-        // Streaming: đọc từng chunk 64 KB thay vì readToEnd() toàn bộ file.
-        // Peak memory = O(64 KB buffer + 1-2 dòng) thay vì O(filesize).
-        let chunkSize = 64 * 1024
-        var buffer = Data()
-        buffer.reserveCapacity(chunkSize * 2)
-        let newlineByte = Data([0x0A])
-
-        var endOfFile = false
-        while !endOfFile {
-            autoreleasepool {
-                // Đọc chunk tiếp theo từ file handle.
-                let chunk: Data
-                if #available(macOS 10.15.4, *) {
-                    chunk = (try? handle.read(upToCount: chunkSize)) ?? Data()
-                } else {
-                    chunk = handle.readData(ofLength: chunkSize)
+        if let input {
+            input.read(state: {
+                var compact = stats
+                compact.events = []
+                compact.agents = stats.agents.map {
+                    AgentSpawn(id: $0.id, subagentType: $0.subagentType,
+                               description: "", timestamp: $0.timestamp)
                 }
-                if chunk.isEmpty {
-                    endOfFile = true
-                    return
-                }
-                buffer.append(chunk)
-
-                // Xử lý mọi dòng hoàn chỉnh trong buffer (kết thúc bằng 0x0A).
-                while let nlRange = buffer.firstRange(of: newlineByte) {
-                    let lineData = buffer[buffer.startIndex..<nlRange.lowerBound]
-                    lineIndex += 1
-                    if !lineData.isEmpty {
-                        applyLine(lineData, to: &stats,
-                                  pendingAgents: &pendingAgentIds,
-                                  pendingTools: &pendingToolUseIds,
-                                  counter: &eventCounter,
-                                  lineIndex: lineIndex,
-                                  range: range,
-                                  capturePrompts: capturePrompts,
-                                  prompts: &prompts)
-                    }
-                    buffer.removeSubrange(buffer.startIndex...nlRange.lowerBound)
-                }
+                return IncrementalLogInput.encode(ScanCheckpoint(
+                    stats: compact, prompts: prompts, lineIndex: lineIndex, eventCounter: eventCounter))
+            }, line: { data in
+                lineIndex += 1
+                guard !data.isEmpty else { return }
+                applyLine(data, to: &stats, pendingAgents: &pendingAgentIds,
+                          pendingTools: &pendingToolUseIds, counter: &eventCounter,
+                          lineIndex: lineIndex, range: range,
+                          capturePrompts: true, prompts: &prompts, captureFingerprints: false, input: input)
+                // Coaching needs counts, prompts and ledger, never tool output/images.
+                stats.events.removeAll(keepingCapacity: true)
+                pendingToolUseIds.removeAll(keepingCapacity: true)
+                pendingAgentIds.removeAll(keepingCapacity: true)
+            })
+        } else {
+            JsonlLineReader.forEachLineData(at: url, includingEmptyLines: true) { lineData in
+                lineIndex += 1
+                guard !lineData.isEmpty else { return }
+                applyLine(lineData, to: &stats, pendingAgents: &pendingAgentIds,
+                          pendingTools: &pendingToolUseIds, counter: &eventCounter,
+                          lineIndex: lineIndex, range: range,
+                          capturePrompts: capturePrompts, prompts: &prompts, captureFingerprints: eventLimit != 0)
             }
-        }
-
-        // Flush phần cuối file nếu không kết thúc bằng newline.
-        if !buffer.isEmpty {
-            lineIndex += 1
-            applyLine(buffer, to: &stats,
-                      pendingAgents: &pendingAgentIds,
-                      pendingTools: &pendingToolUseIds,
-                      counter: &eventCounter,
-                      lineIndex: lineIndex,
-                      range: range,
-                      capturePrompts: capturePrompts,
-                      prompts: &prompts)
         }
 
         let usage = stats.usageLedger.normalizedTokens
@@ -148,7 +139,9 @@ public enum JsonlParser {
                                   lineIndex: Int,
                                   range: Range<Date>?,
                                   capturePrompts: Bool,
-                                  prompts: inout [JsonlUserPrompt]) {
+                                  prompts: inout [JsonlUserPrompt],
+                                  captureFingerprints: Bool = true,
+                                  input: IncrementalLogInput? = nil) {
         guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             stats.usageLedger.recordWarning("Malformed JSONL records excluded; source coverage is partial.")
             return
@@ -159,6 +152,7 @@ public enum JsonlParser {
         let ts = (raw["timestamp"] as? String)
             ?? (raw["_audit_timestamp"] as? String) ?? ""
         let timestamp = parseISO(ts)
+        input?.observe(timestamp)
         if timestamp == nil, type == "assistant" {
             stats.usageLedger.recordWarning("Assistant usage lacks a valid timestamp; daily allocation is incomplete.")
         }
@@ -204,7 +198,7 @@ public enum JsonlParser {
                 applyAssistantContent(content, to: &stats,
                                        pendingAgents: &pendingAgents,
                                        pendingTools: &pendingTools,
-                                       counter: &counter, timestamp: ts)
+                                       counter: &counter, timestamp: ts, captureFingerprints: captureFingerprints)
             }
 
         case "user":
@@ -227,7 +221,7 @@ public enum JsonlParser {
                 applyUserContent(content, to: &stats,
                                   pendingAgents: &pendingAgents,
                                   pendingTools: &pendingTools,
-                                  counter: &counter, timestamp: ts)
+                                  counter: &counter, timestamp: ts, captureFingerprints: captureFingerprints)
             } else if let text = msg["content"] as? String,
                       !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 stats.promptCount += 1
@@ -266,7 +260,7 @@ public enum JsonlParser {
                                               pendingAgents: inout Set<String>,
                                               pendingTools: inout [String: Int],
                                               counter: inout Int,
-                                              timestamp: String) {
+                                              timestamp: String, captureFingerprints: Bool = true) {
         for block in content {
             guard let blockType = block["type"] as? String else { continue }
             switch blockType {
@@ -305,7 +299,7 @@ public enum JsonlParser {
                     toolName: name,
                     toolUseId: id,
                     summary: summarizeTool(name: name, input: input),
-                    completed: false
+                    completed: false, inputDigest: captureFingerprints ? ToolEvidenceDigest.hash(block["input"]) : nil
                 )
                 stats.events.append(evt)
                 if !id.isEmpty {
@@ -335,7 +329,7 @@ public enum JsonlParser {
                                          pendingAgents: inout Set<String>,
                                          pendingTools: inout [String: Int],
                                          counter: inout Int,
-                                         timestamp: String) {
+                                         timestamp: String, captureFingerprints: Bool = true) {
         for block in content {
             let blockType = block["type"] as? String
 
@@ -356,7 +350,8 @@ public enum JsonlParser {
 
             // Mark matching tool_use event as completed + extract result content
             // (text snippet + image attachment nếu có).
-            if let idx = pendingTools[id] {
+            if let idx = pendingTools[id] ?? stats.events.lastIndex(where: { $0.kind == .toolUse && $0.toolUseId == id }) {
+                if captureFingerprints && !ToolEvidenceDigest.update(&stats.events[idx], output: block["content"], error: block["is_error"], timestamp: timestamp) { continue }
                 stats.events[idx].completed = true
                 stats.events[idx].completedAt = timestamp
                 let extracted = extractResult(from: block["content"])

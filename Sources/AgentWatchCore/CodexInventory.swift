@@ -43,6 +43,11 @@ public enum CodexJsonlParser {
         return AgentLogScanResult(summary: summary, prompts: prompts)
     }
 
+    static func scanIndexed(file: URL, range: Range<Date>, input: IncrementalLogInput) -> AgentLogScanResult {
+        let parsed = parse(file: file, includeEvents: false, range: range, input: input)
+        return AgentLogScanResult(summary: makeSummary(from: parsed, file: file), prompts: parsed.isSubagent ? [] : parsed.prompts)
+    }
+
     private static func makeSummary(from parsed: Parsed, file: URL) -> SessionSummary? {
         guard parsed.firstTimestamp != nil,
               parsed.lastTimestamp != nil else {
@@ -146,7 +151,7 @@ public enum CodexJsonlParser {
         var ledger: UsageLedger
     }
 
-    private struct UsageCheckpoint {
+    private struct UsageCheckpoint: Codable {
         let timestamp: Date
         let input: Int
         let output: Int
@@ -158,36 +163,66 @@ public enum CodexJsonlParser {
         let serviceTier: String?
     }
 
-    private static func parse(file: URL,
-                              includeEvents: Bool,
-                              range: Range<Date>? = nil) -> Parsed {
-        let fallbackId = file.deletingPathExtension().lastPathComponent
-        var sessionId = fallbackId
-        var cwd = "(unknown)"
-        var model = ""
+    private struct ScanCheckpoint: Codable {
+        var sessionId: String
+        var cwd: String
+        var model: String
         var thinkingLevel: String?
-        var provider = "openai"
+        var provider: String
         var serviceTier: String?
-        var isSubagent = false
+        var isSubagent: Bool
         var firstTimestamp: Date?
         var lastTimestamp: Date?
         var fullFirstTimestamp: Date?
         var forkCreatedAt: Date?
-        var parseWarnings: [String] = []
-        var firstTimestampString = ""
-        var lastTimestampString = ""
-        var messageCount = 0
-        var promptCount = 0
-        var toolCalls = 0
-        var usageCheckpoints: [UsageCheckpoint] = []
-        var events: [SessionEvent] = []
-        var prompts: [PromptRecord] = []
-        var pendingTools: [String: Int] = [:]
-        var promptDedupe = PromptDedupeState()
-        var lineIndex = 0
-        var eventCounter = 0
+        var parseWarnings: [String]
+        var firstTimestampString: String
+        var lastTimestampString: String
+        var messageCount: Int
+        var promptCount: Int
+        var toolCalls: Int
+        var usageCheckpoints: [UsageCheckpoint]
+        var events: [SessionEvent]
+        var prompts: [PromptRecord]
+        var pendingTools: [String: Int]
+        var promptDedupe: PromptDedupeState
+        var lineIndex: Int
+        var eventCounter: Int
+    }
 
-        JsonlLineReader.forEachLineData(at: file) { lineData in
+    private static func parse(file: URL,
+                              includeEvents: Bool,
+                              range: Range<Date>? = nil,
+                              input: IncrementalLogInput? = nil) -> Parsed {
+        let saved = input?.restore(ScanCheckpoint.self)
+        let fallbackId = file.deletingPathExtension().lastPathComponent
+        var sessionId: String = saved.map { $0.sessionId } ?? fallbackId
+        var cwd: String = saved.map { $0.cwd } ?? "(unknown)"
+        var model: String = saved.map { $0.model } ?? ""
+        var thinkingLevel: String? = saved.map { $0.thinkingLevel } ?? nil
+        var provider: String = saved.map { $0.provider } ?? "openai"
+        var serviceTier: String? = saved.map { $0.serviceTier } ?? nil
+        var isSubagent: Bool = saved.map { $0.isSubagent } ?? false
+        var firstTimestamp: Date? = saved.map { $0.firstTimestamp } ?? nil
+        var lastTimestamp: Date? = saved.map { $0.lastTimestamp } ?? nil
+        var fullFirstTimestamp: Date? = saved.map { $0.fullFirstTimestamp } ?? nil
+        var forkCreatedAt: Date? = saved.map { $0.forkCreatedAt } ?? nil
+        var parseWarnings: [String] = saved.map { $0.parseWarnings } ?? []
+        var firstTimestampString: String = saved.map { $0.firstTimestampString } ?? ""
+        var lastTimestampString: String = saved.map { $0.lastTimestampString } ?? ""
+        var messageCount: Int = saved.map { $0.messageCount } ?? 0
+        var promptCount: Int = saved.map { $0.promptCount } ?? 0
+        var toolCalls: Int = saved.map { $0.toolCalls } ?? 0
+        var usageCheckpoints: [UsageCheckpoint] = saved.map { $0.usageCheckpoints } ?? []
+        var events: [SessionEvent] = saved.map { $0.events } ?? []
+        var prompts: [PromptRecord] = saved.map { $0.prompts } ?? []
+        var pendingTools: [String: Int] = saved.map { $0.pendingTools } ?? [:]
+        var promptDedupe: PromptDedupeState = saved.map { $0.promptDedupe } ?? PromptDedupeState()
+        var lineIndex: Int = saved.map { $0.lineIndex } ?? 0
+        var eventCounter: Int = saved.map { $0.eventCounter } ?? 0
+
+        let consume: (Data) -> Void = { lineData in
+            guard !lineData.isEmpty else { return }
             lineIndex += 1
             guard let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
                 parseWarnings.append("Malformed JSONL records excluded; source coverage is partial.")
@@ -196,6 +231,7 @@ public enum CodexJsonlParser {
 
             let tsString = obj["timestamp"] as? String ?? ""
             let timestamp = parseISO(tsString)
+            input?.observe(timestamp)
             if let ts = timestamp {
                 if fullFirstTimestamp == nil || ts < fullFirstTimestamp! {
                     fullFirstTimestamp = ts
@@ -294,6 +330,38 @@ public enum CodexJsonlParser {
             default:
                 break
             }
+        }
+
+        if let input {
+            input.read(state: {
+                IncrementalLogInput.encode(ScanCheckpoint(
+                    sessionId: sessionId,
+                    cwd: cwd,
+                    model: model,
+                    thinkingLevel: thinkingLevel,
+                    provider: provider,
+                    serviceTier: serviceTier,
+                    isSubagent: isSubagent,
+                    firstTimestamp: firstTimestamp,
+                    lastTimestamp: lastTimestamp,
+                    fullFirstTimestamp: fullFirstTimestamp,
+                    forkCreatedAt: forkCreatedAt,
+                    parseWarnings: parseWarnings,
+                    firstTimestampString: firstTimestampString,
+                    lastTimestampString: lastTimestampString,
+                    messageCount: messageCount,
+                    promptCount: promptCount,
+                    toolCalls: toolCalls,
+                    usageCheckpoints: usageCheckpoints,
+                    events: events,
+                    prompts: prompts,
+                    pendingTools: pendingTools,
+                    promptDedupe: promptDedupe,
+                    lineIndex: lineIndex,
+                    eventCounter: eventCounter))
+            }, line: consume)
+        } else {
+            JsonlLineReader.forEachLineData(at: file, consume)
         }
 
         let upperBound = range?.upperBound ?? .distantFuture
@@ -464,16 +532,15 @@ public enum CodexJsonlParser {
                 toolName: name,
                 toolUseId: id,
                 summary: summarizeTool(name: name, payload: payload),
-                completed: false
+                completed: false, inputDigest: ToolEvidenceDigest.arguments(payload["arguments"] ?? payload["input"])
             ))
             pendingTools[id] = events.count - 1
 
         case "function_call_output", "custom_tool_call_output":
             guard capture, includeEvents,
                   let id = payload["call_id"] as? String ?? payload["id"] as? String,
-                  let idx = pendingTools[id] else { return }
-            events[idx].completed = true
-            events[idx].completedAt = timestamp
+                  let idx = pendingTools[id] ?? events.lastIndex(where: { $0.kind == .toolUse && $0.toolUseId == id }) else { return }
+            guard ToolEvidenceDigest.update(&events[idx], output: payload["output"], error: payload["is_error"], timestamp: timestamp) else { return }
             events[idx].resultPreview = extractOutput(from: payload)
             pendingTools.removeValue(forKey: id)
 
@@ -605,7 +672,7 @@ public enum CodexJsonlParser {
         return (ledger, precision, Array(Set(warnings)).sorted())
     }
 
-    private struct PromptDedupeState {
+    private struct PromptDedupeState: Codable {
         var lastTimestampByKey: [String: Date] = [:]
         var timelessKeys: Set<String> = []
     }

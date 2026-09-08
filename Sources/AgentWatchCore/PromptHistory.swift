@@ -7,7 +7,7 @@
 import Foundation
 
 /// 1 prompt đã được chấm điểm + metadata.
-public struct PromptRecord: Identifiable, Sendable, Equatable {
+public struct PromptRecord: Identifiable, Sendable, Equatable, Codable {
     public let id: String           // hash uuid+timestamp+text-prefix
     public let timestamp: Date
     public let projectSlug: String  // tên thư mục dưới ~/.claude/projects/

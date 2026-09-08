@@ -27,6 +27,7 @@ struct MainWindowView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case live = "Sessions"
         case coaching = "Coaching"
+        case insights = "Tasks"
         case pets = "Pets"
         var id: String { rawValue }
     }
@@ -41,6 +42,8 @@ struct MainWindowView: View {
                 liveTab
             case .coaching:
                 CoachingReportView()
+            case .insights:
+                TaskInsightsView()
             case .pets:
                 PetCollectionView()
             }
@@ -51,6 +54,13 @@ struct MainWindowView: View {
         .sheet(isPresented: $showGoogleSetup) { GoogleSetupView() }
         .sheet(isPresented: $showPrivacy) { PrivacyView() }
         .sheet(isPresented: $showSupervisorLock) { SupervisorLockView() }
+        .task(id: tab) {
+            guard tab == .live else { return }
+            while !Task.isCancelled {
+                refreshAuditSnapshots()
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
         .onAppear {
             presentSupervisorLockIfNeeded()
         }
@@ -88,32 +98,19 @@ struct MainWindowView: View {
 
     private var topBar: some View {
         HStack(alignment: .center, spacing: 16) {
-            Picker("", selection: $tab) {
-                ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 220)
-
-            if tab == .live {
-                // Pet nằm trong ProjectPickerView, ngay bên trái cụm snapshot/pin.
-                Divider().frame(height: 22)
-                ProjectPickerView()
+            if tab == .coaching || tab == .insights {
+                Button { tab = .live } label: { Label("Quay lại", systemImage: "chevron.left") }
+                Text(tab == .insights ? "Phân tích nâng cao" : "Coaching").font(.headline)
+            } else {
+                Picker("", selection: $tab) {
+                    Text("Sessions").tag(Tab.live)
+                    Text("Pets").tag(Tab.pets)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 170)
             }
             Spacer()
-            if tab == .live {
-                Button { refreshAuditSnapshots() } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Claude.textPrimary)
-                        .frame(width: 28, height: 22)
-                }
-                .buttonStyle(.borderless)
-                .help("Đọc log lại một lần")
-            }
-            // Tab Coaching + Pets không có ProjectPickerView → pet ở đây để vẫn hiện.
-            if tab == .coaching || tab == .pets {
-                HeaderPet()
-            }
+            AutomaticDailyReportExportButton()
             if supervisorLock.isLocked || supervisorLock.requiresStartupKey {
                 Button { showSupervisorLock = true } label: {
                     HStack(spacing: 4) {
@@ -144,6 +141,10 @@ struct MainWindowView: View {
     private var settingsMenu: some View {
         @Bindable var petBinding = pet
         return Menu {
+            Menu("Nâng cao") {
+                Button("Phân tích task và context") { tab = .insights }
+                Button("Coaching và lịch sử") { tab = .coaching }
+            }
             Button("Kết nối Google cho report…") { showGoogleSetup = true }
             Divider()
             // Floating pet toggle — top of menu, most-used setting.
@@ -229,11 +230,15 @@ struct MainWindowView: View {
                         piSnapshot: piSnapshot,
                         filter: $liveFilter
                     )
-                    liveAgentSections(
-                        claudeStats: claudeStats,
-                        codexSnapshot: codexSnapshot,
-                        piSnapshot: piSnapshot
-                    )
+                    DisclosureGroup("Chi tiết phiên làm việc") {
+                        ProjectPickerView()
+                        liveAgentSections(
+                            claudeStats: claudeStats,
+                            codexSnapshot: codexSnapshot,
+                            piSnapshot: piSnapshot
+                        )
+                    }
+
                 }
                 .padding(20)
             }
@@ -270,7 +275,7 @@ struct MainWindowView: View {
             } else {
                 LiveEmptyAgentCard(
                     title: "Chưa có Claude log trong snapshot",
-                    detail: "Bấm refresh để đọc session Claude mới nhất.",
+                    detail: "Dữ liệu session được cập nhật tự động.",
                     systemImage: "moon.zzz.fill"
                 )
             }
@@ -332,12 +337,12 @@ struct MainWindowView: View {
 
     private var placeholderText: String {
         if projectStore.followLatest {
-            return "Chưa có snapshot gần đây.\nBấm refresh để đọc log Claude, Codex hoặc PiAgent một lần."
+            return "Chưa có snapshot gần đây.\nĐang tự chuẩn bị dữ liệu Claude, Codex và PiAgent."
         }
         if let folder = projectStore.pinnedFolder {
-            return "Chưa có snapshot trong \(folder.lastPathComponent).\nBấm refresh để đọc log mới nhất."
+            return "Chưa có snapshot trong \(folder.lastPathComponent).\nDữ liệu được cập nhật tự động."
         }
-        return "Pin 1 folder hoặc bấm refresh để đọc session mới nhất."
+        return "Tự động hiển thị session gần nhất."
     }
 
     private func refreshAuditSnapshots() {

@@ -2,109 +2,81 @@
 // TaskGroup. Thay thế việc gọi PromptHistory.loadPrompts + SessionInventory.list
 // + computeDailyCostTrend riêng (mỗi cái re-enumerate filesystem độc lập).
 //
-// Coaching reload trước: 9× scan dir (cur/prev/7×day × 1 source mỗi cái) →
-// nay: 1× scan dir, slice trong memory. Tốc độ thực tế +5-10×.
+// Manual refresh discovers files once, reuses persistent per-scope results and
+// resumes append-only logs. Reading a saved scope needs no filesystem scan.
 
 import Foundation
+import CryptoKit
 
-struct CoachingFileResult: Sendable {
+struct CoachingFileResult: Sendable, Codable {
     let prompts: [PromptRecord]
     let summary: SessionSummary?
 }
 
-// MARK: - Parse result cache (P0 optimisation)
-
-/// Cache kết quả parse JSONL theo (path, mtime, size). Thread-safe via actor.
-/// Tránh re-parse file không đổi khi user reload snapshot cùng scope.
-/// Giới hạn 1000 entry — evict theo lastAccess cũ nhất để tránh tăng vô hạn.
-actor JsonlParseCache {
-    static let shared = JsonlParseCache()
-
-    private struct CachedSession {
-        let mtime: Date
-        let size: Int64
-        let rangeLowerBound: Date
-        let rangeUpperBound: Date
-        let source: SessionSource
-        let result: CoachingFileResult
-        let parsedAt: Date
-        var lastAccess: Date
-    }
-
-    private var cache: [String: CachedSession] = [:]
-    private let maxEntries = 1000
-
-    /// Trả về cached SessionStats nếu (mtime, size) không đổi; nil nếu stale.
-    func get(path: String, mtime: Date, size: Int64,
-             range: Range<Date>,
-             source: SessionSource,
-             allowRecentGrowth: Bool) -> CoachingFileResult? {
-        guard var entry = cache[path],
-              entry.rangeLowerBound == range.lowerBound,
-              entry.rangeUpperBound == range.upperBound,
-              entry.source == source else { return nil }
-        let unchanged = entry.mtime == mtime && entry.size == size
-        // Snapshot reload and immediate export often happen back-to-back while
-        // the active agent is still appending to its JSONL. Coalesce only that
-        // short burst; a later manual refresh must observe the new bytes.
-        let recentlyParsed = allowRecentGrowth && Date().timeIntervalSince(entry.parsedAt) < 5
-        guard unchanged || recentlyParsed else { return nil }
-        // Cập nhật lastAccess để LRU eviction hoạt động đúng.
-        entry.lastAccess = Date()
-        cache[path] = entry
-        return entry.result
-    }
-
-    /// Lưu kết quả parse vào cache, evict oldest entry nếu vượt 1000.
-    func set(path: String, mtime: Date, size: Int64,
-             range: Range<Date>,
-             source: SessionSource,
-             result: CoachingFileResult) {
-        if cache.count >= maxEntries, let oldestKey = oldestKey() {
-            cache.removeValue(forKey: oldestKey)
-        }
-        cache[path] = CachedSession(
-            mtime: mtime,
-            size: size,
-            rangeLowerBound: range.lowerBound,
-            rangeUpperBound: range.upperBound,
-            source: source,
-            result: result,
-            parsedAt: Date(),
-            lastAccess: Date()
-        )
-    }
-
-    private func oldestKey() -> String? {
-        cache.min(by: { $0.value.lastAccess < $1.value.lastAccess })?.key
-    }
-}
-
 /// Kết quả 1 lần scan rộng. Caller slice cho từng dimension (current/prev/daily).
-public struct CoachingScanResult: Sendable {
+public struct CoachingScanResult: Sendable, Codable {
     public let prompts: [PromptRecord]
     public let sessions: [SessionSummary]
     public let candidateFileCount: Int
     public let sourceFiles: [SourceFileManifest]
     public let sourceRoots: [SourceRootManifest]
+    public var catalogFingerprint: String? = nil
+    public var aggregate: InventoryAggregate? = nil
+    public var aggregateGroups: [CoachingAggregateKey: InventoryAggregate] = [:]
+    public var cacheHitCount: Int = 0
+    public var resumedFileCount: Int = 0
+    public var sourceBytesRead: UInt64 = 0
+}
+
+private struct FileScanOutcome: Sendable {
+    let result: CoachingFileResult
+    var cacheHit = false
+    var resumed = false
+    var bytesRead: UInt64 = 0
+    var stable = true
 }
 
 public enum CoachingScan {
 
     /// Scan toàn bộ session file có khả năng chạm `range`. Parallel parse mỗi file.
     /// Trả về cả prompt list lẫn session summary từ CÙNG 1 pass đọc file.
+    /// `allowRecentGrowth` is retained for source compatibility; changed files
+    /// are now always refreshed. Export uses `forceFullRead` or `captureManifest`.
     public static func scan(in range: Range<Date>,
                             allowRecentGrowth: Bool = false,
                             roots: AgentLogRoots = .current,
                             captureManifest: Bool = false,
+                            forceFullRead: Bool = false,
+                            store: CoachingQueryStore = .shared,
                             progress: (@Sendable (Int, Int) async -> Void)? = nil) async -> CoachingScanResult {
+        let generation = await store.beginScan(in: range, roots: roots)
         let index = DesktopOriginIndex.shared()
         let candidates = collectCandidateFiles(in: range, roots: roots)
         await progress?(0, candidates.count)
+        let revisions = candidates.map { candidate in
+            FileRevision(path: candidate.url.path, source: candidate.source(via: index), stamp: LogFileStamp.read(candidate.url))
+        }.sorted { $0.path < $1.path }
+        let revisionEncoder = JSONEncoder()
+        revisionEncoder.outputFormatting = [.sortedKeys]
+        let fingerprint = revisions.allSatisfy { $0.stamp != nil }
+            ? (try? revisionEncoder.encode(revisions)).map { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() }
+            : nil
+        if !captureManifest, !forceFullRead, let fingerprint,
+           let saved = await store.snapshot(in: range, roots: roots),
+           saved.result.catalogFingerprint == fingerprint, !Task.isCancelled {
+            var result = saved.result
+            result.cacheHitCount = candidates.count
+            result.resumedFileCount = 0
+            result.sourceBytesRead = 0
+            await progress?(candidates.count, candidates.count)
+            await store.saveSnapshot(result, range: range, roots: roots, generation: generation)
+            await store.finishScan(in: range, roots: roots, generation: generation)
+            return result
+        }
         let before = captureManifest ? candidates.map { SourceFileManifest.inspect($0.url) } : []
         // Parallel parse — IO-bound trên SSD, CPU-bound bị JSON; TaskGroup
         // tận dụng cả 2.
-        let results = await withTaskGroup(of: CoachingFileResult?.self) { group in
+        let results = await withTaskGroup(of: FileScanOutcome?.self) { group in
             let workerCount = min(4, candidates.count)
             var nextIndex = 0
             for _ in 0..<workerCount {
@@ -113,10 +85,10 @@ public enum CoachingScan {
                 group.addTask {
                     await parseOne(file: c.url, slug: c.slug, display: c.display,
                                    source: c.source(via: index), range: range,
-                                   allowRecentGrowth: allowRecentGrowth, bypassCache: captureManifest)
+                                   bypassCache: captureManifest || forceFullRead, store: store)
                 }
             }
-            var collected: [CoachingFileResult] = []
+            var collected: [FileScanOutcome] = []
             var completed = 0
             while let r = await group.next() {
                 if Task.isCancelled { group.cancelAll(); break }
@@ -129,7 +101,7 @@ public enum CoachingScan {
                     group.addTask {
                         await parseOne(file: c.url, slug: c.slug, display: c.display,
                                        source: c.source(via: index), range: range,
-                                       allowRecentGrowth: allowRecentGrowth, bypassCache: captureManifest)
+                                       bypassCache: captureManifest || forceFullRead, store: store)
                     }
                 }
             }
@@ -138,8 +110,8 @@ public enum CoachingScan {
         var prompts: [PromptRecord] = []
         var sessions: [SessionSummary] = []
         for r in results {
-            prompts.append(contentsOf: r.prompts)
-            if let s = r.summary { sessions.append(s) }
+            prompts.append(contentsOf: r.result.prompts)
+            if let s = r.result.summary { sessions.append(s) }
         }
         sessions = SessionAccounting.canonical(sessions)
         var seenPrompts: Set<String> = []
@@ -150,7 +122,7 @@ public enum CoachingScan {
             if $0.cost != $1.cost { return $0.cost > $1.cost }
             return $0.totalTokens > $1.totalTokens
         }
-        return CoachingScanResult(
+        var result = CoachingScanResult(
             prompts: prompts,
             sessions: sessions,
             candidateFileCount: candidates.count,
@@ -163,9 +135,27 @@ public enum CoachingScan {
             } : [],
             sourceRoots: [roots.claudeProjects, roots.claudeDesktop, roots.codexSessions, roots.codexArchived, roots.piSessions].map(SourceRootManifest.init)
         )
+        result.catalogFingerprint = fingerprint
+        result.aggregate = SessionInventory.aggregate(result.sessions)
+        result.aggregateGroups = CoachingAggregateKey.build(sessions: result.sessions, total: result.aggregate ?? .zero)
+        result.cacheHitCount = results.filter(\.cacheHit).count
+        result.resumedFileCount = results.filter(\.resumed).count
+        result.sourceBytesRead = results.reduce(0) { $0 + $1.bytesRead }
+        if !captureManifest, !forceFullRead, !Task.isCancelled, results.count == candidates.count,
+           results.allSatisfy(\.stable) {
+            await store.saveSnapshot(result, range: range, roots: roots, generation: generation)
+        }
+        await store.finishScan(in: range, roots: roots, generation: generation)
+        return result
     }
 
     // MARK: - File enumeration
+
+    private struct FileRevision: Codable {
+        let path: String
+        let source: SessionSource
+        let stamp: LogFileStamp?
+    }
 
     private struct Candidate {
         let url: URL
@@ -270,31 +260,31 @@ public enum CoachingScan {
     private static func parseOne(file: URL, slug: String, display: String,
                                  source: SessionSource,
                                  range: Range<Date>,
-                                 allowRecentGrowth: Bool, bypassCache: Bool) async -> CoachingFileResult? {
-        let path = file.path
-        let mtime = ProjectPath.mtime(of: file)
-        let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize)
-            .flatMap { Int64($0) } ?? 0
-        if !bypassCache, let cached = await JsonlParseCache.shared.get(
-            path: path,
-            mtime: mtime,
-            size: size,
-            range: range,
-            source: source,
-            allowRecentGrowth: allowRecentGrowth
-        ) {
-            return cached.summary == nil && cached.prompts.isEmpty ? nil : cached
+                                 bypassCache: Bool, store: CoachingQueryStore) async -> FileScanOutcome? {
+        guard !Task.isCancelled else { return nil }
+        let key = CoachingQueryStore.fileKey(file, source: source, range: range)
+        let stamp = LogFileStamp.read(file)
+        let previous = bypassCache ? nil : await store.file(key)
+        if let previous, previous.stamp == stamp {
+            return FileScanOutcome(result: previous.result, cacheHit: true)
         }
+        if !bypassCache, let stamp, await store.excludesRange(file: file, stamp: stamp, range: range) {
+            return FileScanOutcome(result: CoachingFileResult(prompts: [], summary: nil), cacheHit: true)
+        }
+        let input = bypassCache ? nil : stamp.map { IncrementalLogInput(file: file, stamp: $0, previous: previous) }
 
         let result: CoachingFileResult
         if source == .codex {
-            let parsed = CodexJsonlParser.scan(file: file, range: range)
+            let parsed = input.map { CodexJsonlParser.scanIndexed(file: file, range: range, input: $0) }
+                ?? CodexJsonlParser.scan(file: file, range: range)
             result = CoachingFileResult(prompts: parsed.prompts, summary: parsed.summary)
         } else if source == .piagent {
-            let parsed = PiAgentJsonlParser.scan(file: file, range: range)
+            let parsed = input.map { PiAgentJsonlParser.scanIndexed(file: file, range: range, input: $0) }
+                ?? PiAgentJsonlParser.scan(file: file, range: range)
             result = CoachingFileResult(prompts: parsed.prompts, summary: parsed.summary)
         } else {
-            let parsed = JsonlParser.scanSession(at: file, range: range)
+            let parsed = input.map { JsonlParser.scanIndexed(at: file, range: range, input: $0) }
+                ?? JsonlParser.scanSession(at: file, range: range)
             let stats = parsed.stats
             let firstTs = parseISO(stats.startedAt)
             let lastTs = parseISO(stats.lastEventAt)
@@ -344,15 +334,15 @@ public enum CoachingScan {
         }
 
         guard !Task.isCancelled else { return nil }
-        await JsonlParseCache.shared.set(
-            path: path,
-            mtime: mtime,
-            size: size,
-            range: range,
-            source: source,
-            result: result
-        )
-        return result.summary == nil && result.prompts.isEmpty ? nil : result
+        let stable = input?.succeeded ?? (stamp != nil && LogFileStamp.read(file) == stamp)
+        if !bypassCache, let stamp, stable {
+            let cached = CachedLogFile(stamp: stamp, result: result, checkpoint: input?.checkpoint,
+                                       firstTimestamp: input?.firstTimestamp, lastTimestamp: input?.lastTimestamp)
+            await store.saveFile(cached, key: key)
+            if input != nil { await store.saveBounds(file: file, value: cached) }
+        }
+        return FileScanOutcome(result: result, resumed: input?.resumed ?? false,
+                               bytesRead: input?.bytesRead ?? stamp?.size ?? 0, stable: stable)
     }
 
     /// True nếu text trông giống auto-injected message của Claude Code thay vì

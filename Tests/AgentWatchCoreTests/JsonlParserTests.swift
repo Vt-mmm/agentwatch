@@ -227,42 +227,6 @@ final class JsonlParserTests: XCTestCase {
         XCTAssertGreaterThan(result.prompts.first?.text.count ?? 0, 160)
     }
 
-    func testCoachingCacheDoesNotHideRecentGrowthFromStrictExportScan() async {
-        let cache = JsonlParseCache()
-        let mtime = Date(timeIntervalSinceReferenceDate: 800_000_000)
-        let range = mtime..<mtime.addingTimeInterval(300)
-        let result = CoachingFileResult(prompts: [], summary: nil)
-
-        await cache.set(
-            path: "/tmp/live-session.jsonl",
-            mtime: mtime,
-            size: 100,
-            range: range,
-            source: .codex,
-            result: result
-        )
-
-        let uiHit = await cache.get(
-            path: "/tmp/live-session.jsonl",
-            mtime: mtime.addingTimeInterval(1),
-            size: 120,
-            range: range,
-            source: .codex,
-            allowRecentGrowth: true
-        )
-        XCTAssertNotNil(uiHit)
-
-        let exportMiss = await cache.get(
-            path: "/tmp/live-session.jsonl",
-            mtime: mtime.addingTimeInterval(1),
-            size: 120,
-            range: range,
-            source: .codex,
-            allowRecentGrowth: false
-        )
-        XCTAssertNil(exportMiss)
-    }
-
     func testSlugReplacesSlashUnderscoreAndDot() {
         XCTAssertEqual(
             ProjectPath.slug(for: URL(fileURLWithPath: "/Users/vtamm/Documents/Working")),

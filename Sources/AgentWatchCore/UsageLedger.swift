@@ -110,7 +110,7 @@ public struct UsageEntry: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
-public struct UsageLedger: Sendable, Equatable {
+public struct UsageLedger: Sendable, Equatable, Codable {
     public private(set) var entries: [UsageEntry] = []
     private var indices: [String: Int] = [:]
     private var sourceWarnings: Set<String> = []

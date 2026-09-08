@@ -46,6 +46,7 @@ struct AgentWatchMacApp: App {
                     ReportDeliveryScheduler.shared.start()
                     supervisorLock.start()
                     DesktopAppActivityCollector.shared.start()
+                    DailyActivityStore.shared.start()
                     // Bắt đầu thu thập MetricKit payloads — silent, không có UI.
                     MetricsCollector.shared.start()
                     petBroker.attach(floatingPet)
@@ -71,6 +72,9 @@ struct AgentWatchMacApp: App {
                     coachingData.onScanCompleted = { audit in
                         supervisorLock.recordScanCompleted(audit)
                     }
+                }
+                .onChange(of: supervisorLock.reportIdentity?.employeeID) { _, _ in
+                    DailyActivityStore.shared.select(DailyActivityStore.shared.day)
                 }
                 .onChange(of: petCollection.selectedId) { _, newId in
                     floatingPet.characterName = newId

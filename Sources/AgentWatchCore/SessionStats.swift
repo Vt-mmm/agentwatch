@@ -2,7 +2,7 @@
 
 import Foundation
 
-public struct SessionStats: Sendable, Equatable {
+public struct SessionStats: Sendable, Equatable, Codable {
     public let sessionId: String       // jsonl filename without extension
     public let projectSlug: String     // parent directory name under ~/.claude/projects
     public let filePath: URL

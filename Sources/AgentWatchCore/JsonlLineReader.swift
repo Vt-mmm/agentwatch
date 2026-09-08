@@ -2,7 +2,7 @@ import Foundation
 import Darwin
 
 enum JsonlLineReader {
-    static func forEachLineData(at url: URL, _ body: (Data) -> Void) {
+    static func forEachLineData(at url: URL, includingEmptyLines: Bool = false, _ body: (Data) -> Void) {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return }
         defer { try? handle.close() }
         var pending = Data()
@@ -23,7 +23,7 @@ enum JsonlLineReader {
                         }
                         let length = start.distance(to: UnsafeRawPointer(newline))
                         if pending.isEmpty {
-                            if length > 0 { body(Data(bytes: start, count: length)) }
+                            if length > 0 || includingEmptyLines { body(Data(bytes: start, count: length)) }
                         } else {
                             pending.append(start.assumingMemoryBound(to: UInt8.self), count: length)
                             body(pending)

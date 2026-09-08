@@ -1,6 +1,4 @@
-// Store giữ data Coaching tab persistent giữa các lần switch tab.
-// Manual snapshot mode: mở tab/đổi scope không scan Claude/Codex/PiAgent.
-// App chỉ đọc agent logs khi user bấm Đọc log hoặc khi export report.
+// Cached reads appear first; local sources refresh automatically in the background.
 
 import Foundation
 import Observation
@@ -37,6 +35,7 @@ final class CoachingDataStore {
     var allRecords: [PromptRecord] = []
     var allSessions: [SessionSummary] = []
     var previousAggregate: InventoryAggregate = .zero
+    var aggregateGroups: [CoachingAggregateKey: InventoryAggregate] = [:]
     var previousAvgStars: Double = 0
     var previousPromptCount: Int = 0
     /// 7 bucket gần nhất, từ cũ → mới. Mỗi bucket là (ngày, cost) để chart
@@ -69,31 +68,46 @@ final class CoachingDataStore {
     var onScanCompleted: ((CoachingScanAudit) -> Void)?
 
     private var loadTask: Task<Void, Never>?
+    private var restoreTask: Task<Void, Never>?
 
-    /// True nếu đã có snapshot cho đúng scope. Đổi scope không tự scan; view
-    /// dùng giá trị này để show màn "Chưa đọc snapshot".
+    /// Whether the displayed snapshot belongs to the selected range.
     func isFresh(for fingerprint: String) -> Bool {
         guard fingerprint == lastScopeFingerprint else { return false }
         return lastRefreshAt != .distantPast
     }
 
-    /// Cập nhật scope đang chọn MÀ KHÔNG trigger reload — dùng khi onAppear
-    /// thấy data còn fresh nhưng vẫn cần giữ fingerprint hiện tại.
+    /// Restore a saved scope first, then refresh local sources automatically.
     func setActive(scope: ReportScope, fingerprint: String) {
         if activeFingerprint != fingerprint {
             scanGeneration = UUID()
+            restoreTask?.cancel()
             loadTask?.cancel()
             loadTask = nil
             isLoading = false
         }
         activeScope = scope
         activeFingerprint = fingerprint
+        guard !isFresh(for: fingerprint), loadTask == nil else { return }
+        restoreTask?.cancel()
+        let generation = scanGeneration
+        let range = Self.dateRange(for: scope)
+        restoreTask = Task { [weak self] in
+            let snapshot = await CoachingQueryStore.shared.snapshot(in: range)
+            guard !Task.isCancelled, let self, self.scanGeneration == generation,
+                  self.activeFingerprint == fingerprint else { return }
+            if let snapshot {
+                _ = self.applyScanResult(snapshot.result, scope: scope, fingerprint: fingerprint,
+                    reason: "snapshot", startedAt: snapshot.capturedAt, capturedAt: snapshot.capturedAt, notify: false)
+            }
+            self.reload(scope: scope, fingerprint: fingerprint, showLoading: snapshot == nil, reason: "automatic")
+        }
     }
 
     /// Reload sử dụng scope mới nhất. Cancel in-flight load để tránh stale data
     /// được ghi đè lên UI sau khi user đã đổi filter.
-    func reload(scope: ReportScope, fingerprint: String, showLoading: Bool = true) {
-        setActive(scope: scope, fingerprint: fingerprint)
+    func reload(scope: ReportScope, fingerprint: String, showLoading: Bool = true, reason: String = "manual") {
+        if activeFingerprint != fingerprint { setActive(scope: scope, fingerprint: fingerprint) }
+        restoreTask?.cancel()
         loadTask?.cancel()
         let shouldShowLoading = showLoading || (lastRefreshAt == .distantPast && allRecords.isEmpty && allSessions.isEmpty)
         if shouldShowLoading {
@@ -104,7 +118,7 @@ final class CoachingDataStore {
         scanProgress = "Đang tìm file log…"
         let currentRange = Self.dateRange(for: scope)
         let startedAt = Date()
-        onScanStarted?("manual", scope)
+        onScanStarted?(reason, scope)
 
         loadTask = Task.detached(priority: showLoading ? .userInitiated : .utility) { [weak self] in
             let result = await CoachingScan.scan(in: currentRange, progress: { [weak self] completed, total in
@@ -120,7 +134,7 @@ final class CoachingDataStore {
                     result,
                     scope: scope,
                     fingerprint: fingerprint,
-                    reason: "manual",
+                    reason: reason,
                     startedAt: startedAt
                 )
             }
@@ -129,24 +143,27 @@ final class CoachingDataStore {
 
     func cancelScan() {
         scanGeneration = UUID()
+        restoreTask?.cancel()
         loadTask?.cancel(); loadTask = nil; isLoading = false
         scanProgress = "Đã dừng đọc log."
     }
 
     @discardableResult
     func reloadForExport(scope: ReportScope, fingerprint: String) async -> Bool {
-        setActive(scope: scope, fingerprint: fingerprint)
+        if activeFingerprint != fingerprint { setActive(scope: scope, fingerprint: fingerprint) }
+        restoreTask?.cancel()
         loadTask?.cancel()
         scanGeneration = UUID()
+        let generation = scanGeneration
         isLoading = true
         let currentRange = Self.dateRange(for: scope)
         let startedAt = Date()
         onScanStarted?("export", scope)
         let result = await Task.detached(priority: .userInitiated) {
-            // Export must include bytes appended after the last UI snapshot.
-            // Unchanged files still use the cache.
-            await CoachingScan.scan(in: currentRange, allowRecentGrowth: false)
+            // Evidence exports read authoritative source bytes, including rewrites.
+            await CoachingScan.scan(in: currentRange, forceFullRead: true)
         }.value
+        guard scanGeneration == generation, !Task.isCancelled else { return false }
         return applyScanResult(
             result,
             scope: scope,
@@ -160,23 +177,22 @@ final class CoachingDataStore {
                                  scope: ReportScope,
                                  fingerprint: String,
                                  reason: String,
-                                 startedAt: Date) -> Bool {
+                                 startedAt: Date,
+                                 capturedAt: Date = Date(), notify: Bool = true) -> Bool {
         // Nếu user đã đổi scope/filter trước khi scan xong → bỏ kết quả này,
         // tránh data cũ ghi đè lên data mới.
         guard activeFingerprint == fingerprint else { return false }
         let curP = result.prompts
         let curS = result.sessions
-        let curAgg = SessionInventory.aggregate(curS)
+        let curAgg = result.aggregate ?? SessionInventory.aggregate(curS)
         let curStats = ReportGenerator.stats(for: curP)
 
         allRecords = curP
-        allSessions = curS.sorted {
-            if $0.cost != $1.cost { return $0.cost > $1.cost }
-            return $0.totalTokens > $1.totalTokens
-        }
+        allSessions = curS
         // Keep delta chips neutral. Period comparisons and trends are intentionally
         // not inferred from whole-session totals; each report snapshot is exact.
         previousAggregate = curAgg
+        aggregateGroups = result.aggregateGroups
         previousAvgStars = curStats.avgStars
         previousPromptCount = curStats.totalPrompts
         dailyCostTrend = []
@@ -187,13 +203,15 @@ final class CoachingDataStore {
             avgStarsDelta: 0)
         petState = PetMood.resolve(signals)
         lastScopeFingerprint = fingerprint
-        lastRefreshAt = Date()
+        lastRefreshAt = capturedAt
         isLoading = false
         loadTask = nil
         let outlierIds = CoachingInsights.outlierSessions(curS)
         let loopIds = CoachingInsights.agentLoopSessions(curS)
         let sourceSessionCounts = Dictionary(grouping: curS, by: { $0.source.vendor.label })
             .mapValues(\.count)
+        // Restoring a snapshot must not award XP or record a new source scan.
+        guard notify else { return true }
         onReloadComplete?(curP, curS, outlierIds, loopIds)
         onScanCompleted?(CoachingScanAudit(
             reason: reason,

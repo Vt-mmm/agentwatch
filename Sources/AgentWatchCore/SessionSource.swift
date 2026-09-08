@@ -17,7 +17,7 @@
 
 import Foundation
 
-public enum SessionSource: String, Sendable, CaseIterable {
+public enum SessionSource: String, Sendable, CaseIterable, Codable {
     case cli
     case desktop
     /// v0.7.0: Codex CLI/Desktop — JSONL ở ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl.

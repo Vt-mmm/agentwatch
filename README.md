@@ -51,7 +51,7 @@ open AgentWatchMac.xcodeproj
 1. Mở app → icon Claude sparkle xuất hiện trên menu bar (top right) + cửa sổ chính.
 2. **Default**: app đọc session JSONL mới nhất từ `~/.claude/projects/`, cộng thêm snapshot log Codex/PiAgent gần nhất.
 3. Hoặc bấm **Pin folder…** để khoá theo 1 project folder cụ thể; bấm **Latest Claude** để quay lại scope mới nhất.
-4. Click menu bar icon → dropdown summary cost + tokens; bấm **Refresh** để đọc log lại một lần.
+4. Click menu bar icon → dropdown summary cost + tokens; dữ liệu được cập nhật tự động; **Refresh** dùng khi cần cập nhật ngay.
 5. Full window: tab **Sessions** hiển thị session header, token / cost, event feed theo snapshot và agent tree với Open / Done status. Tab **Coaching** audit prompts, source filter, report export và risk scoring.
 
 ## Iteration loop khi sửa code
@@ -80,6 +80,10 @@ done
 # 4. Rebuild
 xcodebuild -project AgentWatchMac.xcodeproj -scheme AgentWatchMac build
 ```
+
+## Truy vấn nhanh
+
+Nút **Xuất báo cáo hôm nay** trên thanh chính tự lưu và mở PDF sau một lần bấm. Dữ liệu được chuẩn bị nền mỗi phút; không cần màn hình riêng hoặc chọn nguồn/task. Phân tích task/context và Coaching nằm trong **Nâng cao**. PDF dùng dữ liệu đã chuẩn bị và chỉ trình bày prompt người dùng, app, nơi gửi và file; xem [luồng tối giản](docs/daily-activity-simple.md). Coaching cũng tự tải kỳ được chọn, dùng snapshot SQLite và đọc tiếp phần JSONL thay đổi. Các bản export bằng chứng nâng cao vẫn xác minh nguồn riêng. Xem [cơ chế, giới hạn và cách đo](docs/query-performance.md).
 
 ## Architecture
 

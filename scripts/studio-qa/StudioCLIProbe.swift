@@ -14,6 +14,13 @@ import Foundation
     func save(_ key: String, profileID: String) throws { throw StudioError.storage }
     func delete(profileID: String) throws { throw StudioError.storage }
 }
+@MainActor private final class LifecycleKeys: StudioKeyStorage {
+    var value: String?
+    init(_ key: String) { value = key }
+    func load(profileID: String) throws -> String? { value }
+    func save(_ key: String, profileID: String) throws { value = key }
+    func delete(profileID: String) throws { value = nil }
+}
 
 // Test-only entry point: no production environment-key fallback. The Go fixture
 // supplies a temporary database key and confines this process to its gateway.
@@ -30,6 +37,33 @@ import Foundation
             let identity = try StudioProfile(origin: origin, id: origin.profileID(orgID: result.identity.orgID, ownerID: result.identity.user.id))
             let root = URL(fileURLWithPath: directory, isDirectory: true)
             let resume = env["STUDIO_FIXTURE_RESUME"].flatMap(UUID.init(uuidString:))
+            if CommandLine.arguments.contains("--keep-cli") || CommandLine.arguments.contains("--close-cli") {
+                let directory = root.appendingPathComponent("profiles", isDirectory: true)
+                let registry = StudioProcessRegistry(directory: directory)
+                // This is a different process from the launcher. Acquisition
+                // while the actual CLI is awaiting a response proves exec did
+                // not retain the launch lock or require a running GUI.
+                let before = try registry.withLaunchLock(connection: identity) { registry.snapshot(connection: identity) }
+                guard !before.incomplete, before.entries.count == 1, before.entries[0].state == .running,
+                      before.entries[0].process.provider == provider else { throw StudioCLIError.processFailed }
+                let profile = try StudioCLIProfiles.prepare(connection: identity, provider: provider, directory: directory)
+                let manifest = profile.root.appendingPathComponent("profile.json")
+                let originalManifest = try Data(contentsOf: manifest)
+                let keys = LifecycleKeys(key), settings = ProbeSettings(identity)
+                let store = StudioConnectionStore(keys: keys, settings: settings, cache: StudioDashboardCache(directory: root.appendingPathComponent("cache")))
+                let choice: StudioDisconnectChoice = CommandLine.arguments.contains("--keep-cli") ? .keepCLI : .closeCLI
+                let disconnected = try await StudioDisconnect.perform(store: store, expected: identity, choice: choice, registry: registry)
+                guard store.profile == nil, keys.value == nil, settings.profile == nil,
+                      !disconnected.incomplete, disconnected.unverified == 0,
+                      disconnected.closed == (choice == .closeCLI ? 1 : 0),
+                      disconnected.remaining == (choice == .keepCLI ? 1 : 0) else { throw StudioCLIError.processFailed }
+                await store.connect(origin: origin.value, key: key)
+                guard store.state == .connected, store.profile == identity, keys.value == key,
+                      try StudioCLIProfiles.prepare(connection: identity, provider: provider, directory: directory) == profile,
+                      try Data(contentsOf: manifest) == originalManifest else { throw StudioCLIError.processFailed }
+                print("PASS active native CLI disconnect choice, saved-key removal, available launch lock and stable reconnect profile")
+                return
+            }
             if CommandLine.arguments.contains("--logs") {
                 let registry = StudioProcessRegistry(directory: root.appendingPathComponent("profiles", isDirectory: true))
                 try registry.withLaunchLock(connection: identity) {

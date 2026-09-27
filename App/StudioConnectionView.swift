@@ -22,7 +22,12 @@ struct StudioConnectionView: View {
                 }
                 connectionCard
                 if studio.profile == nil || editingKey { form }
-                if let snapshot = studio.snapshot { account(snapshot); models(snapshot) }
+                if let snapshot = studio.snapshot {
+                    DisclosureGroup("Tài khoản và model được cấp") {
+                        VStack(spacing: 12) { account(snapshot); models(snapshot) }.padding(.top, 10)
+                    }.font(ClaudeFont.body())
+                }
+                if studio.profile != nil { StudioDashboardView() }
                 Text("Sessions, Tasks và báo cáo local vẫn dùng dữ liệu riêng trên máy. Kết nối Studio không thay key Supervisor hoặc tài khoản CLI cá nhân.")
                     .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
             }
@@ -61,6 +66,7 @@ struct StudioConnectionView: View {
                 Text(error.localizedDescription).font(ClaudeFont.body()).foregroundStyle(Claude.orange)
             }
             if let snapshot = studio.snapshot {
+                Text(snapshot.identity.user.displayName).font(ClaudeFont.heading())
                 Text("Xác minh lần cuối: \(snapshot.observedAt.formatted(date: .abbreviated, time: .standard))")
                     .font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
             }

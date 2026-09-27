@@ -184,11 +184,11 @@ source.serve_forever()
 @MainActor final class StudioConnectionStoreTests: XCTestCase {
     func testSaveRestoreRotationAndDisconnectUseOnlyScopedKeychain() async throws {
         let keys = FixtureStudioKeys(), settings = FixtureStudioSettings(), client = FixtureStudioClient()
-        let store = StudioConnectionStore(client: client, keys: keys, settings: settings)
+        let store = StudioConnectionStore(client: client, keys: keys, settings: settings, cache: ConnectionTestCache())
         await store.connect(origin: "https://studio.example", key: fixtureKey)
         let id = try XCTUnwrap(store.profile?.id)
         XCTAssertEqual(keys.values[id], fixtureKey); XCTAssertEqual(store.state, .connected)
-        let restored = StudioConnectionStore(client: client, keys: keys, settings: settings)
+        let restored = StudioConnectionStore(client: client, keys: keys, settings: settings, cache: ConnectionTestCache())
         XCTAssertEqual(restored.state, .saved); XCTAssertNil(restored.snapshot)
         await restored.refresh(); XCTAssertEqual(restored.snapshot?.identity.user.id, studioOwner)
         await restored.connect(origin: "https://studio.example", key: "rotated_fixture_key")
@@ -200,7 +200,7 @@ source.serve_forever()
     func testDisconnectWhileConnectingCannotResurrectCredential() async throws {
         let keys = FixtureStudioKeys(), settings = FixtureStudioSettings(), client = FixtureStudioClient()
         await client.suspend()
-        let store = StudioConnectionStore(client: client, keys: keys, settings: settings)
+        let store = StudioConnectionStore(client: client, keys: keys, settings: settings, cache: ConnectionTestCache())
         let task = Task { await store.connect(origin: "https://studio.example", key: fixtureKey) }
         for _ in 0..<1000 { if await client.waiting() { break }; await Task.yield() }
         let waiting = await client.waiting(); XCTAssertTrue(waiting)
@@ -209,7 +209,7 @@ source.serve_forever()
     }
     func testOfflineCacheIsExplicitlyStaleAndRevocationClearsIt() async {
         let client = FixtureStudioClient()
-        let store = StudioConnectionStore(client: client, keys: FixtureStudioKeys(), settings: FixtureStudioSettings())
+        let store = StudioConnectionStore(client: client, keys: FixtureStudioKeys(), settings: FixtureStudioSettings(), cache: ConnectionTestCache())
         await store.connect(origin: "https://studio.example", key: fixtureKey)
         let previous = store.snapshot
         await client.set(.failure(.offline)); await store.refresh()
@@ -219,7 +219,7 @@ source.serve_forever()
     }
     func testDisconnectDuringRefreshDropsLateIdentityAndCancelledConnectDoesNotSave() async {
         let client = FixtureStudioClient(), keys = FixtureStudioKeys(), settings = FixtureStudioSettings()
-        let store = StudioConnectionStore(client: client, keys: keys, settings: settings)
+        let store = StudioConnectionStore(client: client, keys: keys, settings: settings, cache: ConnectionTestCache())
         await store.connect(origin: "https://studio.example", key: fixtureKey)
         await client.suspend()
         let refresh = Task { await store.refresh() }
@@ -236,7 +236,7 @@ source.serve_forever()
     }
     func testIdentityAndOriginChangesNeverOverwriteExistingKeyOrExposeOldSnapshot() async throws {
         let client = FixtureStudioClient(), keys = FixtureStudioKeys(), settings = FixtureStudioSettings()
-        let store = StudioConnectionStore(client: client, keys: keys, settings: settings)
+        let store = StudioConnectionStore(client: client, keys: keys, settings: settings, cache: ConnectionTestCache())
         await store.connect(origin: "https://studio.example", key: fixtureKey)
         let original = store.profile
         await store.connect(origin: "https://other.example", key: "other_key")
@@ -254,7 +254,7 @@ source.serve_forever()
     }
     func testStorageFailuresDoNotClaimSuccessOrForgetDeleteRetry() async {
         let keys = FixtureStudioKeys(), settings = FixtureStudioSettings()
-        let store = StudioConnectionStore(client: FixtureStudioClient(), keys: keys, settings: settings)
+        let store = StudioConnectionStore(client: FixtureStudioClient(), keys: keys, settings: settings, cache: ConnectionTestCache())
         keys.failSave = true
         await store.connect(origin: "https://studio.example", key: fixtureKey)
         XCTAssertEqual(store.error, .storage); XCTAssertNil(store.snapshot); XCTAssertNil(settings.profile)
@@ -292,4 +292,10 @@ source.serve_forever()
         try storage.delete(profileID: first)
         XCTAssertNil(try storage.load(profileID: first)); XCTAssertEqual(try storage.load(profileID: second), "other_fixture")
     }
+}
+
+@MainActor private final class ConnectionTestCache: StudioDashboardCaching {
+    func load(profile: StudioProfile) throws -> StudioDashboardSnapshot? { nil }
+    func save(_ snapshot: StudioDashboardSnapshot, profile: StudioProfile) throws {}
+    func delete(profile: StudioProfile) throws {}
 }

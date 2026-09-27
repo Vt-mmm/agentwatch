@@ -83,22 +83,42 @@ public struct StudioProfile: Codable, Equatable, Sendable {
     public private(set) var snapshot: StudioConnectionSnapshot?
     public private(set) var state: State = .disconnected
     public private(set) var error: StudioError?
+    public enum DashboardState: Equatable { case empty, loading, current, stale, failed }
+    public private(set) var dashboard: StudioDashboardSnapshot?
+    public private(set) var dashboardState: DashboardState = .empty
+    public private(set) var dashboardError: StudioError?
+    public private(set) var cacheUnavailable = false
+    public private(set) var quotaModelID: String?
     @ObservationIgnored private let client: any StudioConnecting
     @ObservationIgnored private let keys: any StudioKeyStorage
     @ObservationIgnored private let settings: any StudioSettingsStorage
     @ObservationIgnored private var generation: UInt64 = 0
+    @ObservationIgnored private let reporting: (any StudioReporting)?
+    @ObservationIgnored private let cache: any StudioDashboardCaching
 
     public init(client: any StudioConnecting = StudioClient(), keys: any StudioKeyStorage = StudioKeychainStorage(),
-                settings: any StudioSettingsStorage = StudioPreferences()) {
+                settings: any StudioSettingsStorage = StudioPreferences(), reporting: (any StudioReporting)? = nil,
+                cache: any StudioDashboardCaching = StudioDashboardCache()) {
         self.client = client; self.keys = keys; self.settings = settings
+        self.reporting = reporting ?? (client as? any StudioReporting); self.cache = cache
         do { profile = try settings.load(); if profile != nil { state = .saved } }
         catch { self.error = .storage; state = .failed }
+        if let profile {
+            do {
+                if try keys.load(profileID: profile.id) != nil {
+                    dashboard = try cache.load(profile: profile)
+                    if dashboard != nil { dashboardState = .stale; quotaModelID = dashboard?.quotaModel?.id }
+                } else { try cache.delete(profile: profile) }
+            } catch { cacheUnavailable = true }
+        }
     }
 
     public func connect(origin input: String, key: String) async {
         generation &+= 1; let attempt = generation
         snapshot = nil; error = nil; state = .checking
+        clearDashboard()
         do {
+            if let profile { try cache.delete(profile: profile) }
             let origin = try StudioOrigin(input)
             if let profile, profile.origin != origin { throw StudioError.disconnectFirst }
             let result = try await client.connect(origin: origin, key: key)
@@ -109,6 +129,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
             let next = try StudioProfile(origin: origin, id: id)
             try keys.save(key, profileID: id)
             settings.save(next); profile = next; snapshot = result; state = .connected
+            await updateDashboard(key: key, result: result, attempt: attempt)
         } catch {
             guard generation == attempt else { return }
             self.error = error is CancellationError ? nil : (error as? StudioError ?? .offline)
@@ -120,6 +141,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
         guard let profile, state != .checking else { return }
         generation &+= 1; let attempt = generation
         error = nil; state = .checking
+        if reporting != nil { dashboardState = .loading }
         do {
             guard let key = try keys.load(profileID: profile.id) else { throw StudioError.invalidKey }
             let result = try await client.connect(origin: profile.origin, key: key)
@@ -129,11 +151,19 @@ public struct StudioProfile: Codable, Equatable, Sendable {
                 throw StudioError.identityChanged
             }
             snapshot = result; state = .connected
+            await updateDashboard(key: key, result: result, attempt: attempt)
         } catch {
             guard generation == attempt else { return }
             let failure = error as? StudioError ?? .offline
             let transient = [.offline, .serverUnavailable, .upstreamUnavailable, .rateLimited, .quotaExceeded].contains(failure) || error is CancellationError
-            if !transient { snapshot = nil }
+            if !transient {
+                snapshot = nil; clearDashboard()
+                do { try cache.delete(profile: profile) } catch { cacheUnavailable = true }
+            }
+            if reporting != nil {
+                dashboardState = dashboard == nil ? .failed : .stale
+                dashboardError = error is CancellationError ? nil : failure
+            }
             self.error = error is CancellationError ? nil : failure
             state = snapshot == nil ? .failed : .stale
         }
@@ -141,9 +171,58 @@ public struct StudioProfile: Codable, Equatable, Sendable {
 
     public func disconnect() {
         generation &+= 1; snapshot = nil; error = nil
+        quotaModelID = nil
+        clearDashboard()
         do {
-            if let profile { try keys.delete(profileID: profile.id) }
+            if let profile {
+                // Attempt both removals, even when one storage layer is unavailable.
+                var failed = false
+                do { try cache.delete(profile: profile) } catch { failed = true }
+                do { try keys.delete(profileID: profile.id) } catch { failed = true }
+                if failed { throw StudioError.storage }
+            }
             settings.save(nil); profile = nil; state = .disconnected
         } catch { self.error = .storage; state = .failed }
+    }
+
+    public func selectQuotaModel(_ id: String) async {
+        guard case .available(let models) = snapshot?.models, models.contains(where: { $0.id == id }), state != .checking else { return }
+        quotaModelID = id; clearDashboard()
+        if let profile { do { try cache.delete(profile: profile) } catch { cacheUnavailable = true } }
+        await refresh()
+    }
+
+    private func clearDashboard() {
+        dashboard = nil; dashboardState = .empty; dashboardError = nil
+    }
+    private func updateDashboard(key: String, result: StudioConnectionSnapshot, attempt: UInt64) async {
+        guard let reporting, let profile, generation == attempt else { return }
+        let model: StudioModel?
+        if case .available(let models) = result.models { model = models.first(where: { $0.id == quotaModelID }) ?? models.first }
+        else { model = nil }
+        if let dashboard, dashboard.quotaModel?.id != model?.id {
+            clearDashboard()
+            do { try cache.delete(profile: profile) } catch { cacheUnavailable = true }
+        }
+        quotaModelID = model?.id
+        dashboardState = .loading; dashboardError = nil
+        do {
+            let report = try await reporting.dashboard(origin: profile.origin, key: key, identity: result.identity, model: model, now: Date(), timezone: .current)
+            try Task.checkCancellation()
+            guard generation == attempt else { return }
+            guard report.identity == result.identity else { throw StudioError.identityChanged }
+            dashboard = report; dashboardState = .current
+            do { try cache.save(report, profile: profile); cacheUnavailable = false }
+            catch { cacheUnavailable = true }
+        } catch {
+            guard generation == attempt else { return }
+            let failure = error as? StudioError ?? .offline
+            let transient = [.offline, .serverUnavailable, .upstreamUnavailable, .rateLimited, .quotaExceeded].contains(failure) || error is CancellationError
+            if !transient {
+                clearDashboard(); snapshot = nil; state = .failed; self.error = failure
+                do { try cache.delete(profile: profile) } catch { cacheUnavailable = true }
+            }
+            dashboardError = failure; dashboardState = dashboard == nil ? .failed : .stale
+        }
     }
 }

@@ -1,7 +1,7 @@
 import Foundation
 import CryptoKit
 
-public enum StudioError: Error, LocalizedError, Sendable, Equatable {
+public enum StudioError: String, Error, LocalizedError, Sendable, Equatable, Codable {
     case invalidOrigin, invalidKey, incompatibleVersion, invalidResponse, redirectDenied
     case permissionDenied, quotaExceeded, rateLimited, serverUnavailable, upstreamUnavailable, offline
     case storage, identityChanged, disconnectFirst
@@ -183,8 +183,11 @@ public struct StudioClient: StudioConnecting {
         }
         return StudioConnectionSnapshot(identity: identity, capabilities: capabilities, models: models)
     }
-    private func get<T: Decodable>(_ origin: StudioOrigin, _ path: String, key: String?) async throws -> T {
-        var request = URLRequest(url: origin.url(path: path))
+    func get<T: Decodable>(_ origin: StudioOrigin, _ path: String, key: String?, query: [URLQueryItem] = []) async throws -> T {
+        if let key, !Self.validKey(key) { throw StudioError.invalidKey }
+        var components = URLComponents(url: origin.url(path: path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { components.queryItems = query }
+        var request = URLRequest(url: components.url!)
         request.httpMethod = "GET"; request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let key { request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
         do {
@@ -194,6 +197,7 @@ public struct StudioClient: StudioConnecting {
             guard response.status == 200 else {
                 let code = (try? JSONDecoder().decode(Failure.self, from: response.body))?.error.code ?? ""
                 switch response.status {
+                case 400: throw code == "key_target_unavailable" ? StudioError.permissionDenied : StudioError.invalidResponse
                 case 401: throw StudioError.invalidKey
                 case 403: throw StudioError.permissionDenied
                 case 429: throw code == "token_quota_exhausted" ? StudioError.quotaExceeded : StudioError.rateLimited
@@ -201,10 +205,23 @@ public struct StudioClient: StudioConnecting {
                 }
             }
             guard response.contentType.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else { throw StudioError.invalidResponse }
-            do { return try JSONDecoder().decode(T.self, from: response.body) }
+            do { return try Self.apiDecoder().decode(T.self, from: response.body) }
             catch { throw StudioError.invalidResponse }
         } catch let error as StudioError { throw error }
         catch is CancellationError { throw CancellationError() }
         catch { if Task.isCancelled { throw CancellationError() }; throw StudioError.offline }
+    }
+    static func apiDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { value in
+            let text = try value.singleValueContainer().decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: text) { return date }
+            formatter.formatOptions = [.withInternetDateTime]
+            guard let date = formatter.date(from: text) else { throw StudioError.invalidResponse }
+            return date
+        }
+        return decoder
     }
 }

@@ -29,6 +29,7 @@ struct MainWindowView: View {
         case coaching = "Coaching"
         case insights = "Tasks"
         case pets = "Pets"
+        case studio = "Studio"
         var id: String { rawValue }
     }
 
@@ -46,6 +47,8 @@ struct MainWindowView: View {
                 TaskInsightsView()
             case .pets:
                 PetCollectionView()
+            case .studio:
+                StudioConnectionView()
             }
         }
         .frame(minWidth: 620, minHeight: 560)
@@ -91,6 +94,9 @@ struct MainWindowView: View {
             Button { tab = .pets } label: { EmptyView() }
                 .keyboardShortcut("3", modifiers: .command)
                 .opacity(0)
+            Button { tab = .studio } label: { EmptyView() }
+                .keyboardShortcut("4", modifiers: .command)
+                .opacity(0)
         }
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
@@ -105,9 +111,10 @@ struct MainWindowView: View {
                 Picker("", selection: $tab) {
                     Text("Sessions").tag(Tab.live)
                     Text("Pets").tag(Tab.pets)
+                    Text("Studio").tag(Tab.studio)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 170)
+                .frame(width: 245)
             }
             Spacer()
             AutomaticDailyReportExportButton()

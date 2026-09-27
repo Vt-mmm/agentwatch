@@ -21,6 +21,7 @@ struct AgentWatchMacApp: App {
     @State private var codexPoller = CodexLivePoller()
     @State private var piAgentPoller = PiAgentLivePoller()
     @State private var supervisorLock = SupervisorLockStore.shared
+    @State private var studio = StudioConnectionStore()
 
     // v0.6.0: opt-in toggle cho streak-risk notification (default OFF).
     @AppStorage("notif.streakRisk.enabled") private var streakRiskNotificationEnabled: Bool = false
@@ -41,6 +42,7 @@ struct AgentWatchMacApp: App {
                 .environment(codexPoller)
                 .environment(piAgentPoller)
                 .environment(supervisorLock)
+                .environment(studio)
                 .preferredColorScheme(appearance.mode.colorScheme)
                 .onAppear {
                     ReportDeliveryScheduler.shared.start()

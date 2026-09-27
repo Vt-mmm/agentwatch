@@ -21,12 +21,14 @@ public enum JsonlParser {
     /// a session is in flight — never abort the whole parse on one bad line).
     public static func parseSession(at url: URL,
                                     range: Range<Date>? = nil,
-                                    eventLimit: Int? = SessionStats.eventWindowSize) -> SessionStats {
+                                    eventLimit: Int? = SessionStats.eventWindowSize,
+                                    maxBytes: Int? = nil) -> SessionStats {
         parseSessionData(
             at: url,
             range: range,
             eventLimit: eventLimit,
-            capturePrompts: false
+            capturePrompts: false,
+            maxBytes: maxBytes
         ).stats
     }
 
@@ -57,7 +59,8 @@ public enum JsonlParser {
                                          range: Range<Date>?,
                                          eventLimit: Int?,
                                          capturePrompts: Bool,
-                                         input: IncrementalLogInput? = nil) -> JsonlSessionScanResult {
+                                         input: IncrementalLogInput? = nil,
+                                         maxBytes: Int? = nil) -> JsonlSessionScanResult {
         let saved = input?.restore(ScanCheckpoint.self)
         var stats = saved?.stats ?? SessionStats(
             sessionId: url.deletingPathExtension().lastPathComponent,
@@ -101,7 +104,7 @@ public enum JsonlParser {
                 pendingAgentIds.removeAll(keepingCapacity: true)
             })
         } else {
-            JsonlLineReader.forEachLineData(at: url, includingEmptyLines: true) { lineData in
+            JsonlLineReader.forEachLineData(at: url, includingEmptyLines: true, maxBytes: maxBytes) { lineData in
                 lineIndex += 1
                 guard !lineData.isEmpty else { return }
                 applyLine(lineData, to: &stats, pendingAgents: &pendingAgentIds,

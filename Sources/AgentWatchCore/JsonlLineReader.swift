@@ -2,15 +2,17 @@ import Foundation
 import Darwin
 
 enum JsonlLineReader {
-    static func forEachLineData(at url: URL, includingEmptyLines: Bool = false, _ body: (Data) -> Void) {
+    static func forEachLineData(at url: URL, includingEmptyLines: Bool = false, maxBytes: Int? = nil, _ body: (Data) -> Void) {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return }
         defer { try? handle.close() }
         var pending = Data()
+        var remaining = maxBytes ?? Int.max
         // Search only new bytes. Repeatedly searching a growing multi-MB image
         // record from its start made the old reader quadratic in line length.
-        while !Task.isCancelled {
-            let chunk = (try? handle.read(upToCount: 256 * 1024)) ?? Data()
+        while !Task.isCancelled, remaining > 0 {
+            let chunk = (try? handle.read(upToCount: min(256 * 1024, remaining))) ?? Data()
             if chunk.isEmpty { break }
+            remaining -= chunk.count
             autoreleasepool {
                 chunk.withUnsafeBytes { raw in
                     guard let base = raw.baseAddress else { return }

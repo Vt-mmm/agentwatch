@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+@testable import AgentWatchCore
 
 private actor FixtureClient: StudioConnecting, StudioReporting {
     var offline = false
@@ -55,8 +56,27 @@ private actor FixtureClient: StudioConnecting, StudioReporting {
             if CommandLine.arguments.contains("connected") { await store.connect(origin: "https://studio.example.com", key: "fixture_key") }
             if CommandLine.arguments.contains("stale") { await client.setOffline(); await store.refresh() }
             let launcher = CommandLine.arguments.contains("launcher")
-            let height: CGFloat = launcher ? 620 : (CommandLine.arguments.contains("connected") && !CommandLine.arguments.contains("stale") ? 2300 : 790)
-            let content: AnyView = launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView())
+            let localLogs = CommandLine.arguments.contains("logs")
+            let base = realpath(FileManager.default.temporaryDirectory.path, nil)!
+            let fixtureRoot = URL(fileURLWithPath: String(cString: base)).appendingPathComponent("studio-log-render-" + UUID().uuidString)
+            free(base)
+            defer { try? FileManager.default.removeItem(at: fixtureRoot) }
+            if localLogs, let connection = store.profile {
+                let profile = try! StudioCLIProfiles.prepare(connection: connection, provider: .claude, directory: fixtureRoot)
+                let project = profile.logRoot.appendingPathComponent("-fixture-project")
+                try! FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+                let timestamp = ISO8601DateFormatter().string(from: Date())
+                let line = """
+                {"type":"assistant","timestamp":"\(timestamp)","message":{"id":"fixture-msg","model":"claude-haiku","usage":{"input_tokens":100,"output_tokens":20},"content":[]}}
+                """
+                try! Data(line.utf8).write(to: project.appendingPathComponent("00000000-0000-4000-8000-000000000003.jsonl"))
+                let unknown = """
+                {"type":"user","timestamp":"\(timestamp)","message":{"content":"fixture"}}
+                """
+                try! Data(unknown.utf8).write(to: project.appendingPathComponent("00000000-0000-4000-8000-000000000004.jsonl"))
+            }
+            let height: CGFloat = localLogs ? 660 : launcher ? 620 : (CommandLine.arguments.contains("connected") && !CommandLine.arguments.contains("stale") ? 2300 : 790)
+            let content: AnyView = localLogs ? AnyView(StudioLocalLogsView(reader: StudioLocalLogReader(directory: fixtureRoot)).padding(20)) : launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView())
             let view = NSHostingView(rootView: content.environment(store).frame(width: 720, height: height).background(Claude.backgroundGradient).environment(\.colorScheme, .light))
             let window = FixtureWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: height), styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = view

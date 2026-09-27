@@ -31,7 +31,14 @@ public enum CodexInventory {
 
 public enum CodexJsonlParser {
     public static func summarize(file: URL, range: Range<Date>) -> SessionSummary? {
-        scan(file: file, range: range).summary
+        summarizeWithDiagnostics(file: file, range: range).summary
+    }
+
+    /// Preserve coverage diagnostics even when malformed/out-of-range input
+    /// cannot produce a session row. No prompt or event content is returned.
+    public static func summarizeWithDiagnostics(file: URL, range: Range<Date>, maxBytes: Int? = nil) -> (summary: SessionSummary?, partial: Bool) {
+        let parsed = parse(file: file, includeEvents: false, range: range, maxBytes: maxBytes)
+        return (makeSummary(from: parsed, file: file), parsed.usageScope == .partialRange || parsed.ledger.hasPartialUsage)
     }
 
     /// Decode summary and prompts in one streaming pass.
@@ -193,7 +200,8 @@ public enum CodexJsonlParser {
     private static func parse(file: URL,
                               includeEvents: Bool,
                               range: Range<Date>? = nil,
-                              input: IncrementalLogInput? = nil) -> Parsed {
+                              input: IncrementalLogInput? = nil,
+                              maxBytes: Int? = nil) -> Parsed {
         let saved = input?.restore(ScanCheckpoint.self)
         let fallbackId = file.deletingPathExtension().lastPathComponent
         var sessionId: String = saved.map { $0.sessionId } ?? fallbackId
@@ -361,7 +369,7 @@ public enum CodexJsonlParser {
                     eventCounter: eventCounter))
             }, line: consume)
         } else {
-            JsonlLineReader.forEachLineData(at: file, consume)
+            JsonlLineReader.forEachLineData(at: file, maxBytes: maxBytes, consume)
         }
 
         let upperBound = range?.upperBound ?? .distantFuture

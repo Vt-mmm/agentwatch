@@ -31,7 +31,7 @@ import Foundation
             let root = URL(fileURLWithPath: directory, isDirectory: true)
             let resume = env["STUDIO_FIXTURE_RESUME"].flatMap(UUID.init(uuidString:))
             if CommandLine.arguments.contains("--logs") {
-                let snapshot = await StudioLocalLogReader(directory: root.appendingPathComponent("profiles", isDirectory: true)).read(connection: identity, range: Date.distantPast..<Date().addingTimeInterval(60))
+                let snapshot = await StudioLocalLogReader(directory: root.appendingPathComponent("profiles", isDirectory: true)).read(connection: identity, range: Date().addingTimeInterval(-3600)..<Date())
                 guard snapshot.issues.isEmpty, snapshot.sessions.count == 1,
                       let session = snapshot.sessions.first, session.provider == provider,
                       session.sessionID.lowercased() == resume?.uuidString.lowercased(),
@@ -40,7 +40,14 @@ import Foundation
                     print("FAIL registered logs: sessions=\(snapshot.sessions.count), known=\(snapshot.sessions.first?.knownTokens ?? -1), partial=\(snapshot.partial), issues=\(snapshot.issues.map(\.rawValue))")
                     throw StudioCLIError.processFailed
                 }
-                print("PASS registered native logs: one persisted session, 30 local fixture tokens, no terminal environment or credential content")
+                guard let digest = StudioSessionComparison.digest(sessionID: session.sessionID) else { throw StudioError.invalidResponse }
+                let report = try await StudioClient().sessionUsage(origin: origin, key: key, identity: result.identity, provider: provider, digest: digest, range: snapshot.from..<snapshot.to)
+                let comparison = StudioSessionComparison.compare(local: session, report: report, coveragePartial: !snapshot.issues.isEmpty)
+                guard comparison.status == .matched, comparison.serverTokens?.value == "30", comparison.serverRequests?.value == "2" else {
+                    print("FAIL native reconciliation: \(comparison.reason.rawValue)")
+                    throw StudioCLIError.processFailed
+                }
+                print("PASS registered native logs: one persisted session, 30 local fixture tokens matched to two confirmed Studio requests; no terminal environment or credential content")
                 return
             }
             var args = [provider.rawValue, "--profile", identity.id, "--model", model.id, "--project", root.appendingPathComponent("project").path, "--binary", binary, "--print", resume == nil ? "Return STUDIO_FIXTURE_OK." : "Continue with STUDIO_RESUME_QUESTION."]

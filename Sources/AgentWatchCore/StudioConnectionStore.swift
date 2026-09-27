@@ -87,6 +87,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
     public private(set) var dashboard: StudioDashboardSnapshot?
     public private(set) var dashboardState: DashboardState = .empty
     public private(set) var dashboardError: StudioError?
+    public private(set) var sessionReportsRevision: UInt64 = 0
     public private(set) var cacheUnavailable = false
     public private(set) var quotaModelID: String?
     @ObservationIgnored private let client: any StudioConnecting
@@ -114,7 +115,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
     }
 
     public func connect(origin input: String, key: String) async {
-        generation &+= 1; let attempt = generation
+        sessionReportsRevision &+= 1; generation &+= 1; let attempt = generation
         snapshot = nil; error = nil; state = .checking
         clearDashboard()
         do {
@@ -139,7 +140,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
 
     public func refresh() async {
         guard let profile, state != .checking else { return }
-        generation &+= 1; let attempt = generation
+        sessionReportsRevision &+= 1; generation &+= 1; let attempt = generation
         error = nil; state = .checking
         if reporting != nil { dashboardState = .loading }
         do {
@@ -170,7 +171,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
     }
 
     public func disconnect() {
-        generation &+= 1; snapshot = nil; error = nil
+        sessionReportsRevision &+= 1; generation &+= 1; snapshot = nil; error = nil
         quotaModelID = nil
         clearDashboard()
         do {
@@ -190,6 +191,31 @@ public struct StudioProfile: Codable, Equatable, Sendable {
         quotaModelID = id; clearDashboard()
         if let profile { do { try cache.delete(profile: profile) } catch { cacheUnavailable = true } }
         await refresh()
+    }
+
+    public func compareSession(_ local: StudioLocalSession, range: Range<Date>, coveragePartial: Bool) async throws -> StudioSessionComparison {
+        guard let digest = StudioSessionComparison.digest(sessionID: local.sessionID) else { return .unavailable(.unsupportedIdentity) }
+        guard state == .connected, let profile, profile.id == local.profileID, let identity = snapshot?.identity,
+              profile.origin.profileID(orgID: identity.orgID, ownerID: identity.user.id) == profile.id,
+              let reporting = client as? any StudioSessionReporting else { throw StudioError.offline }
+        let attempt = generation
+        guard let key = try keys.load(profileID: profile.id) else { throw StudioError.invalidKey }
+        do {
+            let report = try await reporting.sessionUsage(origin: profile.origin, key: key, identity: identity, provider: local.provider, digest: digest, range: range)
+            try Task.checkCancellation()
+            guard attempt == generation, self.profile == profile, state == .connected,
+                  try keys.load(profileID: profile.id) == key else { throw CancellationError() }
+            try report.validate(identity: identity, provider: local.provider, digest: digest, range: range)
+            return StudioSessionComparison.compare(local: local, report: report, coveragePartial: coveragePartial)
+        } catch {
+            guard attempt == generation else { throw CancellationError() }
+            if error as? StudioError == .invalidKey {
+                sessionReportsRevision &+= 1; generation &+= 1
+                snapshot = nil; clearDashboard(); state = .failed; self.error = .invalidKey
+                do { try cache.delete(profile: profile) } catch { cacheUnavailable = true }
+            }
+            throw error
+        }
     }
 
     private func clearDashboard() {

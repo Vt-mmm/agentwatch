@@ -59,11 +59,22 @@ import Foundation
             try await preflight(plan)
             // A Terminal handoff/preflight can outlive an app disconnect or key
             // rotation. Do not launch from the stale credential read above.
-            guard try settings.load() == connection,
-                  try keys.load(profileID: connection.id) == key else { throw StudioError.identityChanged }
-            if check { print("Đã kiểm tra \(provider.rawValue) · \(provider.qualifiedVersion) · model \(model.id) · chưa gửi inference."); return 0 }
-            try execute(plan, key)
-            return 0
+            if check {
+                guard try settings.load() == connection,
+                      try keys.load(profileID: connection.id) == key else { throw StudioError.identityChanged }
+                print("Đã kiểm tra \(provider.rawValue) · \(provider.qualifiedVersion) · model \(model.id) · chưa gửi inference.")
+                return 0
+            }
+            let registry = StudioProcessRegistry(directory: directory)
+            return try registry.withLaunchLock(connection: connection) {
+                // Disconnect uses this same short lock around its key/profile
+                // removal. A successful exec closes it before native CLI work.
+                guard try settings.load() == connection, try keys.load(profileID: connection.id) == key else { throw StudioError.identityChanged }
+                let process = try registry.register(plan: plan)
+                defer { try? registry.remove(process) } // exec success never returns.
+                try execute(plan, key)
+                return 0
+            }
         } catch {
             let message = (error as? StudioError)?.localizedDescription ?? (error as? StudioCLIError)?.localizedDescription ?? "Không chuẩn bị được profile CLI Studio."
             FileHandle.standardError.write(Data((message + "\n").utf8)); return 1

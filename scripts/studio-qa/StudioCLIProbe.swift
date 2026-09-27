@@ -31,6 +31,12 @@ import Foundation
             let root = URL(fileURLWithPath: directory, isDirectory: true)
             let resume = env["STUDIO_FIXTURE_RESUME"].flatMap(UUID.init(uuidString:))
             if CommandLine.arguments.contains("--logs") {
+                let registry = StudioProcessRegistry(directory: root.appendingPathComponent("profiles", isDirectory: true))
+                try registry.withLaunchLock(connection: identity) {
+                    let processes = registry.snapshot(connection: identity)
+                    guard !processes.incomplete, processes.entries.count == 1,
+                          processes.entries.allSatisfy({ $0.state == .finished && $0.process.provider == provider }) else { throw StudioCLIError.processFailed }
+                }
                 let snapshot = await StudioLocalLogReader(directory: root.appendingPathComponent("profiles", isDirectory: true)).read(connection: identity, range: Date().addingTimeInterval(-3600)..<Date())
                 guard snapshot.issues.isEmpty, snapshot.sessions.count == 1,
                       let session = snapshot.sessions.first, session.provider == provider,

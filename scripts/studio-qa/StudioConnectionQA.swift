@@ -85,8 +85,9 @@ private actor FixtureClient: StudioConnecting, StudioReporting, StudioSessionRep
                 """
                 try! Data(unknown.utf8).write(to: project.appendingPathComponent("00000000-0000-4000-8000-000000000004.jsonl"))
             }
-            let height: CGFloat = localLogs ? 900 : launcher ? 620 : (CommandLine.arguments.contains("connected") && !CommandLine.arguments.contains("stale") ? 2300 : 790)
-            let content: AnyView = localLogs ? AnyView(StudioLocalLogsView(reader: StudioLocalLogReader(directory: fixtureRoot)).padding(20)) : launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView())
+            let disconnect = CommandLine.arguments.contains("disconnect")
+            let height: CGFloat = disconnect ? 530 : localLogs ? 900 : launcher ? 620 : (CommandLine.arguments.contains("connected") && !CommandLine.arguments.contains("stale") ? 2300 : 790)
+            let content: AnyView = disconnect ? AnyView(StudioDisconnectSheet(origin: "https://studio.example.com", running: 2, unverified: 1, incomplete: true, sessions: ["claude · claude-haiku", "codex · studio-codex"], cancel: {}, choose: { _ in })) : localLogs ? AnyView(StudioLocalLogsView(reader: StudioLocalLogReader(directory: fixtureRoot)).padding(20)) : launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView())
             let view = NSHostingView(rootView: content.environment(store).frame(width: 720, height: height).background(Claude.backgroundGradient).environment(\.colorScheme, .light))
             let window = FixtureWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: height), styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = view

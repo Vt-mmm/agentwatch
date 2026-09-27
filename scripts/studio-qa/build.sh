@@ -19,3 +19,4 @@ xcrun swiftc -swift-version 6 -parse-as-library \
 "$output/render" "$output/launcher.png" connected launcher
 
 "$output/render" "$output/logs.png" connected logs
+"$output/render" "$output/disconnect.png" connected disconnect

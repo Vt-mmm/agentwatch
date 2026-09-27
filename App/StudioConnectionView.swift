@@ -6,6 +6,15 @@ struct StudioConnectionView: View {
     @State private var origin = ""
     @State private var key = ""
     @State private var editingKey = false
+    @State private var disconnectReview: DisconnectReview?
+    @State private var disconnecting = false
+    @State private var disconnectMessage: String?
+
+    private struct DisconnectReview: Identifiable {
+        let profile: StudioProfile
+        let inventory: StudioProcessSnapshot
+        var id: String { profile.id }
+    }
 
     var body: some View {
         ScrollView {
@@ -21,6 +30,8 @@ struct StudioConnectionView: View {
                         .font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
                 }
                 connectionCard
+                if disconnecting { ProgressView("Đang ngắt kết nối và kiểm tra phiên CLI…") }
+                if let disconnectMessage { Text(disconnectMessage).font(ClaudeFont.body()).textSelection(.enabled) }
                 if studio.profile == nil || editingKey { form }
                 if let snapshot = studio.snapshot {
                     DisclosureGroup("Tài khoản và model được cấp") {
@@ -40,6 +51,16 @@ struct StudioConnectionView: View {
             if studio.state == .saved { await studio.refresh() }
         }
         .onDisappear { key = ""; editingKey = false }
+        .disabled(disconnecting)
+        .sheet(item: $disconnectReview) { review in
+            StudioDisconnectSheet(origin: review.profile.origin.value,
+                                  running: review.inventory.entries.filter { $0.state == .running }.count,
+                                  unverified: review.inventory.entries.filter { $0.state == .unverified }.count,
+                                  incomplete: review.inventory.incomplete,
+                                  sessions: review.inventory.entries.filter { $0.state != .finished }.prefix(8).map { "\($0.process.provider.rawValue) · \($0.process.model)" },
+                                  cancel: { disconnectReview = nil },
+                                  choose: { choice in disconnect(review, choice: choice) })
+        }
     }
 
     private var connectionCard: some View {
@@ -52,7 +73,9 @@ struct StudioConnectionView: View {
                 if studio.profile != nil {
                     Button("Kiểm tra lại") { Task { await studio.refresh() } }.disabled(studio.state == .checking)
                     Button("Ngắt kết nối", role: .destructive) {
-                        key = ""; editingKey = false; studio.disconnect()
+                        guard let profile = studio.profile else { return }
+                        key = ""; editingKey = false; disconnectMessage = nil
+                        disconnectReview = DisconnectReview(profile: profile, inventory: StudioProcessRegistry().snapshot(connection: profile))
                     }
                 }
             }
@@ -71,6 +94,20 @@ struct StudioConnectionView: View {
                     .font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
             }
         }.claudeCard()
+    }
+    private func disconnect(_ review: DisconnectReview, choice: StudioDisconnectChoice) {
+        disconnectReview = nil; disconnecting = true
+        Task { @MainActor in
+            defer { disconnecting = false }
+            do {
+                let result = try await StudioDisconnect.perform(store: studio, expected: review.profile, choice: choice)
+                disconnectMessage = result.message
+            } catch StudioProcessError.busy {
+                disconnectMessage = "CLI đang khởi động. Chưa ngắt kết nối; thử lại khi CLI mở xong."
+            } catch {
+                disconnectMessage = (error as? StudioError)?.localizedDescription ?? "Chưa ngắt kết nối: không đọc được danh sách phiên CLI an toàn."
+            }
+        }
     }
     private var status: String {
         switch studio.state {
@@ -144,5 +181,43 @@ struct StudioConnectionView: View {
                 Text(error.localizedDescription).font(ClaudeFont.body(12)).foregroundStyle(Claude.orange)
             }
         }.claudeCard()
+    }
+}
+
+struct StudioDisconnectSheet: View {
+    let origin: String
+    let running, unverified: Int
+    let incomplete: Bool
+    let sessions: [String]
+    let cancel: () -> Void
+    let choose: (StudioDisconnectChoice) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Ngắt kết nối Studio").font(ClaudeFont.heading(22))
+            Text(origin).font(ClaudeFont.mono(12)).textSelection(.enabled)
+            Text("CLI công ty đang chạy: \(running) · chưa xác minh: \(unverified)").font(ClaudeFont.body())
+            if !sessions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(sessions.enumerated()), id: \.offset) { _, session in Text(session).font(ClaudeFont.mono(11)).lineLimit(2) }
+                }
+            }
+            if incomplete {
+                Text("Chưa đọc được đầy đủ danh sách phiên. Hãy kiểm tra thêm các cửa sổ Terminal.")
+                    .font(ClaudeFont.body()).foregroundStyle(Claude.orange)
+            }
+            Text("Key lưu trên Mac sẽ được xóa. Log công ty, file dự án và cấu hình cá nhân được giữ lại.")
+                .font(ClaudeFont.body())
+            Text("Giữ CLI: phiên đang chạy vẫn có key trong bộ nhớ. Muốn thu hồi quyền ngay, hãy thu hồi key trên Studio.")
+                .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
+            Text("Đóng CLI: chỉ yêu cầu các CLI chính được launcher ghi nhận kết thúc. CLI mở bằng bản cũ, công cụ con và phiên chưa xác minh cần được kiểm tra trong Terminal. Danh sách được kiểm tra lại khi xác nhận.")
+                .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
+            HStack {
+                Button("Hủy", action: cancel).keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Ngắt kết nối, giữ CLI") { choose(.keepCLI) }
+                Button("Ngắt kết nối và đóng CLI", role: .destructive) { choose(.closeCLI) }
+            }
+        }.padding(24).frame(width: 580)
     }
 }

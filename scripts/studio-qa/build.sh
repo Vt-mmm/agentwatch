@@ -9,7 +9,7 @@ mkdir -p "$output"
 from pathlib import Path
 import sys
 root, output = map(Path, sys.argv[1:])
-for name in ['Theme', 'StudioConnectionView', 'StudioDashboardView']:
+for name in ['Theme', 'StudioConnectionView', 'StudioDashboardView', 'StudioLauncherView', 'StudioTerminalOpener']:
     source = root / 'App' / (name + '.swift')
     (output / source.name).write_text(source.read_text().replace('import AgentWatchCore\n', ''))
 PY
@@ -18,8 +18,12 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     "$root/Sources/AgentWatchCore/StudioConnectionStore.swift" \
     "$root/Sources/AgentWatchCore/StudioDashboard.swift" \
     "$root/Sources/AgentWatchCore/StudioDashboardCache.swift" \
-    "$output/Theme.swift" "$output/StudioConnectionView.swift" "$output/StudioDashboardView.swift" \
+    "$root/Sources/AgentWatchCore/StudioCLI.swift" \
+    "$root/Sources/AgentWatchCore/StudioCLIPreflight.swift" \
+    "$root/Sources/AgentWatchCore/StudioTerminalCommand.swift" \
+    "$output/Theme.swift" "$output/StudioConnectionView.swift" "$output/StudioDashboardView.swift" "$output/StudioLauncherView.swift" "$output/StudioTerminalOpener.swift" \
     "$root/scripts/studio-qa/StudioConnectionQA.swift" -o "$output/render"
 "$output/render" "$output/disconnected.png"
 "$output/render" "$output/connected.png" connected
 "$output/render" "$output/stale.png" connected stale
+"$output/render" "$output/launcher.png" connected launcher

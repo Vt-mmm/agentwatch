@@ -1,10 +1,24 @@
 import Foundation
-import AgentWatchCore
+@testable import AgentWatchCore
+
+@MainActor private final class ProbeSettings: StudioSettingsStorage {
+    var profile: StudioProfile?
+    init(_ profile: StudioProfile) { self.profile = profile }
+    func load() throws -> StudioProfile? { profile }
+    func save(_ profile: StudioProfile?) { self.profile = profile }
+}
+@MainActor private final class ProbeKeys: StudioKeyStorage {
+    let key: String
+    init(_ key: String) { self.key = key }
+    func load(profileID: String) throws -> String? { key }
+    func save(_ key: String, profileID: String) throws { throw StudioError.storage }
+    func delete(profileID: String) throws { throw StudioError.storage }
+}
 
 // Test-only entry point: no production environment-key fallback. The Go fixture
 // supplies a temporary database key and confines this process to its gateway.
 @main struct StudioCLIProbe {
-    static func main() async {
+    @MainActor static func main() async {
         do {
             let env = ProcessInfo.processInfo.environment
             guard let raw = env["STUDIO_FIXTURE_ORIGIN"], raw.hasPrefix("http://127.0.0.1:"),
@@ -15,13 +29,13 @@ import AgentWatchCore
             guard case .available(let models) = result.models, let model = models.first(where: { $0.id == "studio-model" }) else { throw StudioError.invalidResponse }
             let identity = try StudioProfile(origin: origin, id: origin.profileID(orgID: result.identity.orgID, ownerID: result.identity.user.id))
             let root = URL(fileURLWithPath: directory, isDirectory: true)
-            let profile = try StudioCLIProfiles.prepare(connection: identity, provider: provider, directory: root.appendingPathComponent("profiles", isDirectory: true))
-            let executable = try StudioCLIExecutable.resolve(provider, explicit: URL(fileURLWithPath: binary))
             let resume = env["STUDIO_FIXTURE_RESUME"].flatMap(UUID.init(uuidString:))
-            let plan = try StudioCLILaunchPlan(executable: executable, profile: profile, project: root.appendingPathComponent("project"), model: model, resumeID: resume, prompt: resume == nil ? "Return STUDIO_FIXTURE_OK." : "Continue with STUDIO_RESUME_QUESTION.")
-            try await StudioCLIPreflight.verify(plan)
-            if CommandLine.arguments.contains("--check") { print("PASS keyless native configuration preflight; no inference"); return }
-            try plan.execute(key: key)
+            var args = [provider.rawValue, "--profile", identity.id, "--model", model.id, "--project", root.appendingPathComponent("project").path, "--binary", binary, "--print", resume == nil ? "Return STUDIO_FIXTURE_OK." : "Continue with STUDIO_RESUME_QUESTION."]
+            if let resume { args += ["--resume", resume.uuidString] }
+            if CommandLine.arguments.contains("--check") { args += ["--check"] }
+            let status = await StudioRunCommand(arguments: args, settings: ProbeSettings(identity), keys: ProbeKeys(key), client: StudioClient(), directory: root.appendingPathComponent("profiles", isDirectory: true)).run()
+            if status == 0 { print("PASS keyless native configuration preflight; no inference") }
+            exit(status)
         } catch {
             // Never dump native output, config, request data or keys.
             let message = (error as? StudioCLIError)?.rawValue ?? (error as? StudioError)?.rawValue ?? "fixtureFailed"

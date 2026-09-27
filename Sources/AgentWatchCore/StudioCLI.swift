@@ -2,7 +2,7 @@ import Foundation
 import Darwin
 
 public enum StudioCLIError: String, Error, LocalizedError, Sendable {
-    case binaryMissing, desktopBinary, unsupportedVersion, unsafePath, changedProfile, managedSettings, incompatibleConfiguration, processFailed, invalidArguments
+    case binaryMissing, desktopBinary, unsupportedVersion, unsafePath, changedProfile, managedSettings, incompatibleConfiguration, processFailed, invalidArguments, helperMissing, terminalFailed
     public var errorDescription: String? {
         switch self {
         case .binaryMissing: "Không tìm thấy CLI độc lập. Chọn đường dẫn Claude Code hoặc Codex CLI đã cài."
@@ -14,6 +14,8 @@ public enum StudioCLIError: String, Error, LocalizedError, Sendable {
         case .incompatibleConfiguration: "Cấu hình CLI thực tế không khớp endpoint, model hoặc quyền chạy của profile Studio. Chưa gửi key cho CLI."
         case .processFailed: "Không khởi chạy hoặc xác minh được CLI."
         case .invalidArguments: "Tham số launcher không hợp lệ. Dùng agentwatch run --help để xem cách dùng."
+        case .helperMissing: "Bản app này thiếu launcher đi kèm. Cần build hoặc cập nhật bản có hỗ trợ CLI Studio."
+        case .terminalFailed: "Chưa mở được Terminal. Anh có thể thử lại sau khi kiểm tra ứng dụng Terminal trên máy."
         }
     }
 }

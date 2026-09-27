@@ -11,6 +11,23 @@ packages:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.6.4
 targets:
+  AgentWatchCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/AgentWatchCLI
+    dependencies:
+      - package: AgentWatchCore
+        product: AgentWatchCore
+    settings:
+      PRODUCT_NAME: agentwatch
+      PRODUCT_BUNDLE_IDENTIFIER: com.vtamm.claudewatch.agentwatch-cli
+      SWIFT_VERSION: "6.0"
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_IDENTITY: "-"
+      ENABLE_HARDENED_RUNTIME: NO
+      SKIP_INSTALL: YES
   AgentWatchMac:
     type: application
     platform: macOS
@@ -29,6 +46,13 @@ targets:
         product: AgentWatchCore
       - package: Sparkle
         product: Sparkle
+      - target: AgentWatchCLI
+        embed: true
+        link: false
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     info:
       path: App/Info.plist
       properties:

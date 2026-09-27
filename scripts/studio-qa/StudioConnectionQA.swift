@@ -54,8 +54,10 @@ private actor FixtureClient: StudioConnecting, StudioReporting {
             let store = StudioConnectionStore(client: client, keys: FixtureKeys(), settings: FixtureSettings(), cache: FixtureCache())
             if CommandLine.arguments.contains("connected") { await store.connect(origin: "https://studio.example.com", key: "fixture_key") }
             if CommandLine.arguments.contains("stale") { await client.setOffline(); await store.refresh() }
-            let height: CGFloat = CommandLine.arguments.contains("connected") && !CommandLine.arguments.contains("stale") ? 1900 : 790
-            let view = NSHostingView(rootView: StudioConnectionView().environment(store).frame(width: 720, height: height).background(Claude.backgroundGradient).environment(\.colorScheme, .light))
+            let launcher = CommandLine.arguments.contains("launcher")
+            let height: CGFloat = launcher ? 620 : (CommandLine.arguments.contains("connected") && !CommandLine.arguments.contains("stale") ? 2300 : 790)
+            let content: AnyView = launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView())
+            let view = NSHostingView(rootView: content.environment(store).frame(width: 720, height: height).background(Claude.backgroundGradient).environment(\.colorScheme, .light))
             let window = FixtureWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: height), styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = view
             view.layoutSubtreeIfNeeded()

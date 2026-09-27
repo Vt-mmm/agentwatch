@@ -18,6 +18,7 @@ let args = Array(CommandLine.arguments.dropFirst())
 let sub = args.first ?? "watch"
 
 switch sub {
+case "run":        exit(await StudioRunCommand(arguments: Array(args.dropFirst())).run())
 case "watch":      WatchCommand().run()
 case "status":     StatusCommand().run()
 case "statusline": StatusLineCommand().run()
@@ -43,6 +44,7 @@ func printHelp() {
       agentwatch statusline            inject vào Claude Code statusLine
       agentwatch setup                 cài tự động vào ~/.claude/settings.json
       agentwatch report [day|week]     stats coaching ngày/tuần
+      agentwatch run --help           chạy CLI bằng profile Studio công ty
 
     Inject pet vào Claude Code CLI:
       agentwatch setup                 (auto — cài statusLine + 6 hooks)

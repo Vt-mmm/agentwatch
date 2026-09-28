@@ -181,8 +181,10 @@ public struct StudioCLILaunchPlan: Sendable, CustomStringConvertible {
         return pairs.flatMap { ["-c", $0] }
     }
     public var arguments: [String] {
+        // Built-in /compact must remain available. Bare mode, empty setting
+        // sources and the explicit company profile provide configuration isolation.
         if profile.provider == .claude {
-            var args = ["--bare", "--setting-sources", "", "--settings", profile.configFile.path, "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}", "--disable-slash-commands", "--no-chrome", "--permission-mode", "default", "--model", model.id]
+            var args = ["--bare", "--setting-sources", "", "--settings", profile.configFile.path, "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}", "--no-chrome", "--permission-mode", "default", "--model", model.id]
             if let resumeID { args += ["--resume", resumeID.uuidString.lowercased()] }
             if let prompt { args += ["--print", "--output-format", "json", "--", prompt] }
             return args

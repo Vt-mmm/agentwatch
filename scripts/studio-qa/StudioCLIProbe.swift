@@ -90,6 +90,17 @@ import Foundation
                 print("PASS registered native logs: one persisted session, 30 local fixture tokens matched to two confirmed Studio requests; no terminal environment or credential content")
                 return
             }
+            if CommandLine.arguments.contains("--launch-plan") {
+                // Test-only, credential-free projection of the production plan.
+                // The caller runs it inside its verified loopback-only sandbox.
+                let profile = try StudioCLIProfiles.prepare(connection: identity, provider: provider, directory: root.appendingPathComponent("profiles", isDirectory: true))
+                let executable = try StudioCLIExecutable.resolve(provider, explicit: URL(fileURLWithPath: binary))
+                let plan = try StudioCLILaunchPlan(executable: executable, profile: profile, project: root.appendingPathComponent("work"), model: model, prompt: "Return STUDIO_FIXTURE_OK.")
+                struct Output: Encodable { let executable: String; let arguments: [String]; let environment: [String: String] }
+                let data = try JSONEncoder().encode(Output(executable: plan.executable.url.path, arguments: plan.arguments, environment: plan.environment))
+                FileHandle.standardOutput.write(data)
+                return
+            }
             var args = [provider.rawValue, "--profile", identity.id, "--model", model.id, "--project", root.appendingPathComponent("project").path, "--binary", binary, "--print", resume == nil ? "Return STUDIO_FIXTURE_OK." : "Continue with STUDIO_RESUME_QUESTION."]
             if let resume { args += ["--resume", resume.uuidString] }
             if CommandLine.arguments.contains("--check") { args += ["--check"] }

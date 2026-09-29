@@ -36,7 +36,7 @@ struct AutomaticDailyReportExportButton: View {
     }
     private func export(forDelivery: Bool = false) {
         guard let identity = SupervisorLockStore.shared.reportIdentity else {
-            error = "Nhập key mở app trước khi xuất report."; return
+            error = "Chưa đọc được thông tin báo cáo trên máy."; return
         }
         preparingDelivery = forDelivery
         busy = true; error = nil; progress = "Đang chuẩn bị dữ liệu theo ngày…"

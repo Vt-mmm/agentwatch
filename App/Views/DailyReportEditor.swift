@@ -136,7 +136,7 @@ struct DailyReportEditor: View {
                     TextField("Họ tên", text: $displayName).disabled(SupervisorLockStore.shared.reportIdentity != nil)
                 }
                 if let identity = SupervisorLockStore.shared.reportIdentity {
-                    Text("Tên theo key: \(identity.name) · Thư mục report: \(identity.folderName)").font(.caption).foregroundStyle(.secondary)
+                    Text("Hồ sơ báo cáo: \(identity.name) · Thư mục report: \(identity.folderName)").font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
                     DatePicker("Ngày", selection: $day, in: ...Date(), displayedComponents: .date)

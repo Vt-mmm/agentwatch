@@ -17,11 +17,14 @@ struct StudioDashboardView: View {
                     .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
                 if studio.dashboardState == .loading { Text("Đang tải; số bên dưới là lần cập nhật trước.").font(.caption).foregroundStyle(Claude.orange) }
                 usageCards(report)
-                quota(report)
                 models(report.month)
+                DisclosureGroup("Hạn mức của key") { quota(report).padding(.top, 12) }
+                    .font(ClaudeFont.body()).claudeCard()
                 requests(report.recent)
-                Text("Các phần được đọc ở những thời điểm riêng. Input đã gồm cache; output đã gồm reasoning. Usage chưa rõ không được coi là 0. Chi phí và dung lượng thuê bao chưa có dữ liệu xác minh.")
-                    .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
+                DisclosureGroup("Cách tính usage") {
+                    Text("Nguồn: Studio ledger. Input đã gồm cache; output đã gồm reasoning. Usage chưa rõ không được coi là 0. Token ghi sổ không cộng vào token xác nhận. Chi phí và dung lượng thuê bao chưa có dữ liệu xác minh.")
+                        .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted).padding(.top, 8)
+                }.font(ClaudeFont.body(12))
             } else if studio.dashboardState != .loading {
                 Text("Chưa có dữ liệu usage đã xác minh từ Studio.").foregroundStyle(Claude.textMuted)
             }
@@ -49,7 +52,6 @@ struct StudioDashboardView: View {
     }
     private func quota(_ report: StudioDashboardSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel(text: "Hạn mức của key hiện tại")
             if case .available(let models) = studio.snapshot?.models, !models.isEmpty {
                 Picker("Model", selection: Binding(get: { studio.quotaModelID ?? models[0].id }, set: { id in Task { await studio.selectQuotaModel(id) } })) {
                     ForEach(models) { model in Text(model.displayName).tag(model.id) }
@@ -77,7 +79,7 @@ struct StudioDashboardView: View {
                 Text(report.quotaError?.localizedDescription ?? "Chưa có model khả dụng để kiểm tra quota. Usage cá nhân vẫn độc lập với danh sách model.")
                     .font(ClaudeFont.body()).foregroundStyle(Claude.textMuted)
             }
-        }.claudeCard()
+        }
     }
     private func models(_ overview: StudioOverview) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -110,7 +112,13 @@ struct StudioDashboardView: View {
                     }
                     Text("\(time(request.created_at)) · \(request.provider) · ghi sổ \(request.charged_tokens.formatted) token")
                         .font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
-                    Text(request.id.uuidString.lowercased()).font(ClaudeFont.mono(10)).foregroundStyle(Claude.textMuted).textSelection(.enabled)
+                    DisclosureGroup("Chi tiết request") {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(request.id.uuidString.lowercased()).font(ClaudeFont.mono(10)).textSelection(.enabled)
+                            Text("Key: " + request.key_id.uuidString.lowercased()).font(ClaudeFont.mono(10)).textSelection(.enabled)
+                            Text("Input: \(request.confirmed.input_tokens?.formatted ?? "—") · Output: \(request.confirmed.output_tokens?.formatted ?? "—")")
+                        }.padding(.top, 5)
+                    }.font(ClaudeFont.body(11)).foregroundStyle(Claude.textMuted)
                 }
                 Divider()
             }
@@ -124,7 +132,7 @@ struct StudioDashboardView: View {
     private func scopeLabel(_ value: String) -> String {
         switch value { case "org": "Tổ chức"; case "team": "Nhóm"; case "user": "Nhân viên"; case "key": "Key"; default: "Phạm vi chưa rõ" }
     }
-    private func time(_ value: Date) -> String { value.ISO8601Format() }
+    private func time(_ value: Date) -> String { value.formatted(date: .abbreviated, time: .shortened) }
     private func date(_ value: Date, zone: String) -> String {
         let formatter = DateFormatter(); formatter.dateFormat = "dd/MM/yyyy"; formatter.timeZone = TimeZone(identifier: zone)
         return formatter.string(from: value)

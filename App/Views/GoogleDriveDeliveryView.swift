@@ -142,7 +142,7 @@ struct GoogleDriveDeliveryView: View {
                 if let identity {
                     guard identity.employeeID == snapshot.report.employee.employeeID,
                           let saved = try ReportFolderBindingStore.local.read(organizationID: snapshot.report.employee.organizationID, employeeID: identity.employeeID, accountKey: credential.accountKey),
-                          saved.folderID == access.id else { throw ReportValidationError.invalid("Cần gắn đúng thư mục cho key của report trước khi upload.") }
+                          saved.folderID == access.id else { throw ReportValidationError.invalid("Cần gắn đúng thư mục của báo cáo trước khi upload.") }
                 }
                 let name = "daily-report-\(DailyReportRenderer.dateLabel(snapshot.report.period.start, zone: snapshot.report.period.timeZone, format: "yyyy-MM-dd"))-v\(snapshot.revision).pdf"
                 let destination = DriveDestination(accountKey: credential.accountKey, folderID: access.id, fileName: name)
@@ -190,7 +190,7 @@ struct GoogleDriveDeliveryView: View {
     }
     private func bindExistingFolder(usePicker: Bool) {
         guard let identity, identity.employeeID == snapshot.report.employee.employeeID else {
-            error = "Nhập đúng key của report trước khi chọn thư mục."; return
+            error = "Thông tin báo cáo không khớp với hồ sơ trên máy."; return
         }
         busy = true; approved = false; job = nil; preview = nil; error = nil
         Task {

@@ -1,5 +1,7 @@
 #if DEBUG
 import Foundation
+import AppKit
+import Carbon
 import ServiceManagement
 import AgentWatchCore
 
@@ -9,6 +11,29 @@ enum StudioLocalAcceptance {
     @MainActor static func run(arguments: [String]) async {
         do {
             let args = arguments
+            if args == ["lifecycle"] {
+                let suite = "watch-lifecycle-qa-" + UUID().uuidString
+                let isolated = UserDefaults(suiteName: suite)!
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+                defer { isolated.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: directory) }
+                isolated.set(true, forKey: "supervisor.lock.enabled")
+                isolated.set("retired-enrollment", forKey: "supervisor.lock.byLabel")
+                let lifecycle = SupervisorLockStore(defaults: isolated, directory: directory)
+                guard !lifecycle.isLocked, lifecycle.reportIdentity != nil,
+                      isolated.object(forKey: "supervisor.lock.enabled") == nil,
+                      isolated.object(forKey: "supervisor.lock.byLabel") == nil,
+                      lifecycle.shouldTerminate(source: "isolated QA") == .terminateNow else { throw StudioConfigurationError.invalid }
+                let delegate = AgentWatchAppDelegate()
+                guard !delegate.applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared),
+                      !AgentWatchAppDelegate.isLoginLaunch(nil) else { throw StudioConfigurationError.invalid }
+                let event = NSAppleEventDescriptor(eventClass: kCoreEventClass, eventID: kAEOpenApplication,
+                    targetDescriptor: nil, returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
+                guard !AgentWatchAppDelegate.isLoginLaunch(event) else { throw StudioConfigurationError.invalid }
+                event.setParam(NSAppleEventDescriptor(enumCode: keyAELaunchedAsLogInItem), forKeyword: keyAEPropData)
+                guard AgentWatchAppDelegate.isLoginLaunch(event) else { throw StudioConfigurationError.invalid }
+                print("lifecycle_verified_no_enrollment_unrestricted_quit_background_close_login_detection")
+                return
+            }
             if args == ["background-status"] {
                 switch SMAppService.mainApp.status {
                 case .enabled: print("login_item_enabled")

@@ -20,3 +20,14 @@ xcrun swiftc -swift-version 6 -parse-as-library \
 
 "$output/render" "$output/logs.png" connected logs
 "$output/render" "$output/disconnect.png" connected disconnect
+
+"$output/render" "$output/connected-narrow.png" connected narrow long
+"$output/render" "$output/connected-dark.png" connected dark
+"$output/render" "$output/connected-short.png" connected narrow short
+"$output/render" "$output/onboarding-narrow.png" narrow
+"$output/render" "$output/usage-narrow.png" connected usage narrow
+"$output/render" "$output/usage-stale.png" connected usage narrow stale
+
+"$output/render" "$output/diagnostics-narrow.png" connected diagnostics narrow
+
+"$output/render" "$output/no-grants-narrow.png" connected narrow no-grants

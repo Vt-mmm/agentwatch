@@ -1,3 +1,11 @@
+## Studio layout and background lifecycle · 2026-09-29
+
+The renderer now covers 14 views at 620/860px, including a 460px content height, long member/team labels, light/dark, onboarding, empty-grant tool errors, stale usage and diagnostics. These are production SwiftUI views with synthetic identities, isolated preferences, fake key storage and temporary tool/log roots. It never applies configuration to the owner’s directories. The connected Studio sections are Tools / Usage / Diagnostics; log reading is mounted only in Diagnostics.
+
+Run the built Debug app executable with `--studio-local-acceptance lifecycle` for an isolated native check of retired enrollment preferences, unconditional normal termination, last-window background behavior and macOS login launch-event detection. The probe writes only a temporary audit directory and preferences suite and removes them. `--studio-local-acceptance background-status` is a read-only query of the installed app’s actual Login Items registration. Neither probe sends inference or uploads reports.
+
+[Implementation and acceptance](../../docs/studio-ui-background-update.md). No synthetic screenshot proves an actual logout/login cycle.
+
 # Native Studio connection fixture
 
 Run `bash scripts/studio-qa/build.sh` on macOS with Xcode/Swift 6. Outputs are `.build/studio-ui-fixture/disconnected.png`, `connected.png`, `stale.png` `launcher.png` and `logs.png`. Connected/stale views include the personal ledger dashboard, quota and recent requests with synthetic data; the launcher view is rendered without executing it.

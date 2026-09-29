@@ -19,7 +19,6 @@ struct MainWindowView: View {
     @State private var liveFilter: LiveAgentFilter = .all
     @State private var showGoogleSetup = false
     @State private var showPrivacy: Bool = false
-    @State private var showSupervisorLock: Bool = false
     // Sync với @AppStorage trong SpritePet — toggle áp dụng cho mọi pet instance.
     @AppStorage("PetFlippedHorizontally") private var petFlipped: Bool = true
     @AppStorage("notif.streakRisk.enabled") private var streakRiskNoti: Bool = false
@@ -56,29 +55,12 @@ struct MainWindowView: View {
         .background(shortcutKeys)
         .sheet(isPresented: $showGoogleSetup) { GoogleSetupView() }
         .sheet(isPresented: $showPrivacy) { PrivacyView() }
-        .sheet(isPresented: $showSupervisorLock) { SupervisorLockView() }
         .task(id: tab) {
             guard tab == .live else { return }
             while !Task.isCancelled {
                 refreshAuditSnapshots()
                 try? await Task.sleep(for: .seconds(60))
             }
-        }
-        .onAppear {
-            presentSupervisorLockIfNeeded()
-        }
-        .onChange(of: supervisorLock.isLocked) { _, locked in
-            if !locked { presentSupervisorLockIfNeeded() }
-        }
-        .onChange(of: supervisorLock.requiresStartupKey) { _, needsKey in
-            if needsKey { presentSupervisorLockIfNeeded() }
-        }
-    }
-
-    private func presentSupervisorLockIfNeeded() {
-        guard supervisorLock.requiresStartupKey || !supervisorLock.isLocked else { return }
-        DispatchQueue.main.async {
-            showSupervisorLock = true
         }
     }
 
@@ -118,22 +100,6 @@ struct MainWindowView: View {
             }
             Spacer()
             AutomaticDailyReportExportButton()
-            if supervisorLock.isLocked || supervisorLock.requiresStartupKey {
-                Button { showSupervisorLock = true } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: supervisorLock.requiresStartupKey ? "key.fill" : "lock.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(supervisorLock.requiresStartupKey ? "Key" : "Locked")
-                            .font(ClaudeFont.label(10))
-                    }
-                    .foregroundStyle(Claude.orange)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Claude.orangeSoft, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .help(supervisorLock.statusLine)
-            }
             HStack(spacing: 4) {
                 themePicker
                 settingsMenu
@@ -160,11 +126,8 @@ struct MainWindowView: View {
             // v0.6.0: streak-risk notification opt-in (default OFF).
             Toggle("Nhắc khi streak sắp mất (sau 18h)", isOn: $streakRiskNoti)
             Divider()
-            Button {
-                showSupervisorLock = true
-            } label: {
-                Label(supervisorLock.isLocked ? "Supervisor Lock: On" : "Supervisor Lock: Enroll…",
-                      systemImage: supervisorLock.isLocked ? "lock.fill" : "lock.open")
+            Button { supervisorLock.openLoginSettings() } label: {
+                Label(supervisorLock.loginItemStatus, systemImage: "power")
             }
             Divider()
             Button {

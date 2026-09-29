@@ -6,11 +6,11 @@ extension CoachingReportView {
         let events = lockAuditEvents
         let compliance = supervisorLock.complianceFindings(scope: currentScope, sessions: allSessions)
         let forceQuitCount = events.filter { $0.kind == .forceQuitSuspected }.count
-        let blockedCount = events.filter { $0.kind == .quitBlocked }.count
-        let authorizedCount = events.filter { $0.kind == .quitAuthorized }.count
+        let openedCount = events.filter { $0.kind == .appStarted }.count
+        let closedCount = events.filter { $0.kind == .cleanQuit }.count
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "lock.shield.fill")
+                Image(systemName: "clock.arrow.circlepath")
                     .foregroundStyle(forceQuitCount > 0 ? .red : Claude.orange)
                 Text("AgentWatch audit")
                     .font(ClaudeFont.heading())
@@ -25,15 +25,15 @@ extension CoachingReportView {
                 .buttonStyle(.bordered)
                 Text(supervisorLock.statusLine)
                     .font(ClaudeFont.mono(10, weight: .semibold))
-                    .foregroundStyle(supervisorLock.isLocked ? Claude.orange : Claude.textMuted)
+                    .foregroundStyle(Claude.textMuted)
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)],
                       alignment: .leading, spacing: 10) {
-                lockMetric("Force quit", "\(forceQuitCount)", tint: forceQuitCount > 0 ? .red : Claude.textPrimary)
-                lockMetric("Quit blocked", "\(blockedCount)", tint: blockedCount > 0 ? Claude.orange : Claude.textPrimary)
-                lockMetric("Coverage gaps", "\(compliance.count)", tint: compliance.isEmpty ? Claude.textPrimary : .red)
-                lockMetric("Authorized", "\(authorizedCount)", tint: Claude.textPrimary)
+                lockMetric("Gián đoạn", "\(forceQuitCount)", tint: forceQuitCount > 0 ? .red : Claude.textPrimary)
+                lockMetric("Mở app", "\(openedCount)", tint: Claude.textPrimary)
+                lockMetric("Thiếu dữ liệu", "\(compliance.count)", tint: compliance.isEmpty ? Claude.textPrimary : .red)
+                lockMetric("Đóng app", "\(closedCount)", tint: Claude.textPrimary)
                 lockMetric("Events", "\(events.count)", tint: Claude.textPrimary)
             }
 

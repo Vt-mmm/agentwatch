@@ -1,16 +1,9 @@
 import AppKit
-import CryptoKit
+import Carbon
 import Foundation
 import Observation
 import ServiceManagement
 import AgentWatchCore
-
-struct SupervisorLockKey: Identifiable, Sendable, Equatable {
-    let label: String
-    let enrollmentHash: String
-    let unlockPassHash: String
-    var id: String { label }
-}
 
 enum SupervisorLockEventKind: String, Codable, Sendable, Equatable {
     case appStarted
@@ -116,49 +109,8 @@ struct WorkComplianceFinding: Identifiable, Sendable, Equatable {
 final class SupervisorLockStore {
     static let shared = SupervisorLockStore()
 
-    static let keys: [SupervisorLockKey] = [
-        .init(label: "Tài - TW - BE", enrollmentHash: "6ff42c6e6263e081cf9bb1b94122e60ff0e0e51b593aa24018e9fcda91969e78", unlockPassHash: "4010a89e176c60586c541ef2423e50e1f8ca9e0b0cee8ca1cea2a526429d475f"),
-        .init(label: "Dũng - TW - BE", enrollmentHash: "1be030ee5bb367e40aedfc33785b396afad77ebc34384deeed48c0840638c518", unlockPassHash: "2871942179b7125f335c43bd8ad19d7b0d327a2baa19810e7625e1c30a1281a3"),
-        .init(label: "Minh - TW - BE", enrollmentHash: "e8f9d5d06e15b4c7c7d66bd5bc9137773953efd99a496decbaba7d1fc6f03f4e", unlockPassHash: "0419adae6bd2f48fba23248a4ce1d55099522a6a8740056b40899af041f43516"),
-        .init(label: "Ngọc - HRM - BE", enrollmentHash: "b0ce7c7f927a8c8a00fecdb28aad9626f6d97240b0263f1fec789cc371b7e86c", unlockPassHash: "ce3e67502801aa9f51886a50711ae34f34f85d07afe2f24d73cbeff0a0b44d4f"),
-        .init(label: "Bình - HRM - BE", enrollmentHash: "b710d1ca98b457196db400e5ca6b0d8cbaf7526ff1491a704cb0c4f0fadecad0", unlockPassHash: "fc97f2f20dcf017a931656f43ada0577c6ad5e9db1638d3b606e51e0de7298cb"),
-        .init(label: "Chiến - TW - App", enrollmentHash: "5f732d05e00e69b2d113041907c62fadb15740225ae8213608cd2ea04ebaab8e", unlockPassHash: "bab23d3e4d0e6c9ca109f936400f67c1f0605c0c3333d81b4c32f1f3bc453bab"),
-        .init(label: "Quang - TW - FE", enrollmentHash: "2c679ecf6acf2ee33090698668c9a05ef53b2c5338f5596c6ed870f67e2d89bf", unlockPassHash: "c4e6b11b9f2b0532004b6a4f084bda64fe5265d83838b9467fe60cf9121ace8c"),
-        .init(label: "Duy - HUB - BE", enrollmentHash: "11af5c04015c9e651a3bd438bf9354056b317116cb61622ae2c7287983ae1e1a", unlockPassHash: "b9d7c91a98da34eacaa2db5a823d2479fa551aad155d7f2d67679c7ed32ba29f"),
-        .init(label: "Dũng - VN - BE", enrollmentHash: "5331a527a0982d030131f89f42ecf9802cc4cd8e21fd8f1f0f2a0852ef5bacdc", unlockPassHash: "e4833fd75b9edc29d6b3388a4178d12404acd8d702fd238231b46a1efae04793"),
-        .init(label: "Đại - VN - BE", enrollmentHash: "62d6e1a881c89cd5c909622541f419da4b7a22b371518f65fd084761a2928080", unlockPassHash: "de0ce006288cb42456eafa0b1d1f428dfc016d309e75285524a8cd05cfa513b0"),
-        .init(label: "Tâm - VN - FE", enrollmentHash: "4e6dd66953ecc86aeb3c5e5e147ca43f35e771dffde4b3b4872a1a03ceb40187", unlockPassHash: "92722d2c13e5ceb29b9dfde18439e8c15bfdd142aba38e5ae9158204cd2029ff"),
-        .init(label: "Quý - VN - BE", enrollmentHash: "24d3c0eb16190176d7e8135de76ff0e2bd16aa8336b688f09e3dd579ca8267eb", unlockPassHash: "9e97f349569e42d5b314d6a8fa547b2cca4a4bce334d7922118555fad006726b"),
-        .init(label: "Mac7", enrollmentHash: "020e98465cfc1d5dd3d68f64c734a8f10706501b9c431d0961fbf8d7d14c8f9d", unlockPassHash: "32b477ab14a047d336dde23d4354919297dbe51d3da5d4235bffba3a8b9be12f"),
-        .init(label: "Mac8", enrollmentHash: "da4f4621410e304f29eadd3edec751fb81866c49ae802660f10ed89da2f4913e", unlockPassHash: "b0e3017ee933a611a5cf12bff1d70af8bd100fbe6c3f32a3bab8a7c583cb24c4"),
-        .init(label: "Mac9", enrollmentHash: "cf80bd890c5cfe105f508d13a2c0d9ad92516e49229c321cf05456dd0199d696", unlockPassHash: "ca725bacfdd771f4e44f3acaa2f20a347afdcf0d7021eb8aad8633ac23d4e4e1"),
-        .init(label: "Mac10", enrollmentHash: "8fe5f1172cd54cf91fb8ca65d2df1f60b91500df5478afd9e9dc6a0b31a", unlockPassHash: "98d6d8863b2fb32d95853aa0131d5e0ae009e92e7ef95f414e94ecfe0fb32ce6"),
-        .init(label: "Mac11", enrollmentHash: "7d075d785bf5c27e6af979120718465947b10b0700e3d8c8cdf8779b190454d0", unlockPassHash: "73bb923079ecf50dec0875b0342497daeac52bc9bc184d95550bb0f15ec2f9fc"),
-        .init(label: "Mac12", enrollmentHash: "9abd3239cd2d8f5efdc64624111d8a4ee6b45ab2a47944c7242bf3e9e42c27c7", unlockPassHash: "e1679fa8133fbcc224a219f59e1e6339d02380291340bc1d1dd0fb6ca0ec521a"),
-        .init(label: "Mac13", enrollmentHash: "0b1d64a9380409442bad07dc527ff6b9719178bbf50815a933afd1c82fd46dea", unlockPassHash: "4ef064d3ec2bd1782e9a1aa8ca3c0fb823472541e706ed5855b4c6adc054db72")
-    ]
-
-    // Preserve enrollment and unlock ownership across display-name changes.
-    // Retired keys are deliberately not reassigned to another employee.
-    static func currentKeyLabel(for savedLabel: String?) -> String? {
-        guard let savedLabel else { return nil }
-        let legacyLabels = [
-            "Tài - BE": "Tài - TW - BE",
-            "Dũng - BE": "Dũng - TW - BE",
-            "Minh - BE": "Minh - TW - BE",
-            "Bình - BE": "Bình - HRM - BE",
-            "Ngọc - BE": "Ngọc - HRM - BE",
-            "Chiến - FE": "Chiến - TW - App",
-            "Mac1": "Quang - TW - FE",
-            "Mac2": "Duy - HUB - BE",
-            "Mac3": "Dũng - VN - BE",
-            "Mac4": "Đại - VN - BE",
-            "Mac5": "Tâm - VN - FE",
-            "Mac6": "Quý - VN - BE",
-        ]
-        return legacyLabels[savedLabel] ?? savedLabel
-    }
-
+    // The legacy type/file and audit wire fields remain for historical reports.
+    // App startup and termination no longer authenticate an enrollment key.
     private struct HeartbeatState: Codable {
         let runId: UUID
         let startedAt: Date
@@ -172,61 +124,34 @@ final class SupervisorLockStore {
         let appVersion: String
     }
 
-    private let lockedKey = "supervisor.lock.enabled"
-    private let lockedByLabelKey = "supervisor.lock.byLabel"
     private let heartbeatInterval: TimeInterval = 60
-    private let updateRelaunchAuthorizationWindow: TimeInterval = 5
     private let runId = UUID()
     private let runStartedAt = Date()
 
     private var started = false
     private var heartbeatTimer: Timer?
-    private var updateRelaunchAuthorizedUntil: Date?
     private var powerObserverTokens: [NSObjectProtocol] = []
-    private var terminationAuthorized = false
     private var didMarkCleanExit = false
 
-    var isLocked: Bool
-    var lockedByLabel: String?
-    var startupVerified: Bool = false
-    var startupVerifiedAt: Date?
+    // Kept only as legacy heartbeat fields; they never govern access.
+    let isLocked = false
+    var lockedByLabel: String? { reportIdentity?.name }
+    let startupVerified = false
+    private let startupVerifiedAt: Date? = nil
     var lastHeartbeatAt: Date?
     var recentEvents: [SupervisorLockAuditEvent] = []
+    private(set) var reportIdentity: ReportEnrollmentIdentity?
+    var collectionIdentity: ReportEnrollmentIdentity? { reportIdentity }
 
-    private init() {
-        isLocked = UserDefaults.standard.bool(forKey: lockedKey)
-        let savedLabel = UserDefaults.standard.string(forKey: lockedByLabelKey)
-        lockedByLabel = Self.currentKeyLabel(for: savedLabel)
-        if lockedByLabel != savedLabel {
-            UserDefaults.standard.set(lockedByLabel, forKey: lockedByLabelKey)
-        }
+    private let supportOverride: URL?
+    init(defaults: UserDefaults = .standard, directory: URL? = nil) {
+        supportOverride = directory
+        reportIdentity = try? ReportEnrollmentIdentity.local(defaults: defaults, deviceName: Host.current().localizedName ?? "Máy này")
+        defaults.removeObject(forKey: "supervisor.lock.enabled")
+        defaults.removeObject(forKey: "supervisor.lock.byLabel")
     }
 
-    var statusLine: String {
-        if requiresStartupKey {
-            return "Open key required" + (lockedByLabel.map { " · \($0)" } ?? "")
-        }
-        if isLocked {
-            return "Locked" + (lockedByLabel.map { " · \($0)" } ?? "")
-        }
-        return "Enrollment required"
-    }
-
-    var requiresStartupKey: Bool {
-        !startupVerified
-    }
-
-    var reportIdentity: ReportEnrollmentIdentity? {
-        guard startupVerified, let key = Self.keys.first(where: { $0.label == lockedByLabel }) else { return nil }
-        return try? ReportEnrollmentIdentity(enrollmentHash: key.enrollmentHash, label: key.label)
-    }
-
-    // Collection belongs to the enrolled machine. Viewing/exporting still needs
-    // this run's key verification; restarting must not leave the morning unrecorded.
-    var collectionIdentity: ReportEnrollmentIdentity? {
-        guard isLocked, let key = Self.keys.first(where: { $0.label == lockedByLabel }) else { return nil }
-        return try? ReportEnrollmentIdentity(enrollmentHash: key.enrollmentHash, label: key.label)
-    }
+    var statusLine: String { "Đang chạy nền" }
 
     var loginItemStatus: String {
         switch SMAppService.mainApp.status {
@@ -244,7 +169,7 @@ final class SupervisorLockStore {
         recentEvents = loadAuditEvents(limit: 200)
         detectPreviousAbnormalShutdown()
         appendAudit(kind: .appStarted, keyLabel: lockedByLabel,
-                    message: "AgentWatch opened; enrollment key is required to record this app-open.")
+                    message: "AgentWatch opened; background activity recording started.")
         ensureLaunchAtLogin()
         writeHeartbeat(cleanExit: false)
         installPowerObservers()
@@ -253,143 +178,11 @@ final class SupervisorLockStore {
         }
     }
 
-    func verifyAppOpen(with rawKey: String) -> Bool {
-        guard let key = matchEnrollmentKey(rawKey),
-              lockedByLabel == nil || lockedByLabel == key.label else {
-            appendAudit(kind: .appOpenKeyRejected, keyLabel: lockedByLabel,
-                        message: "App-open enrollment key was rejected.")
-            writeHeartbeat(cleanExit: false)
-            return false
-        }
-        applyVerifiedAppOpen(key: key)
-        return true
-    }
-
-    func enableLock(with rawKey: String) -> Bool {
-        if requiresStartupKey {
-            return verifyAppOpen(with: rawKey)
-        }
-        guard !isLocked, let key = matchEnrollmentKey(rawKey) else { return false }
-        isLocked = true
-        lockedByLabel = key.label
-        persistLockState()
-        appendAudit(kind: .lockEnabled, keyLabel: key.label,
-                    message: "Supervisor lock enabled by \(key.label).")
-        writeHeartbeat(cleanExit: false)
-        return true
-    }
-
-    func disableLock(withUnlockPass rawPass: String) -> Bool {
-        guard let key = matchUnlockPass(rawPass) else { return false }
-        isLocked = false
-        lockedByLabel = nil
-        persistLockState()
-        appendAudit(kind: .lockDisabled, keyLabel: key.label,
-                    message: "Supervisor lock disabled by \(key.label) unlock pass.")
-        writeHeartbeat(cleanExit: false)
-        return true
-    }
-
-    func authorizeQuit(withUnlockPass rawPass: String, source: String) -> Bool {
-        guard let key = matchUnlockPass(rawPass) else {
-            appendAudit(kind: .quitBlocked, keyLabel: nil,
-                        message: "Quit blocked from \(source): invalid unlock pass.")
-            writeHeartbeat(cleanExit: false)
-            return false
-        }
-        terminationAuthorized = true
-        appendAudit(kind: .quitAuthorized, keyLabel: key.label,
-                    message: "Quit authorized from \(source) by \(key.label) unlock pass.")
-        markCleanExit(source: source)
-        NSApp.terminate(nil)
-        return true
-    }
-
-    func requestQuit(source: String = "ui") {
-        NSApp.terminate(nil)
-    }
-
-    /// Sparkle invokes this immediately before its verified update relaunch.
-    /// The one-shot window prevents a stale authorization from weakening
-    /// ordinary Quit/Cmd+Q behavior if installation is unexpectedly aborted.
-    func authorizeUpdateRelaunch() {
-        updateRelaunchAuthorizedUntil = Date()
-            .addingTimeInterval(updateRelaunchAuthorizationWindow)
-        appendAudit(
-            kind: .quitAuthorized,
-            keyLabel: lockedByLabel,
-            message: "Quit authorized automatically for verified Sparkle update relaunch; unlock pass was not requested."
-        )
-    }
+    func requestQuit(source: String = "ui") { NSApp.terminate(nil) }
 
     func shouldTerminate(source: String) -> NSApplication.TerminateReply {
-        if let authorizedUntil = updateRelaunchAuthorizedUntil {
-            updateRelaunchAuthorizedUntil = nil
-            if Date() <= authorizedUntil {
-                markCleanExit(source: "Sparkle update relaunch")
-                return .terminateNow
-            }
-        }
-
-        if terminationAuthorized {
-            markCleanExit(source: source)
-            return .terminateNow
-        }
-
-        if requiresStartupKey {
-            if let key = promptForEnrollmentKey(
-                title: "AgentWatch cần ghi nhận mở app",
-                message: "Nhập enrollment key của máy này để ghi log mở app trước khi tiếp tục."
-            ) {
-                if lockedByLabel == nil || lockedByLabel == key.label {
-                    applyVerifiedAppOpen(key: key)
-                } else {
-                    appendAudit(kind: .appOpenKeyRejected, keyLabel: lockedByLabel,
-                                message: "Quit blocked from \(source): enrollment key belongs to \(key.label), not this enrolled machine.")
-                    writeHeartbeat(cleanExit: false)
-                }
-            } else {
-                appendAudit(kind: .quitBlocked, keyLabel: lockedByLabel,
-                            message: "Quit blocked from \(source): app-open key has not been verified.")
-                writeHeartbeat(cleanExit: false)
-            }
-            return .terminateCancel
-        }
-
-        if !isLocked {
-            if let key = promptForEnrollmentKey(
-                title: "AgentWatch cần được khóa",
-                message: "Nhập enrollment key được cấp cho máy này để bật lock trước khi tiếp tục."
-            ) {
-                isLocked = true
-                lockedByLabel = key.label
-                persistLockState()
-                appendAudit(kind: .lockEnabled, keyLabel: key.label,
-                            message: "Quit from \(source) was blocked; supervisor lock enabled by \(key.label).")
-                writeHeartbeat(cleanExit: false)
-            } else {
-                appendAudit(kind: .quitBlocked, keyLabel: nil,
-                            message: "Quit blocked from \(source): app is not enrolled.")
-                writeHeartbeat(cleanExit: false)
-            }
-            return .terminateCancel
-        }
-
-        if let key = promptForUnlockPass(
-            title: "AgentWatch đang locked",
-            message: "Nhập unlock pass để cho phép quit."
-        ) {
-            terminationAuthorized = true
-            appendAudit(kind: .quitAuthorized, keyLabel: key.label,
-                        message: "Quit authorized from \(source) by \(key.label) unlock pass.")
-            markCleanExit(source: source)
-            return .terminateNow
-        }
-
-        appendAudit(kind: .quitBlocked, keyLabel: nil,
-                    message: "Quit blocked from \(source): missing or invalid unlock pass.")
-        writeHeartbeat(cleanExit: false)
-        return .terminateCancel
+        markCleanExit(source: source)
+        return .terminateNow
     }
 
     func markCleanExit(source: String) {
@@ -459,17 +252,17 @@ final class SupervisorLockStore {
                             sessions: [SessionSummary]) -> [WorkComplianceFinding] {
         let range = dateRange(for: scope)
         let samples = loadPresenceSamples(in: range)
-        let verifiedSamples = samples.filter(\.startupVerified)
+        let verifiedSamples = samples
         var findings: [WorkComplianceFinding] = []
 
         if !sessions.isEmpty && verifiedSamples.isEmpty {
             findings.append(WorkComplianceFinding(
                 id: UUID(),
                 timestamp: range.lowerBound,
-                severity: "critical",
-                title: "No verified AgentWatch open",
-                message: "Có agent sessions trong kỳ nhưng không có heartbeat nào sau khi nhập enrollment key.",
-                recommendation: "Yêu cầu member mở AgentWatch và nhập key trước khi bắt đầu task.",
+                severity: "info",
+                title: "Chưa có dữ liệu Agent Watch",
+                message: "Có phiên CLI trong kỳ nhưng chưa ghi nhận Agent Watch đang chạy.",
+                recommendation: "Mở Agent Watch để ghi nhận hoạt động trên máy.",
                 source: nil,
                 sessionId: nil
             ))
@@ -495,17 +288,17 @@ final class SupervisorLockStore {
                 if let firstVerifiedAt,
                    firstVerifiedAt > upper {
                     title = "Session finished before AgentWatch opened"
-                    message = "\(session.source.label) session '\(session.displayTitle)' đã chạy xong trước khi AgentWatch được mở và nhập key."
-                    recommendation = "Đánh dấu vi phạm flow: member phải mở AgentWatch, nhập key, rồi mới bắt đầu agent task."
+                    message = "\(session.source.label) session '\(session.displayTitle)' đã chạy xong trước khi Agent Watch được mở."
+                    recommendation = "Kiểm tra trạng thái tự mở Agent Watch trong Mục đăng nhập của macOS."
                 } else {
                     title = "Agent session outside app coverage"
-                    message = "\(session.source.label) session '\(session.displayTitle)' không có verified AgentWatch heartbeat trong lúc chạy."
-                    recommendation = "Đối chiếu audit log và yêu cầu member giải trình nếu task được làm khi app chưa mở hoặc chưa nhập key."
+                    message = "\(session.source.label) session '\(session.displayTitle)' chưa có dữ liệu Agent Watch trong lúc chạy."
+                    recommendation = "Đối chiếu thời gian chạy app; khoảng thiếu dữ liệu không chứng minh người dùng vi phạm."
                 }
                 findings.append(WorkComplianceFinding(
                     id: UUID(),
                     timestamp: first,
-                    severity: session.source.vendor == .piagent ? "critical" : "high",
+                    severity: "info",
                     title: title,
                     message: message,
                     recommendation: recommendation,
@@ -528,7 +321,7 @@ final class SupervisorLockStore {
             md += "_Không có app activity event trong khoảng này._\n"
             return md
         }
-        md += "| Time | Event | Key | Downtime | Message |\n"
+        md += "| Time | Event | Name | Downtime | Message |\n"
         md += "|---|---|---|---:|---|\n"
         for event in scoped {
             let downtime = event.downtimeSeconds.map { humanDuration($0) } ?? ""
@@ -540,9 +333,9 @@ final class SupervisorLockStore {
     func complianceMarkdownSection(scope: ReportScope,
                                    sessions: [SessionSummary]) -> String {
         let findings = complianceFindings(scope: scope, sessions: sessions)
-        var md = "\n## AgentWatch compliance\n"
+        var md = "\n## AgentWatch coverage\n"
         if findings.isEmpty {
-            md += "_Không có coverage violation trong kỳ này._\n"
+            md += "_Không có khoảng thiếu dữ liệu trong kỳ này._\n"
             return md
         }
         md += "| Severity | Time | Source | Session | Finding | Recommendation |\n"
@@ -568,7 +361,7 @@ final class SupervisorLockStore {
         }.joined()
         return """
         <h2>AgentWatch activity audit</h2>
-        <div class="table-scroll"><table class="wide-table"><thead><tr><th>Time (\(ReportTime.timeZoneLabel))</th><th>Event</th><th>Key</th><th>Downtime</th><th>Message</th></tr></thead><tbody>\(rows)</tbody></table></div>
+        <div class="table-scroll"><table class="wide-table"><thead><tr><th>Time (\(ReportTime.timeZoneLabel))</th><th>Event</th><th>Name</th><th>Downtime</th><th>Message</th></tr></thead><tbody>\(rows)</tbody></table></div>
         """
     }
 
@@ -576,7 +369,7 @@ final class SupervisorLockStore {
                                sessions: [SessionSummary]) -> String {
         let findings = complianceFindings(scope: scope, sessions: sessions)
         guard !findings.isEmpty else {
-            return "<h2>AgentWatch compliance</h2><p class=muted>Không có coverage violation trong kỳ này.</p>"
+            return "<h2>AgentWatch coverage</h2><p class=muted>Không có khoảng thiếu dữ liệu trong kỳ này.</p>"
         }
         let rows = findings.map { finding in
             "<tr><td>\(htmlEscape(finding.severity))</td>"
@@ -587,7 +380,7 @@ final class SupervisorLockStore {
                 + "<td>\(htmlEscape(finding.recommendation))</td></tr>"
         }.joined()
         return """
-        <h2>AgentWatch compliance</h2>
+        <h2>AgentWatch coverage</h2>
         <div class="table-scroll"><table class="wide-table risk-table"><thead><tr><th>Severity</th><th>Time (\(ReportTime.timeZoneLabel))</th><th>Source</th><th>Session</th><th>Finding</th><th>Recommendation</th></tr></thead><tbody>\(rows)</tbody></table></div>
         """
     }
@@ -599,9 +392,9 @@ final class SupervisorLockStore {
             let recommendation: String
             switch event.kind {
             case .forceQuitSuspected:
-                recommendation = "Check member activity around the last heartbeat and require explanation."
+                recommendation = "Check for an app crash, system shutdown or interrupted update."
             case .quitBlocked:
-                recommendation = "Review attempted quit; keep lock enabled."
+                recommendation = "Historical event from the retired supervisor lock."
             default:
                 recommendation = ""
             }
@@ -688,54 +481,6 @@ final class SupervisorLockStore {
             ]
             return cols.joined(separator: ",")
         }.joined(separator: "\n")
-    }
-
-    private func matchEnrollmentKey(_ rawKey: String) -> SupervisorLockKey? {
-        let hash = Self.hash(normalized(rawKey))
-        return Self.keys.first { $0.enrollmentHash == hash }
-    }
-
-    private func applyVerifiedAppOpen(key: SupervisorLockKey) {
-        isLocked = true
-        lockedByLabel = key.label
-        startupVerified = true
-        startupVerifiedAt = Date()
-        persistLockState()
-        appendAudit(kind: .appOpenVerified, keyLabel: key.label,
-                    message: "AgentWatch app-open recorded by \(key.label).")
-        writeHeartbeat(cleanExit: false)
-    }
-
-    private func matchUnlockPass(_ rawPass: String) -> SupervisorLockKey? {
-        let hash = Self.hash(normalized(rawPass))
-        guard let key = Self.keys.first(where: { $0.unlockPassHash == hash }) else {
-            return nil
-        }
-        guard isLocked, let lockedByLabel else {
-            return key
-        }
-        return key.label == lockedByLabel ? key : nil
-    }
-
-    private func normalized(_ rawKey: String) -> String {
-        rawKey
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-    }
-
-    private static func hash(_ value: String) -> String {
-        let digest = SHA256.hash(data: Data(value.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
-
-    private func persistLockState() {
-        let defaults = UserDefaults.standard
-        defaults.set(isLocked, forKey: lockedKey)
-        defaults.set(lockedByLabel, forKey: lockedByLabelKey)
-        if let identity = reportIdentity {
-            defaults.set(identity.employeeID, forKey: "dailyReport.employeeID")
-            defaults.set(identity.name, forKey: "dailyReport.displayName")
-        }
     }
 
     private func detectPreviousAbnormalShutdown() {
@@ -978,48 +723,8 @@ final class SupervisorLockStore {
         return decoded
     }
 
-    private func promptForEnrollmentKey(title: String, message: String) -> SupervisorLockKey? {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Lock")
-        alert.addButton(withTitle: "Cancel")
-
-        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-        field.placeholderString = "AW-LOCK-XXXX-XXXX-XXXX"
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
-
-        guard alert.runModal() == .alertFirstButtonReturn,
-              let key = matchEnrollmentKey(field.stringValue) else {
-            return nil
-        }
-        return key
-    }
-
-    private func promptForUnlockPass(title: String, message: String) -> SupervisorLockKey? {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Unlock")
-        alert.addButton(withTitle: "Cancel")
-
-        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-        field.placeholderString = "Unlock pass"
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
-
-        guard alert.runModal() == .alertFirstButtonReturn,
-              let key = matchUnlockPass(field.stringValue) else {
-            return nil
-        }
-        return key
-    }
-
     private var supportDirectory: URL {
-        AgentWatchIdentity.applicationSupportDirectory()
+        supportOverride ?? AgentWatchIdentity.applicationSupportDirectory()
     }
 
     private var heartbeatURL: URL {
@@ -1072,10 +777,23 @@ final class SupervisorLockStore {
 
 @MainActor
 final class AgentWatchAppDelegate: NSObject, NSApplicationDelegate {
+    private var launchedAtLogin = false
+    static func isLoginLaunch(_ event: NSAppleEventDescriptor?) -> Bool {
+        event?.eventID == kAEOpenApplication && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+    }
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        launchedAtLogin = Self.isLoginLaunch(NSAppleEventManager.shared().currentAppleEvent)
+    }
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { !launchedAtLogin }
     func applicationDidFinishLaunching(_ notification: Notification) {
         StudioBackgroundService.shared.start()
         SupervisorLockStore.shared.start()
         DesktopAppActivityCollector.shared.start()
+        launchedAtLogin = launchedAtLogin || Self.isLoginLaunch(NSAppleEventManager.shared().currentAppleEvent)
+        if launchedAtLogin {
+            // Login starts the menu-bar/background services without taking focus.
+            DispatchQueue.main.async { NSApp.hide(nil) }
+        }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 

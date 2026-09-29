@@ -48,7 +48,7 @@ struct AutomaticReportDeliveryView: View {
     }
     private func prepare(drive: Bool) {
         guard reviewed, let identity = SupervisorLockStore.shared.reportIdentity,
-              identity.employeeID == draft.employee.employeeID else { error = "Cần nhập đúng key của report."; return }
+              identity.employeeID == draft.employee.employeeID else { error = "Hồ sơ trên máy không khớp với báo cáo đang chọn."; return }
         do {
             if snapshot == nil { snapshot = try ReportSnapshotStore.local.save(draft, reviewedBy: identity.employeeID) }
             step = drive ? .drive : .gmail

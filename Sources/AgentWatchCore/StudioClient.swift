@@ -4,7 +4,7 @@ import CryptoKit
 public enum StudioError: String, Error, LocalizedError, Sendable, Equatable, Codable {
     case invalidOrigin, invalidKey, incompatibleVersion, invalidResponse, redirectDenied
     case permissionDenied, quotaExceeded, rateLimited, serverUnavailable, upstreamUnavailable, offline
-    case storage, identityChanged, disconnectFirst
+    case storage, keychainApprovalRequired, identityChanged, disconnectFirst
 
     public var errorDescription: String? {
         switch self {
@@ -19,6 +19,7 @@ public enum StudioError: String, Error, LocalizedError, Sendable, Equatable, Cod
         case .serverUnavailable: "Studio hiện chưa sẵn sàng. Thử kiểm tra lại sau."
         case .upstreamUnavailable: "Nhà cung cấp AI hiện chưa sẵn sàng."
         case .offline: "Chưa kết nối được Studio. Dữ liệu cũ, nếu có, chưa được cập nhật."
+        case .keychainApprovalRequired: "macOS cần cho phép đọc key Studio. Bấm Cho phép Keychain ở phần kết nối."
         case .storage: "Không đọc hoặc lưu được key trong Keychain. Kiểm tra trạng thái mở khóa của máy rồi thử lại."
         case .identityChanged: "Danh tính server trả về đã thay đổi. Ngắt kết nối và kiểm tra lại tài khoản trước khi kết nối lại."
         case .disconnectFirst: "Ngắt kết nối hiện tại trước khi chuyển sang Studio hoặc tài khoản khác."
@@ -141,7 +142,8 @@ public final class StudioURLSessionTransport: NSObject, StudioHTTPTransport, URL
         let (stream, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse, let responseURL = http.url, origin.contains(responseURL),
               http.expectedContentLength <= StudioClient.maxResponseBytes else { throw StudioError.invalidResponse }
-        if (300..<400).contains(http.statusCode) { throw StudioError.redirectDenied }
+        // 304 is a conditional-read result, not a redirect. The caller validates its cached value.
+        if http.statusCode != 304, (300..<400).contains(http.statusCode) { throw StudioError.redirectDenied }
         var body = Data()
         for try await byte in stream {
             guard body.count < StudioClient.maxResponseBytes else { throw StudioError.invalidResponse }
@@ -203,7 +205,10 @@ public struct StudioClient: StudioConnecting {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let previous { request.setValue("\"" + previous.revision + "\"", forHTTPHeaderField: "If-None-Match") }
         let response = try await transport.send(request, origin: origin)
-        if response.status == 304, let previous { try previous.validate(); return previous }
+        if response.status == 304 {
+            guard let previous else { throw StudioError.invalidResponse }
+            try previous.validate(); return previous
+        }
         if response.status == 401 { throw StudioError.invalidKey }
         if response.status == 403 { throw StudioError.permissionDenied }
         if response.status == 404 { throw StudioError.incompatibleVersion }

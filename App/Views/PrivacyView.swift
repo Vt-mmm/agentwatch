@@ -98,7 +98,7 @@ struct PrivacyView: View {
                     .font(ClaudeFont.heading(13))
                     .foregroundStyle(Claude.textPrimary)
             }
-            Text("Log agent được đọc cục bộ. Máy đã gắn key ghi tên ứng dụng ở phía trước, thời gian và trạng thái có tương tác gần đây/không thao tác. AgentWatch tiếp tục ghi nền khi đóng cửa sổ hoặc đang chờ key mở khóa; dừng khi máy ngủ hoặc app thoát. Không thu nội dung cửa sổ, lịch sử web, ảnh màn hình hay phím gõ. Lịch sử trước khi bật thu thập không có sẵn.")
+            Text("Log agent được đọc cục bộ. AgentWatch ghi tên ứng dụng ở phía trước, thời gian và trạng thái có tương tác gần đây/không thao tác. AgentWatch tiếp tục ghi nền khi đóng cửa sổ; dừng khi máy ngủ hoặc app thoát. Không thu nội dung cửa sổ, lịch sử web, ảnh màn hình hay phím gõ. Lịch sử trước khi bật thu thập không có sẵn.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
         }

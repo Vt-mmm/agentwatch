@@ -55,7 +55,7 @@ final class DesktopAppActivityCollector {
         appID = foreground?.bundleIdentifier ?? foreground?.localizedName.map { "local-app:" + $0 }
         appName = foreground?.localizedName
         lastInteraction = interaction
-        status = identity == nil ? "Chưa gắn key cho máy; chưa ghi nhận ứng dụng" : suspended ? "Tạm dừng khi máy ngủ hoặc phiên không hoạt động" : "Đang ghi ứng dụng · " + (appName ?? "Chưa rõ app") + " · " + interaction.label
+        status = identity == nil ? "Chưa đọc được hồ sơ trên máy; chưa ghi nhận ứng dụng" : suspended ? "Tạm dừng khi máy ngủ hoặc phiên không hoạt động" : "Đang ghi ứng dụng · " + (appName ?? "Chưa rõ app") + " · " + interaction.label
     }
     func flush() async {
         sample()

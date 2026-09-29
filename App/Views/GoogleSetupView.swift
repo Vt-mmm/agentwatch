@@ -50,7 +50,7 @@ struct GoogleSetupView: View {
                             HStack {
                                 VStack(alignment: .leading) {
                                     Text("Thư mục Drive của bạn").font(.headline)
-                                    Text(memberStatus.isEmpty ? "Chưa gắn thư mục với key" : memberStatus).foregroundStyle(hasBinding ? Color.green : Color.secondary)
+                                    Text(memberStatus.isEmpty ? "Chưa gắn thư mục báo cáo" : memberStatus).foregroundStyle(hasBinding ? Color.green : Color.secondary)
                                 }
                                 Spacer()
                                 if !hasBinding {
@@ -105,7 +105,7 @@ struct GoogleSetupView: View {
         return value.isEmpty ? "Chưa cấu hình tổ chức" : value
     }
     private func bindMember(usePicker: Bool) {
-        guard let identity = SupervisorLockStore.shared.reportIdentity else { error = "Nhập key của máy trước khi gắn thư mục."; return }
+        guard let identity = SupervisorLockStore.shared.reportIdentity else { error = "Chưa đọc được thông tin báo cáo trên máy."; return }
         memberBusy = true; error = nil
         operation = Task {
             defer { memberBusy = false }

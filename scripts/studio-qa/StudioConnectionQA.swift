@@ -13,8 +13,8 @@ private actor FixtureClient: StudioConnecting, StudioReporting, StudioSessionRep
     func setOffline() { offline = true }
     func connect(origin: StudioOrigin, key: String) async throws -> StudioConnectionSnapshot {
         if offline { throw StudioError.offline }
-        let identity = StudioIdentity(user: StudioUser(id: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!, displayName: "Nhân viên mẫu", role: "member", active: true, version: 1), orgID: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, apiVersion: "studio/v1")
-        return StudioConnectionSnapshot(identity: identity, capabilities: StudioCapabilities(apiVersion: "studio/v1", protocols: [], auth: ["bearer"]), models: .available([StudioModel(id: "claude-haiku", displayName: "Claude Haiku", ownedBy: "claude", nativeProtocol: "messages")]))
+        let identity = StudioIdentity(user: StudioUser(id: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!, displayName: CommandLine.arguments.contains("long") ? "Nguyễn Hoàng Anh · nhóm phát triển nền tảng" : "Nhân viên mẫu", role: "member", active: true, version: 1, teamID: UUID(), teamName: "Trust WOW · Engineering"), orgID: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, apiVersion: "studio/v1")
+        return StudioConnectionSnapshot(identity: identity, capabilities: StudioCapabilities(apiVersion: "studio/v1", protocols: [], auth: ["bearer"]), models: .available([StudioModel(id: "claude-haiku", displayName: "Claude Haiku", ownedBy: "claude", nativeProtocol: "messages"), StudioModel(id: "codex-fixture", displayName: "Codex (QA)", ownedBy: "codex", nativeProtocol: "responses")]))
     }
     func sessionUsage(origin: StudioOrigin, key: String, identity: StudioIdentity, provider: StudioCLIProvider, digest: String, range: Range<Date>) async throws -> StudioSessionReport {
         let date = ISO8601DateFormatter(); date.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -44,14 +44,22 @@ private actor FixtureClient: StudioConnecting, StudioReporting, StudioSessionRep
     }
 
 }
+private actor FixtureConfigurationTransport: StudioHTTPTransport {
+    func send(_ request: URLRequest, origin: StudioOrigin) async throws -> StudioHTTPResponse {
+        .init(status: 200, body: Data("""
+        {"schema_version":1,"revision":"\(String(repeating: "a", count: 64))","org_id":"00000000-0000-4000-8000-000000000001","user":{"id":"00000000-0000-4000-8000-000000000002","display_name":"Fixture","role":"member","active":true,"version":1,"team_id":"00000000-0000-4000-8000-000000000003","team_name":"Fixture"},"key_id":"00000000-0000-4000-8000-000000000004","expires_at":"2099-01-01T00:00:00Z","refresh_seconds":300,"models":[],"codex_catalog":{"models":[]}}
+        """.utf8))
+    }
+}
 @MainActor private final class FixtureKeys: StudioKeyStorage {
     func load(profileID: String) throws -> String? { "fixture_key" }
     func save(_ key: String, profileID: String) throws {}
     func delete(profileID: String) throws {}
 }
 @MainActor private final class FixtureSettings: StudioSettingsStorage {
-    func load() throws -> StudioProfile? { nil }
-    func save(_ profile: StudioProfile?) {}
+    var profile: StudioProfile?
+    func load() throws -> StudioProfile? { profile }
+    func save(_ profile: StudioProfile?) { self.profile = profile }
 }
 @MainActor private final class FixtureCache: StudioDashboardCaching {
     func load(profile: StudioProfile) throws -> StudioDashboardSnapshot? { nil }
@@ -67,7 +75,8 @@ private actor FixtureClient: StudioConnecting, StudioReporting, StudioSessionRep
         app.setActivationPolicy(.prohibited)
         Task { @MainActor in
             let client = FixtureClient()
-            let store = StudioConnectionStore(client: client, keys: FixtureKeys(), settings: FixtureSettings(), cache: FixtureCache())
+            let settings = FixtureSettings()
+            let store = StudioConnectionStore(client: client, keys: FixtureKeys(), settings: settings, cache: FixtureCache())
             if CommandLine.arguments.contains("connected") { await store.connect(origin: "https://studio.example.com", key: "fixture_key") }
             if CommandLine.arguments.contains("stale") { await client.setOffline(); await store.refresh() }
             let launcher = CommandLine.arguments.contains("launcher")
@@ -92,10 +101,21 @@ private actor FixtureClient: StudioConnecting, StudioReporting, StudioSessionRep
                 try! Data(unknown.utf8).write(to: project.appendingPathComponent("00000000-0000-4000-8000-000000000004.jsonl"))
             }
             let disconnect = CommandLine.arguments.contains("disconnect")
-            let height: CGFloat = disconnect ? 530 : localLogs ? 900 : launcher ? 620 : (CommandLine.arguments.contains("connected") && !CommandLine.arguments.contains("stale") ? 2300 : 790)
-            let content: AnyView = disconnect ? AnyView(StudioDisconnectSheet(origin: "https://studio.example.com", running: 2, unverified: 1, incomplete: true, sessions: ["claude · claude-haiku", "codex · studio-codex"], cancel: {}, choose: { _ in })) : localLogs ? AnyView(StudioLocalLogsView(reader: StudioLocalLogReader(directory: fixtureRoot)).padding(20)) : launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView())
-            let view = NSHostingView(rootView: content.environment(store).frame(width: 720, height: height).background(Claude.backgroundGradient).environment(\.colorScheme, .light))
-            let window = FixtureWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: height), styleMask: [.borderless], backing: .buffered, defer: false)
+            let suite = "studio-render-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let sync = StudioSyncStore(defaults: defaults, client: StudioClient(transport: FixtureConfigurationTransport()), settings: settings, keys: FixtureKeys())
+            sync.directories = Dictionary(uniqueKeysWithValues: StudioSyncTarget.allCases.map { ($0.rawValue, fixtureRoot.appendingPathComponent($0.rawValue).path) })
+            sync.selected = [.claude, .codex]
+            if CommandLine.arguments.contains("no-grants") { await sync.synchronize() }
+            let section: StudioSection = CommandLine.arguments.contains("usage") ? .usage : CommandLine.arguments.contains("diagnostics") ? .diagnostics : .tools
+            let width: CGFloat = CommandLine.arguments.contains("narrow") ? 620 : 860
+            let height: CGFloat = disconnect ? 530 : localLogs ? 900 : launcher ? 620 : CommandLine.arguments.contains("short") ? 460 : 850
+            let content: AnyView = disconnect ? AnyView(StudioDisconnectSheet(origin: "https://studio.example.com", running: 2, unverified: 1, incomplete: true, sessions: ["claude · claude-haiku", "codex · studio-codex"], cancel: {}, choose: { _ in })) : localLogs ? AnyView(StudioLocalLogsView(reader: StudioLocalLogReader(directory: fixtureRoot)).padding(20)) : launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView(sync: sync, section: section, logReader: StudioLocalLogReader(directory: fixtureRoot)))
+            let dark = CommandLine.arguments.contains("dark")
+            let view = NSHostingView(rootView: content.environment(store).frame(width: width, height: height).background(Claude.backgroundGradient).environment(\.colorScheme, dark ? .dark : .light))
+            view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            let window = FixtureWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = view
             view.layoutSubtreeIfNeeded()
             try? await Task.sleep(for: .milliseconds(300))

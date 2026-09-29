@@ -43,7 +43,7 @@ public enum DailyReportRenderer {
         if let desktop = report.desktopActivity {
             let lines = desktop.apps.map { "\($0.name): \(Int($0.seconds / 60)) phút \(Int($0.seconds) % 60) giây ở phía trước màn hình." }
             let start = desktop.collectionStartedAt.map { dateLabel($0, zone: report.period.timeZone, format: "HH:mm dd/MM/yyyy") } ?? "chưa có ghi nhận"
-            result.append(Block(title: "Ứng dụng trên máy", text: (lines.isEmpty ? "Chưa có lịch sử ứng dụng cho ngày này." : lines.joined(separator: "\n")) + "\nBắt đầu có dữ liệu: \(start). Chỉ gồm khoảng AgentWatch chạy và đã nhập key; có thể gồm thời gian để ứng dụng mở nhưng không thao tác. Không phải giờ công; không khôi phục lịch sử trước khi bật thu thập."))
+            result.append(Block(title: "Ứng dụng trên máy", text: (lines.isEmpty ? "Chưa có lịch sử ứng dụng cho ngày này." : lines.joined(separator: "\n")) + "\nBắt đầu có dữ liệu: \(start). Chỉ gồm khoảng AgentWatch đang chạy; có thể gồm thời gian để ứng dụng mở nhưng không thao tác. Không phải giờ công; không khôi phục lịch sử trước khi bật thu thập."))
         }
         result += activityBlocks(report)
         let cost = report.costCoverage == .unavailable ? "Chưa có dữ liệu chi phí" : String(format: "$%.4f", NSDecimalNumber(decimal: report.knownCostSubtotal).doubleValue)

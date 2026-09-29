@@ -150,13 +150,13 @@ struct MenuBarSummaryView: View {
     private var lockBlock: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(supervisorLock.isLocked ? Claude.orange : Claude.done)
+                .fill(Claude.done)
                 .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 1) {
-                Text(supervisorLock.isLocked ? "Supervisor lock on" : "Enrollment required")
+                Text("Agent Watch đang chạy nền")
                     .font(ClaudeFont.body(12))
                     .foregroundStyle(Claude.textPrimary)
-                Text(supervisorLock.lockedByLabel ?? "Open window to enroll this machine")
+                Text(supervisorLock.loginItemStatus)
                     .font(ClaudeFont.mono(10))
                     .foregroundStyle(Claude.textMuted)
             }
@@ -176,7 +176,7 @@ struct MenuBarSummaryView: View {
                 .font(ClaudeFont.body(12))
                 .foregroundStyle(Claude.orange)
             Spacer()
-            Button("Quit…") {
+            Button("Quit") {
                 supervisorLock.requestQuit(source: "menu bar")
             }
                 .buttonStyle(.plain)

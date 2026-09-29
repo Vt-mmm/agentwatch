@@ -1,7 +1,7 @@
 import Foundation
 
-/// Derived only after the existing app-open key verifier succeeds. Neither the
-/// enrollment key nor its authentication digest is included in report metadata.
+/// Stable report identity. Legacy enrollment-derived IDs remain readable;
+/// new installations create a local ID without an app-open or unlock key.
 public struct ReportEnrollmentIdentity: Sendable, Equatable {
     public let employeeID: String
     public let name: String
@@ -10,6 +10,24 @@ public struct ReportEnrollmentIdentity: Sendable, Equatable {
               !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw GoogleServiceError.invalidConfiguration }
         employeeID = "member-" + ReportEncoding.digest(Data(("agentwatch-report-member-v1|" + enrollmentHash.lowercased()).utf8))
         name = label.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    public init(employeeID: String, name: String) throws {
+        guard employeeID.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$", options: .regularExpression) != nil,
+              !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw GoogleServiceError.invalidConfiguration }
+        self.employeeID = employeeID
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Preserve existing report history and Drive bindings; never generate an auth credential.
+    public static func local(defaults: UserDefaults, deviceName: String) throws -> Self {
+        let savedID = defaults.string(forKey: "dailyReport.employeeID")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedName = defaults.string(forKey: "dailyReport.displayName")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let id = savedID.flatMap { $0.isEmpty ? nil : $0 } ?? "member-" + ReportEncoding.digest(Data(UUID().uuidString.utf8))
+        let name = savedName.flatMap { $0.isEmpty ? nil : $0 } ?? deviceName
+        let identity = try Self(employeeID: id, name: name)
+        defaults.set(identity.employeeID, forKey: "dailyReport.employeeID")
+        defaults.set(identity.name, forKey: "dailyReport.displayName")
+        return identity
     }
     public var folderName: String {
         name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: "\\", with: "-")
@@ -37,7 +55,7 @@ public struct ReportFolderBindingStore: Sendable {
     public func requireMatch(organizationID: String, employeeID: String, destination: DriveDestination) throws {
         guard employeeID.hasPrefix("member-") else { return } // Existing manual profiles retain their workflow.
         guard let binding = try read(organizationID: organizationID, employeeID: employeeID, accountKey: destination.accountKey),
-              binding.folderID == destination.folderID else { throw ReportValidationError.invalid("Đích upload không khớp thư mục đã gắn với key.") }
+              binding.folderID == destination.folderID else { throw ReportValidationError.invalid("Đích upload không khớp thư mục của hồ sơ báo cáo.") }
     }
     public func bind(organizationID: String, identity: ReportEnrollmentIdentity, accountKey: String, folder: DriveFolderAccess, now: Date = Date()) throws -> ReportFolderBinding {
         guard !organizationID.isEmpty, !accountKey.isEmpty, DriveAPI.validID(folder.id) else { throw GoogleServiceError.invalidConfiguration }
@@ -46,11 +64,11 @@ public struct ReportFolderBindingStore: Sendable {
         return try files.transaction {
             let current = try allUnlocked()
             if let existing = current.first(where: { $0.id == proposed.id }) {
-                guard existing.folderID == proposed.folderID else { throw ReportValidationError.invalid("Key này đã gắn với thư mục khác. Dùng thư mục đã gắn; việc chuyển đích cần quản trị viên xử lý.") }
+                guard existing.folderID == proposed.folderID else { throw ReportValidationError.invalid("Hồ sơ này đã gắn với thư mục khác. Dùng thư mục đã gắn; việc chuyển đích cần quản trị viên xử lý.") }
                 return existing
             }
             guard !current.contains(where: { $0.organizationID == organizationID && $0.folderID == folder.id && $0.employeeID != identity.employeeID }) else {
-                throw ReportValidationError.invalid("Thư mục này đã gắn với key của người khác trên máy.")
+                throw ReportValidationError.invalid("Thư mục này đã gắn với hồ sơ khác trên máy.")
             }
             try files.write(ReportEncoding.encode(proposed), to: files.root.appendingPathComponent(proposed.id + ".json"))
             return proposed

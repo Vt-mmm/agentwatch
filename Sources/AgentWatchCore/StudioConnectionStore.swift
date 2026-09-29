@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import Security
+import LocalAuthentication
 
 public struct StudioProfile: Codable, Equatable, Sendable {
     public let origin: StudioOrigin
@@ -19,12 +20,20 @@ public struct StudioProfile: Codable, Equatable, Sendable {
 
 @MainActor public protocol StudioKeyStorage {
     func load(profileID: String) throws -> String?
+    func load(profileID: String, allowInteraction: Bool) throws -> String?
     func save(_ key: String, profileID: String) throws
     func delete(profileID: String) throws
+}
+extension StudioKeyStorage {
+    public func load(profileID: String, allowInteraction: Bool) throws -> String? { try load(profileID: profileID) }
 }
 @MainActor public protocol StudioSettingsStorage {
     func load() throws -> StudioProfile?
     func save(_ profile: StudioProfile?)
+    func clearCredentialBlock()
+}
+extension StudioSettingsStorage {
+    public func clearCredentialBlock() {}
 }
 
 /// Separate from provider OAuth, personal CLI credentials and supervisor enrollment.
@@ -42,10 +51,23 @@ public struct StudioProfile: Codable, Equatable, Sendable {
     }
     public func load(profileID: String, allowInteraction: Bool) throws -> String? {
         var q = query(profileID); q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
-        if !allowInteraction { q[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
+        let context = LAContext(); context.interactionNotAllowed = !allowInteraction
+        q[kSecUseAuthenticationContext as String] = context
+        // Existing macOS login-keychain items use the legacy backend, which can
+        // ignore the per-query UI flag. Suppress that UI for this synchronous
+        // read and restore its prior setting; never change an item's ACL.
+        var previousInteraction = DarwinBoolean(false)
+        if !allowInteraction {
+            guard SecKeychainGetUserInteractionAllowed(&previousInteraction) == errSecSuccess,
+                  SecKeychainSetUserInteractionAllowed(false) == errSecSuccess else { throw StudioError.keychainApprovalRequired }
+        }
+        defer { if !allowInteraction { SecKeychainSetUserInteractionAllowed(previousInteraction.boolValue) } }
         var result: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
+        if !allowInteraction && (status == errSecInteractionNotAllowed || status == errSecAuthFailed) {
+            throw StudioError.keychainApprovalRequired
+        }
         guard status == errSecSuccess, let data = result as? Data, let key = String(data: data, encoding: .utf8),
               StudioClient.validKey(key) else { throw StudioError.storage }
         return key
@@ -79,6 +101,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
         do { return try JSONDecoder().decode(StudioProfile.self, from: data) }
         catch { throw StudioError.storage }
     }
+    public func clearCredentialBlock() { defaults.removeObject(forKey: "studio.blockedProfile") }
     public func save(_ profile: StudioProfile?) {
         if let profile { defaults.set(try? JSONEncoder().encode(profile), forKey: name) }
         else { defaults.removeObject(forKey: name) }
@@ -114,7 +137,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
         catch { self.error = .storage; state = .failed }
         if let profile {
             do {
-                if try keys.load(profileID: profile.id) != nil {
+                if try keys.load(profileID: profile.id, allowInteraction: false) != nil {
                     dashboard = try cache.load(profile: profile)
                     if dashboard != nil { dashboardState = .stale; quotaModelID = dashboard?.quotaModel?.id }
                 } else { try cache.delete(profile: profile) }
@@ -137,7 +160,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
             if let profile, profile.id != id { throw StudioError.disconnectFirst }
             let next = try StudioProfile(origin: origin, id: id)
             try keys.save(key, profileID: id)
-            StudioPreferences.applicationDefaults.removeObject(forKey: "studio.blockedProfile")
+            settings.clearCredentialBlock()
             settings.save(next); profile = next; snapshot = result; state = .connected
             await updateDashboard(key: key, result: result, attempt: attempt)
         } catch {
@@ -147,13 +170,13 @@ public struct StudioProfile: Codable, Equatable, Sendable {
         }
     }
 
-    public func refresh() async {
+    public func refresh(allowInteraction: Bool = true) async {
         guard let profile, state != .checking else { return }
         sessionReportsRevision &+= 1; generation &+= 1; let attempt = generation
         error = nil; state = .checking
         if reporting != nil { dashboardState = .loading }
         do {
-            guard let key = try keys.load(profileID: profile.id) else { throw StudioError.invalidKey }
+            guard let key = try keys.load(profileID: profile.id, allowInteraction: allowInteraction) else { throw StudioError.invalidKey }
             let result = try await client.connect(origin: profile.origin, key: key)
             try Task.checkCancellation()
             guard generation == attempt else { return }

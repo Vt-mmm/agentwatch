@@ -1,4 +1,5 @@
 import XCTest
+import Security
 @testable import AgentWatchCore
 
 private let studioOwner = UUID(uuidString: "00000000-0000-4000-8000-000000000002")!
@@ -51,7 +52,58 @@ private actor FixtureStudioClient: StudioConnecting {
     func save(_ profile: StudioProfile?) { self.profile = profile }
 }
 
+@MainActor private final class InteractionTrackingKeys: StudioKeyStorage {
+    var interactions: [Bool] = []
+    func load(profileID: String) throws -> String? { try load(profileID: profileID, allowInteraction: true) }
+    func load(profileID: String, allowInteraction: Bool) throws -> String? {
+        interactions.append(allowInteraction)
+        if !allowInteraction { throw StudioError.keychainApprovalRequired }
+        return fixtureKey
+    }
+    func save(_ key: String, profileID: String) {}
+    func delete(profileID: String) {}
+}
+
 final class StudioClientTests: XCTestCase, @unchecked Sendable {
+    @MainActor func testNoninteractiveKeychainReadRestoresExistingInteractionSetting() throws {
+        var original = DarwinBoolean(false)
+        XCTAssertEqual(SecKeychainGetUserInteractionAllowed(&original), errSecSuccess)
+        defer { SecKeychainSetUserInteractionAllowed(original.boolValue) }
+        let storage = StudioKeychainStorage(testService: "studio-noninteractive-test-" + UUID().uuidString)
+        for allowed in [false, true] {
+            XCTAssertEqual(SecKeychainSetUserInteractionAllowed(allowed), errSecSuccess)
+            XCTAssertNil(try storage.load(profileID: String(repeating: "a", count: 64), allowInteraction: false))
+            var after = DarwinBoolean(false)
+            XCTAssertEqual(SecKeychainGetUserInteractionAllowed(&after), errSecSuccess)
+            XCTAssertEqual(after.boolValue, allowed)
+        }
+    }
+
+    @MainActor func testStartupAndAutomaticRefreshNeverPromptForKeychain() async throws {
+        let keys = InteractionTrackingKeys(), settings = FixtureStudioSettings()
+        let origin = try StudioOrigin("https://studio.test")
+        settings.profile = try StudioProfile(origin: origin, id: origin.profileID(orgID: studioOrg, ownerID: studioOwner))
+        let store = StudioConnectionStore(client: FixtureStudioClient(), keys: keys, settings: settings)
+        XCTAssertEqual(keys.interactions, [false])
+        await store.refresh(allowInteraction: false)
+        XCTAssertEqual(keys.interactions, [false, false])
+        XCTAssertEqual(store.error, .keychainApprovalRequired)
+        await store.refresh()
+        XCTAssertEqual(keys.interactions, [false, false, true])
+        XCTAssertEqual(store.state, .connected)
+    }
+
+    @MainActor func testReconnectClearsOnlyTheInjectedPreferencesCredentialBlock() async throws {
+        let suite = "studio-connect-scope-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("previous-block", forKey: "studio.blockedProfile")
+        let store = StudioConnectionStore(client: FixtureStudioClient(), keys: FixtureStudioKeys(), settings: StudioPreferences(defaults: defaults))
+        await store.connect(origin: "https://studio.test", key: fixtureKey)
+        XCTAssertEqual(store.state, .connected)
+        XCTAssertNil(defaults.string(forKey: "studio.blockedProfile"), "Reconnect must update its own settings namespace, not global application defaults")
+    }
+
     func testRealURLSessionDoesNotForwardEmployeeKeyThroughRedirect() async throws {
         // Two real loopback HTTP listeners. Only a synthetic key is sent. A hard
         // process alarm bounds fixture startup even if the child cannot bind.

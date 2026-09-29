@@ -21,8 +21,11 @@ def run(*args, capture=False):
 
 
 def sha(path):
+    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def main():
@@ -54,6 +57,8 @@ def main():
         run("swift", "scripts/verify-update.swift", public_key, signature, str(zip_path))
 
     if args.action == "prepare":
+        previous = [int(e.text) for e in ET.parse(ROOT / "appcast.xml").iter(f"{{{NS}}}version")]
+        assert not previous or int(build) > max(previous), "Build number must increase"
         assert not directory.exists(), "Artifact directory already exists; preserve it or choose a new version"
         directory.mkdir(parents=True)
         derived = ROOT / ".build" / "upstream-release"
@@ -98,6 +103,9 @@ def main():
     assert manifest["notes_sha256"] == sha(notes)
     for name, expected in manifest["sha256"].items():
         assert sha(directory / name) == expected, f"Changed artifact: {name}"
+    expected_sums = dict(manifest["sha256"])
+    expected_sums[manifest_path.name] = sha(manifest_path)
+    assert (directory / "SHA256SUMS").read_text() == "".join(f"{digest}  {name}\n" for name, digest in expected_sums.items())
     verify_signature(manifest["signature"])
     assets = [zip_path, directory / "agentwatch", manifest_path, directory / "SHA256SUMS"]
     existing_tag = subprocess.run(["git", "rev-parse", "--verify", tag + "^{commit}"], cwd=ROOT, capture_output=True, text=True)

@@ -2,6 +2,25 @@ import Foundation
 import Darwin
 
 public enum StudioCLIPreflight {
+    /// Bulk configuration must not install a catalog schema into an unqualified CLI.
+    /// The version probe receives no employee key and does not send inference.
+    public static func verifyVersion(_ executable: StudioCLIExecutable) async throws {
+        let version = try await Task.detached {
+            let process = Process(), output = Pipe()
+            process.executableURL = executable.url; process.arguments = ["--version"]
+            process.environment = ["HOME": FileManager.default.homeDirectoryForCurrentUser.path,
+                "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", "LANG": "en_US.UTF-8",
+                "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_TELEMETRY": "1"]
+            process.standardOutput = output; process.standardError = FileHandle.nullDevice
+            process.standardInput = FileHandle.nullDevice
+            try process.run()
+            return try readBounded(process, output: output, input: nil)
+        }.value
+        guard String(data: version, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) == executable.provider.qualifiedVersion else {
+            throw StudioCLIError.unsupportedVersion
+        }
+    }
+
     /// Every probe uses the managed profile and receives no employee credential.
     public static func verify(_ plan: StudioCLILaunchPlan) async throws {
         let version = try await capture(plan, arguments: ["--version"])

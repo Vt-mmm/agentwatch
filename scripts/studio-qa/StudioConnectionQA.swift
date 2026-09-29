@@ -2,6 +2,12 @@ import AppKit
 import SwiftUI
 @testable import AgentWatchCore
 
+// Rendering does not register a login item or start the production collectors.
+@MainActor final class SupervisorLockStore {
+    static let shared = SupervisorLockStore()
+    func ensureLaunchAtLogin() {}
+}
+
 private actor FixtureClient: StudioConnecting, StudioReporting, StudioSessionReporting {
     var offline = false
     func setOffline() { offline = true }

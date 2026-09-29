@@ -11,7 +11,7 @@ public enum StudioConfigurationError: Error, LocalizedError {
         case .unsupported: "File cấu hình có cấu trúc chưa hỗ trợ ghép an toàn. Chọn thư mục profile khác."
         case .changed: "File đã thay đổi sau lần kiểm tra. Tải lại trước khi áp dụng hoặc khôi phục."
         case .unsafe: "Đường dẫn cấu hình không an toàn hoặc không có quyền ghi."
-        case .missingCatalog: "Pi chưa có thông số mặc định cho model này. Không tự đoán context window."
+        case .missingCatalog: "CLI chưa có bộ thông số tương thích cho model này. Cần cập nhật bộ model đã được kiểm chứng."
         case .nativeModelUnavailable: "Studio chưa xác minh được tên model gốc. Làm mới danh sách model trước khi cấu hình CLI."
         }
     }
@@ -105,7 +105,7 @@ public enum StudioClientConfiguration {
                 if !section, !trimmed.hasPrefix("#"), let equal = trimmed.firstIndex(of: "=") {
                     let key = trimmed[..<equal].trimmingCharacters(in: .whitespaces)
                     guard key.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil, key != "model_providers" else { throw StudioConfigurationError.unsupported }
-                    if ["model", "model_provider"].contains(key) { continue }
+                    if ["model", "model_provider", "model_catalog_json"].contains(key) { continue }
                     if ["model_context_window", "model_auto_compact_token_limit"].contains(key) { continue }
                     if key == "profile" { throw StudioConfigurationError.unsupported }
                 }
@@ -200,11 +200,13 @@ public enum StudioClientConfiguration {
         var receipt = plan
         if let previous = try read(file) {
             let old = try JSONDecoder().decode(StudioConfigurationPlan.self, from: previous)
-            guard old.tool == plan.tool, Set(old.edits.map(\.file)) == Set(plan.edits.map(\.file)) else { throw StudioConfigurationError.changed }
+            guard old.tool == plan.tool, Set(old.edits.map(\.file)).isSubset(of: Set(plan.edits.map(\.file))) else { throw StudioConfigurationError.changed }
             var merged: [StudioConfigurationEdit] = []
             for edit in plan.edits {
-                guard let original = old.edits.first(where: { $0.file == edit.file }), edit.before == original.after else { throw StudioConfigurationError.changed }
-                merged.append(StudioConfigurationEdit(file: edit.file, before: original.before, after: edit.after))
+                if let original = old.edits.first(where: { $0.file == edit.file }) {
+                    guard edit.before == original.after else { throw StudioConfigurationError.changed }
+                    merged.append(StudioConfigurationEdit(file: edit.file, before: original.before, after: edit.after))
+                } else { merged.append(edit) }
             }
             receipt = StudioConfigurationPlan(edits: merged, tool: plan.tool)
             try privateWrite(JSONEncoder().encode(receipt), to: file)

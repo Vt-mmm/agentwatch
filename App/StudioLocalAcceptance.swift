@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import ServiceManagement
 import AgentWatchCore
 
 // Explicit local acceptance entry point, never part of distributed products.
@@ -8,10 +9,40 @@ enum StudioLocalAcceptance {
     @MainActor static func run(arguments: [String]) async {
         do {
             let args = arguments
+            if args == ["background-status"] {
+                switch SMAppService.mainApp.status {
+                case .enabled: print("login_item_enabled")
+                case .requiresApproval: print("login_item_requires_approval")
+                case .notRegistered: print("login_item_not_registered")
+                default: print("login_item_unavailable")
+                }
+                return
+            }
             guard args.count == 2 else { throw StudioConfigurationError.invalid }
             let stateFile = URL(fileURLWithPath: args[1])
             let settings = StudioPreferences(defaults: StudioPreferences.applicationDefaults)
             let keys = StudioKeychainStorage()
+            if args[0] == "verify-sync" {
+                let state = try JSONDecoder().decode(State.self, from: Data(contentsOf: stateFile))
+                let input = try JSONDecoder().decode(Input.self, from: FileHandle.standardInput.readDataToEndOfFile())
+                guard let target = StudioSyncTarget(rawValue: input.tool), input.origin == "http://127.0.0.1:17922" else { throw StudioConfigurationError.invalid }
+                let suite = "com.vtamm.agentwatch.studio.qa." + state.current.id
+                guard let isolated = UserDefaults(suiteName: suite) else { throw StudioConfigurationError.invalid }
+                defer { isolated.removePersistentDomain(forName: suite) }
+                StudioPreferences(defaults: isolated).save(state.current)
+                let sync = StudioSyncStore(defaults: isolated)
+                sync.selected = [target]; sync.directories = [target.rawValue: input.directory]; sync.enabled = true
+                await sync.synchronize(helper: URL(fileURLWithPath: CommandLine.arguments[0]))
+                guard sync.results.count == 1, sync.results.allSatisfy(\.success) else { throw StudioConfigurationError.invalid }
+                let receipt = StudioClientConfiguration.receiptURL(tool: target.tool, directory: URL(fileURLWithPath: input.directory))
+                defer { try? FileManager.default.removeItem(at: receipt) }
+                let first = try Data(contentsOf: receipt)
+                let at = try receipt.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                await sync.synchronize(helper: URL(fileURLWithPath: CommandLine.arguments[0]))
+                guard sync.results.allSatisfy(\.success), try Data(contentsOf: receipt) == first,
+                      try receipt.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate == at else { throw StudioConfigurationError.changed }
+                print("sync_verified_unchanged_files"); return
+            }
             if args[0] == "cleanup" {
                 let state = try JSONDecoder().decode(State.self, from: Data(contentsOf: stateFile))
                 try keys.delete(profileID: state.current.id)
@@ -31,12 +62,21 @@ enum StudioLocalAcceptance {
             guard FileManager.default.createFile(atPath: stateFile.path, contents: stateData, attributes: [.posixPermissions: 0o600]) else { throw StudioConfigurationError.unsafe }
             try keys.save(input.key, profileID: profile.id); settings.save(profile)
             let catalog = tool == .pi ? try StudioClientConfiguration.catalogModel(for: model, piExecutable: URL(fileURLWithPath: "/opt/homebrew/bin/pi")) : nil
-            let plan = try StudioClientConfiguration.prepare(tool: tool, directory: URL(fileURLWithPath: input.directory), connection: profile, model: model, helper: URL(fileURLWithPath: CommandLine.arguments[0]), piCatalogModel: catalog)
+            let plan: StudioConfigurationPlan
+            if input.all == true {
+                let manifest = try await StudioClient().configuration(origin: origin, key: input.key)
+                try manifest.validate(profile: profile)
+                var native: [String: Data] = [:]
+                if tool == .pi { for item in manifest.models { native[item.id] = try StudioClientConfiguration.catalogModel(for: item, piExecutable: URL(fileURLWithPath: "/opt/homebrew/bin/pi")) } }
+                plan = try StudioClientConfiguration.prepareAll(tool: tool, directory: URL(fileURLWithPath: input.directory), connection: profile, models: manifest.models, helper: URL(fileURLWithPath: CommandLine.arguments[0]), codexCatalog: JSONEncoder().encode(manifest.codexCatalog), piCatalogModels: native)
+            } else {
+                plan = try StudioClientConfiguration.prepare(tool: tool, directory: URL(fileURLWithPath: input.directory), connection: profile, model: model, helper: URL(fileURLWithPath: CommandLine.arguments[0]), piCatalogModel: catalog)
+            }
             try StudioClientConfiguration.apply(plan)
             print("prepared_\(input.tool)_\(model.ownedBy)_context_provider_default")
         } catch { FileHandle.standardError.write(Data("Configuration acceptance failed: \(error.localizedDescription)\n".utf8)); exit(1) }
     }
-    struct Input: Decodable { let origin, key, tool, model, directory: String }
+    struct Input: Decodable { let origin, key, tool, model, directory: String; let all: Bool? }
     struct State: Codable { let previous: StudioProfile?; let current: StudioProfile }
 }
 

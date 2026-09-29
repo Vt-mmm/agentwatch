@@ -3,6 +3,7 @@ import AgentWatchCore
 
 struct StudioConnectionView: View {
     @Environment(StudioConnectionStore.self) private var studio
+    @State private var sync = StudioSyncStore.shared
     @State private var origin = ""
     @State private var key = ""
     @State private var editingKey = false
@@ -38,13 +39,13 @@ struct StudioConnectionView: View {
                         VStack(spacing: 12) { account(snapshot); models(snapshot) }.padding(.top, 10)
                     }.font(ClaudeFont.body())
                 }
-                if studio.profile != nil {
+                if studio.profile != nil && !editingKey {
                     StudioConfigurationView()
                     DisclosureGroup("Mở CLI từ Agent Watch (tuỳ chọn)") { StudioLauncherView().padding(.top, 10) }
                         .font(ClaudeFont.body())
                     StudioDashboardView(); StudioLocalLogsView()
                 }
-                Text("Sessions, Tasks và báo cáo local vẫn dùng dữ liệu riêng trên máy. File cấu hình CLI chỉ thay đổi khi chọn Áp dụng; có thể khôi phục bản trước đó.")
+                Text("Chỉ đồng bộ công cụ đã chọn. Phiên CLI đang chạy giữ model và context hiện tại.")
                     .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
             }
             .padding(20)
@@ -105,6 +106,7 @@ struct StudioConnectionView: View {
         Task { @MainActor in
             defer { disconnecting = false }
             do {
+                sync.reset()
                 let result = try await StudioDisconnect.perform(store: studio, expected: review.profile, choice: choice)
                 disconnectMessage = result.message
             } catch StudioProcessError.busy {
@@ -134,16 +136,21 @@ struct StudioConnectionView: View {
                 .textFieldStyle(.roundedBorder).accessibilityLabel("Key nhân viên Studio")
             Text("Key được lưu trong Keychain của máy sau khi xác minh tài khoản. Chỉ nhập địa chỉ gốc, không kèm đường dẫn.")
                 .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
-            Button("Kiểm tra và kết nối") {
+            StudioConfigurationView(showApply: false)
+            Button("Kết nối và áp dụng") {
                 let submittedOrigin = origin, submittedKey = key
                 key = ""
                 Task {
                     await studio.connect(origin: submittedOrigin, key: submittedKey)
-                    if studio.state == .connected { editingKey = false }
+                    if studio.state == .connected {
+                        editingKey = false; sync.enabled = true
+                        StudioBackgroundService.shared.start()
+                        await sync.synchronize(force: true)
+                    }
                 }
             }
             .buttonStyle(.borderedProminent).tint(Claude.orange)
-            .disabled(origin.isEmpty || key.isEmpty || studio.state == .checking)
+            .disabled(origin.isEmpty || key.isEmpty || studio.state == .checking || sync.busy || sync.selected.isEmpty)
         }.claudeCard()
     }
     private func account(_ snapshot: StudioConnectionSnapshot) -> some View {

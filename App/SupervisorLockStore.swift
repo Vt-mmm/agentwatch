@@ -752,7 +752,7 @@ final class SupervisorLockStore {
         )
     }
 
-    private func ensureLaunchAtLogin() {
+    func ensureLaunchAtLogin() {
         if #available(macOS 13.0, *) {
             let service = SMAppService.mainApp
             switch service.status {
@@ -1073,9 +1073,12 @@ final class SupervisorLockStore {
 @MainActor
 final class AgentWatchAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        StudioBackgroundService.shared.start()
         SupervisorLockStore.shared.start()
         DesktopAppActivityCollector.shared.start()
     }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         SupervisorLockStore.shared.shouldTerminate(source: "application")
     }

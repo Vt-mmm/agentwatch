@@ -137,6 +137,7 @@ public struct StudioProfile: Codable, Equatable, Sendable {
             if let profile, profile.id != id { throw StudioError.disconnectFirst }
             let next = try StudioProfile(origin: origin, id: id)
             try keys.save(key, profileID: id)
+            StudioPreferences.applicationDefaults.removeObject(forKey: "studio.blockedProfile")
             settings.save(next); profile = next; snapshot = result; state = .connected
             await updateDashboard(key: key, result: result, attempt: attempt)
         } catch {

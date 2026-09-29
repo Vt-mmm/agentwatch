@@ -196,6 +196,27 @@ public struct StudioClient: StudioConnecting {
         }
         return StudioConnectionSnapshot(identity: identity, capabilities: capabilities, models: models)
     }
+    public func configuration(origin: StudioOrigin, key: String, previous: StudioManifest?) async throws -> StudioManifest {
+        guard Self.validKey(key) else { throw StudioError.invalidKey }
+        var request = URLRequest(url: origin.url(path: "studio/v1/client-config"))
+        request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let previous { request.setValue("\"" + previous.revision + "\"", forHTTPHeaderField: "If-None-Match") }
+        let response = try await transport.send(request, origin: origin)
+        if response.status == 304, let previous { try previous.validate(); return previous }
+        if response.status == 401 { throw StudioError.invalidKey }
+        if response.status == 403 { throw StudioError.permissionDenied }
+        if response.status == 404 { throw StudioError.incompatibleVersion }
+        if response.status == 429 { throw StudioError.rateLimited }
+        if (300..<400).contains(response.status) { throw StudioError.redirectDenied }
+        guard response.status == 200 else { throw StudioError.serverUnavailable }
+        guard response.body.count <= Self.maxResponseBytes,
+              response.contentType.split(separator: ";").first?.trimmingCharacters(in: .whitespaces) == "application/json" else { throw StudioError.invalidResponse }
+        let value: StudioManifest
+        do { value = try Self.apiDecoder().decode(StudioManifest.self, from: response.body) }
+        catch { throw StudioError.invalidResponse }
+        try value.validate(); return value
+    }
     func get<T: Decodable>(_ origin: StudioOrigin, _ path: String, key: String?, query: [URLQueryItem] = []) async throws -> T {
         if let key, !Self.validKey(key) { throw StudioError.invalidKey }
         var components = URLComponents(url: origin.url(path: path), resolvingAgainstBaseURL: false)!

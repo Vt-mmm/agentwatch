@@ -25,7 +25,7 @@ public enum StudioCLIPreflight {
     static func validateCodexConfiguration(_ data: Data, plan: StudioCLILaunchPlan) throws {
         guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let result = response["result"] as? [String: Any], let config = result["config"] as? [String: Any],
-              config["model"] as? String == plan.model.id, config["model_provider"] as? String == "agent_studio",
+              config["model"] as? String == plan.model.cliModelID, config["model_provider"] as? String == "agent_studio",
               config["sandbox_mode"] as? String == "workspace-write", config["approval_policy"] as? String == "on-request",
               config["allow_login_shell"] as? Bool == false, config["web_search"] as? String == "disabled",
               let sandbox = config["sandbox_workspace_write"] as? [String: Any], sandbox["network_access"] as? Bool == false,

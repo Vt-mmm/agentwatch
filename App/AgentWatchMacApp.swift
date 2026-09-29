@@ -3,7 +3,22 @@
 import SwiftUI
 import AgentWatchCore
 
-@main
+@main enum AgentWatchEntry {
+    @MainActor static func main() async {
+        let args = Array(CommandLine.arguments.dropFirst())
+        if args.first == "credential" {
+            exit(StudioCredentialCommand.run(arguments: Array(args.dropFirst())))
+        }
+        #if DEBUG
+        if args.first == "--studio-local-acceptance" {
+            await StudioLocalAcceptance.run(arguments: Array(args.dropFirst()))
+            return
+        }
+        #endif
+        AgentWatchMacApp.main()
+    }
+}
+
 struct AgentWatchMacApp: App {
     @NSApplicationDelegateAdaptor(AgentWatchAppDelegate.self) private var appDelegate
     @State private var watcher = SessionWatcher()

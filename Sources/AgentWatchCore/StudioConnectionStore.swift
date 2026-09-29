@@ -38,7 +38,11 @@ public struct StudioProfile: Codable, Equatable, Sendable {
          kSecAttrAccount as String: id, kSecAttrSynchronizable as String: false]
     }
     public func load(profileID: String) throws -> String? {
+        try load(profileID: profileID, allowInteraction: true)
+    }
+    public func load(profileID: String, allowInteraction: Bool) throws -> String? {
         var q = query(profileID); q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
+        if !allowInteraction { q[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
         var result: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
@@ -63,6 +67,10 @@ public struct StudioProfile: Codable, Equatable, Sendable {
 }
 
 @MainActor public final class StudioPreferences: StudioSettingsStorage {
+    public static var applicationDefaults: UserDefaults {
+        let id = "com.vtamm.claudewatch.ClaudeWatchMac"
+        return Bundle.main.bundleIdentifier == id ? .standard : (UserDefaults(suiteName: id) ?? .standard)
+    }
     private let defaults: UserDefaults
     private let name = "studio.activeProfile.v1"
     public init(defaults: UserDefaults = .standard) { self.defaults = defaults }

@@ -164,7 +164,7 @@ public struct StudioCLILaunchPlan: Sendable, CustomStringConvertible {
     public var description: String { "StudioCLILaunchPlan(provider: \(executable.provider.rawValue), credentials: omitted)" }
     public init(executable: StudioCLIExecutable, profile: StudioCLIProfile, project: URL, model: StudioModel, resumeID: UUID? = nil, prompt: String? = nil) throws {
         guard executable.provider == profile.provider, model.ownedBy == profile.provider.rawValue, model.nativeProtocol == profile.provider.nativeProtocol,
-              !model.id.isEmpty, model.id.utf8.count <= 160, !model.id.contains(where: { $0.isNewline || $0.asciiValue == 0 }),
+              !model.cliModelID.isEmpty, model.cliModelID.utf8.count <= 160, (model.contextMode == nil || model.clientModel == model.providerModel && model.clientModel != nil), !model.cliModelID.contains(where: { $0.isNewline || $0.asciiValue == 0 }),
               project.isFileURL, (try? project.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true,
               !project.path.contains("\u{0}"), prompt?.contains("\u{0}") != true else { throw StudioCLIError.invalidArguments }
         self.executable = executable; self.profile = profile; self.project = project.resolvingSymlinksInPath()
@@ -174,17 +174,17 @@ public struct StudioCLILaunchPlan: Sendable, CustomStringConvertible {
         ["HOME": profile.home.path, "TMPDIR": profile.temporary.path, "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8", "TERM": "xterm-256color", "SHELL": "/bin/zsh",
          "CODEX_HOME": profile.config.path, "CLAUDE_CONFIG_DIR": profile.config.path,
          "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_AUTOUPDATER": "1", "DISABLE_TELEMETRY": "1", "DISABLE_ERROR_REPORTING": "1",
-         "ANTHROPIC_BASE_URL": profile.connection.origin.value, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"]
+         "ANTHROPIC_BASE_URL": profile.connection.origin.value, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": String(min(model.maxOutputTokens ?? 32000, 32000))]
     }
     public var codexOverrides: [String] {
-        let pairs = ["model=" + StudioCLIProfiles.quoted(model.id), "model_provider=\"agent_studio\"", "sandbox_mode=\"workspace-write\"", "approval_policy=\"on-request\"", "sandbox_workspace_write.network_access=false", "allow_login_shell=false", "web_search=\"disabled\"", "check_for_update_on_startup=false", "analytics.enabled=false", "feedback.enabled=false", "features.shell_snapshot=false", "features.multi_agent=false", "features.apps=false", "features.remote_plugin=false", "features.hooks=false", "features.enable_request_compression=false", "model_providers.agent_studio={name=\"Agent Studio\",base_url=\(StudioCLIProfiles.quoted(profile.connection.origin.value + "/v1")),env_key=\"AGENTWATCH_STUDIO_KEY\",requires_openai_auth=false,wire_api=\"responses\",request_max_retries=0,stream_max_retries=0}", "shell_environment_policy={inherit=\"core\",ignore_default_excludes=false,experimental_use_profile=false,exclude=[\"*KEY*\",\"*TOKEN*\",\"*SECRET*\"]}"]
+        let pairs = ["model=" + StudioCLIProfiles.quoted(model.cliModelID), "model_provider=\"agent_studio\"", "sandbox_mode=\"workspace-write\"", "approval_policy=\"on-request\"", "sandbox_workspace_write.network_access=false", "allow_login_shell=false", "web_search=\"disabled\"", "check_for_update_on_startup=false", "analytics.enabled=false", "feedback.enabled=false", "features.shell_snapshot=false", "features.multi_agent=false", "features.apps=false", "features.remote_plugin=false", "features.hooks=false", "features.enable_request_compression=false", "model_providers.agent_studio={name=\"Agent Studio\",base_url=\(StudioCLIProfiles.quoted(profile.connection.origin.value + "/v1")),env_key=\"AGENTWATCH_STUDIO_KEY\",requires_openai_auth=false,wire_api=\"responses\",request_max_retries=0,stream_max_retries=0}", "shell_environment_policy={inherit=\"core\",ignore_default_excludes=false,experimental_use_profile=false,exclude=[\"*KEY*\",\"*TOKEN*\",\"*SECRET*\"]}"]
         return pairs.flatMap { ["-c", $0] }
     }
     public var arguments: [String] {
         // Built-in /compact must remain available. Bare mode, empty setting
         // sources and the explicit company profile provide configuration isolation.
         if profile.provider == .claude {
-            var args = ["--bare", "--setting-sources", "", "--settings", profile.configFile.path, "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}", "--no-chrome", "--permission-mode", "default", "--model", model.id]
+            var args = ["--bare", "--setting-sources", "", "--settings", profile.configFile.path, "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}", "--no-chrome", "--permission-mode", "default", "--model", model.cliModelID]
             if let resumeID { args += ["--resume", resumeID.uuidString.lowercased()] }
             if let prompt { args += ["--print", "--output-format", "json", "--", prompt] }
             return args

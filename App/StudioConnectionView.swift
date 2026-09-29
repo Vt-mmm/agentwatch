@@ -38,8 +38,13 @@ struct StudioConnectionView: View {
                         VStack(spacing: 12) { account(snapshot); models(snapshot) }.padding(.top, 10)
                     }.font(ClaudeFont.body())
                 }
-                if studio.profile != nil { StudioLauncherView(); StudioDashboardView(); StudioLocalLogsView() }
-                Text("Sessions, Tasks và báo cáo local vẫn dùng dữ liệu riêng trên máy. Kết nối Studio không thay key Supervisor hoặc tài khoản CLI cá nhân.")
+                if studio.profile != nil {
+                    StudioConfigurationView()
+                    DisclosureGroup("Mở CLI từ Agent Watch (tuỳ chọn)") { StudioLauncherView().padding(.top, 10) }
+                        .font(ClaudeFont.body())
+                    StudioDashboardView(); StudioLocalLogsView()
+                }
+                Text("Sessions, Tasks và báo cáo local vẫn dùng dữ liệu riêng trên máy. File cấu hình CLI chỉ thay đổi khi chọn Áp dụng; có thể khôi phục bản trước đó.")
                     .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
             }
             .padding(20)
@@ -146,6 +151,7 @@ struct StudioConnectionView: View {
             SectionLabel(text: "Tài khoản nhân viên")
             Text(snapshot.identity.user.displayName).font(ClaudeFont.heading(20))
             LabeledContent("Vai trò", value: role(snapshot.identity.user.role))
+            if let team = snapshot.identity.user.teamName { LabeledContent("Team", value: team) }
             LabeledContent("ID tài khoản", value: snapshot.identity.user.id.uuidString.lowercased())
                 .font(ClaudeFont.mono(11)).textSelection(.enabled)
             LabeledContent("API", value: snapshot.capabilities.apiVersion)

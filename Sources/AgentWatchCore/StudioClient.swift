@@ -66,7 +66,9 @@ public struct StudioUser: Codable, Equatable, Sendable, Identifiable {
     public let role: String
     public let active: Bool
     public let version: Int64
-    enum CodingKeys: String, CodingKey { case id, displayName = "display_name", role, active, version }
+    public var teamID: UUID? = nil
+    public var teamName: String? = nil
+    enum CodingKeys: String, CodingKey { case id, displayName = "display_name", role, active, version, teamID = "team_id", teamName = "team_name" }
 }
 public struct StudioIdentity: Codable, Equatable, Sendable {
     public let user: StudioUser
@@ -85,7 +87,18 @@ public struct StudioModel: Codable, Equatable, Sendable, Identifiable {
     public let displayName: String
     public let ownedBy: String
     public let nativeProtocol: String
-    enum CodingKeys: String, CodingKey { case id, displayName = "display_name", ownedBy = "owned_by", nativeProtocol = "protocol" }
+    public var providerModel: String? = nil
+    public var clientModel: String? = nil
+    public var cliModelID: String { clientModel ?? id }
+    public var maxOutputTokens: Int64? = nil
+    public var outputAccounting: String? = nil
+    public var contextMode: String? = nil
+    enum CodingKeys: String, CodingKey {
+        case id, displayName = "display_name", ownedBy = "owned_by", nativeProtocol = "protocol"
+        case providerModel = "provider_model_id", maxOutputTokens = "max_output_tokens"
+        case clientModel = "client_model_id"
+        case outputAccounting = "output_accounting", contextMode = "context_mode"
+    }
 }
 public enum StudioModelAccess: Equatable, Sendable {
     case available([StudioModel]), unavailable(StudioError)

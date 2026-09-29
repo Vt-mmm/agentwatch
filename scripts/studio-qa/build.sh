@@ -11,7 +11,7 @@ bin_dir="$(swift build --show-bin-path)"
 xcrun swiftc -swift-version 6 -parse-as-library \
     -I "$bin_dir/Modules" "$bin_dir"/AgentWatchCore.build/*.o \
     "$root/App/Theme.swift" "$root/App/StudioConnectionView.swift" "$root/App/StudioDashboardView.swift" \
-    "$root/App/StudioLauncherView.swift" "$root/App/StudioTerminalOpener.swift" "$root/App/StudioLocalLogsView.swift" \
+    "$root/App/StudioConfigurationView.swift" "$root/App/StudioLauncherView.swift" "$root/App/StudioTerminalOpener.swift" "$root/App/StudioLocalLogsView.swift" \
     "$root/scripts/studio-qa/StudioConnectionQA.swift" -o "$output/render"
 "$output/render" "$output/disconnected.png"
 "$output/render" "$output/connected.png" connected

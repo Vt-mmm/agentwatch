@@ -78,3 +78,6 @@ New request IDs by flow:
 - Pi Codex resume:bbdc9b99-5b52-4bfb-9d49-2c0422eaae19,d46fd05a-29d1-44c1-a22a-b95557dbd591.
 - Pi platform Codex:41317422-56d4-4ef7-990d-bec798441eab; Claude:d2cf8ada-465e-41b3-9394-25fead920d3e.
 - Pi tool:4b656e35-dc43-4973-8440-07f3db22e424,e3bb9a13-8b13-4706-9ac6-be3695007f83.
+
+
+Local rollout completed: clean Studio source f47aa1c built as agent-studio:session-continuation, paired with the unchanged agent-studio-connector:client-terminal. Backup backups/session-continuation-f47aa1c; readiness and unauthenticated ingress isolation passed. Trial remained31/32 (19/20 new). No Docker Desktop restart. Post-fix live tool acceptance remains pending; one remaining start is insufficient for its two-call round trip.

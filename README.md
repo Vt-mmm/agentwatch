@@ -12,6 +12,8 @@ App có thể tự mở khi đăng nhập macOS và tiếp tục chạy nền kh
 
 Source 0.12.0 bổ sung metadata Sonnet 5.5 cho Pi 0.87.1 với context gốc 1M, output tối đa 128K và giá tham khảo Claude 5.5. Source trên nhánh chính có thể mới hơn bản tải tại GitHub Releases; Sparkle chỉ cập nhật khi có release được ký.
 
+[Tải bản phát hành](https://github.com/Vt-mmm/agentwatch/releases/latest) · [Quy trình phát hành và cập nhật](docs/releases.md)
+
 ## Yêu cầu
 
 - macOS 14+ (MenuBarExtra requirement)

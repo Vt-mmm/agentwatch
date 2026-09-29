@@ -55,3 +55,26 @@ Studio request IDs: `0f159cba-cbbb-4ce1-9de4-cbc70202c792`, diagnostic `27616800
 ## Reproduction after the pending diagnostic is cancelled
 
 Build the Debug app with Xcode. The local-only Debug acceptance entry point creates/restores a temporary profile and uses the production client/configuration code; it is excluded from Release. From the sibling Agent Studio repository run `node scripts/live-client-config-e2e.mjs <flow> [basic|resume]`, where flow is `claude-claude`, `codex-codex`, `pi-claude` or `pi-codex`. The driver uses the existing persistent allowance and never increases it. Reports contain selected metadata only, under Studio `.cache/client-config-live-*.json`; raw keys are supplied on stdin and not logged.
+
+
+## App-owned credential acceptance after Cancel (2026-09-29)
+
+The synthetic Keychain diagnostic exited after the user cancelled. Its deferred cleanup ran. The first final-app prepare still failed before inference because the test replaced HOME, redirecting macOS Keychain resolution. The driver now retains the login HOME and isolates each CLI through CLAUDE_CONFIG_DIR, CODEX_HOME and PI_CODING_AGENT_DIR. No Keychain ACL override is used.
+
+Real final-app credential checks passed, followed by two-turn memory/session/usage checks for Claude Code, Codex, Pi→Claude and Pi→Codex. All eight new requests confirmed the expected team and model; each profile was restored and temporary member disabled. Native observed context: Claude Haiku 200,000; Codex CLI effective 258,400; Pi Codex native catalog 272,000. These reflect different native client accounting, not an imposed shared context limit. No full-window/compaction acceptance claim.
+
+Installed Piagent 1.8.0 core guard and WebUI extensions were explicitly loaded for one real basic request per provider, both successful, with no extension-load errors observed. This qualifies basic CLI coexistence; it does not qualify every guard workflow or WebUI interaction, and does not change the owner's dirty Pi source tree.
+
+Tool probe: Pi with both platform extensions completed a real read-tool round trip against Codex, with two confirmed requests (1,262 tokens). However, two intervening 503 session_account_busy_retry_later responses occurred before Pi recovered. The final answer contained the file marker but added text. The original driver's pass flag was too weak; this result is **recovered tool execution, not clean tool acceptance**. The driver now requires no intermediate error events and an exact final assistant reply. Revoking the test member made the former key return 401 on /v1/models without another provider start.
+
+The gateway now refreshes durable connector completion evidence once (bounded to two seconds) when an existing session's account appears busy, then rechecks normal admission. It neither replays inference nor releases capacity from transport success. A real PostgreSQL regression covers completed evidence, seal-only evidence, no evidence and unavailable connector; unresolved usage retains its budget holds. Focused and full HTTP API race suites passed. Local image rollout and a post-fix live two-call tool rerun are not yet evidenced at this checkpoint.
+
+Budget: **19/20 newly authorized provider starts**, persistent journal31/32, one remaining. Across this batch, 18 requests have confirmed usage totaling74,040 tokens; the earlier Codex diagnostic remains unresolved. Do not use the one remaining start for a two-call tool test or silently extend the budget.
+
+New request IDs by flow:
+- Codex resume:654d94ac-8b73-4a0e-a651-6f133eebbc39,8cd27534-ca6a-4cf0-85bc-1c122f1d7e87.
+- Claude resume:9afbb439-e70f-4f6b-a95b-b0112d8b7c42,3620cd23-d329-4687-beee-b632c56401a6.
+- Pi Claude resume:879d4462-4256-407e-ba00-ef879b97c75e,3275c848-afde-415d-9b3d-e6c290c0fa03.
+- Pi Codex resume:bbdc9b99-5b52-4bfb-9d49-2c0422eaae19,d46fd05a-29d1-44c1-a22a-b95557dbd591.
+- Pi platform Codex:41317422-56d4-4ef7-990d-bec798441eab; Claude:d2cf8ada-465e-41b3-9394-25fead920d3e.
+- Pi tool:4b656e35-dc43-4973-8440-07f3db22e424,e3bb9a13-8b13-4706-9ac6-be3695007f83.

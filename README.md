@@ -2,7 +2,15 @@
 
 Native macOS menu bar + window app audit Claude, Codex và PiAgent sessions. App đọc snapshot log local theo lần mở tab / bấm refresh, hiển thị prompts, tokens, cost, thinking mode và rủi ro usage theo phiên.
 
-App chạy **local only** — không có hosted distribution, mỗi dev tự clone về build trên máy mình.
+Agent Watch chạy native trên macOS, giữ chức năng đọc log local và có tab Studio để kết nối workspace công ty.
+
+## Studio
+
+Nhập base URL và API key của [Agent Studio](https://github.com/Vt-mmm/agent-studio), chọn Claude Code, Codex, Pi hoặc Piagent rồi áp dụng cấu hình. Chỉ các công cụ đã chọn được đồng bộ. Key nằm trong Keychain; cấu hình CLI gọi helper để lấy key khi cần.
+
+App có thể tự mở khi đăng nhập macOS và tiếp tục chạy nền khi đóng cửa sổ. Không cần key giám sát riêng để mở hoặc thoát ứng dụng. Quyền dùng model vẫn do Studio quản lý theo team và member key.
+
+Source 0.12.0 bổ sung metadata Sonnet 5.5 cho Pi 0.87.1 với context gốc 1M, output tối đa 128K và giá tham khảo Claude 5.5. Source trên nhánh chính có thể mới hơn bản tải tại GitHub Releases; Sparkle chỉ cập nhật khi có release được ký.
 
 ## Yêu cầu
 

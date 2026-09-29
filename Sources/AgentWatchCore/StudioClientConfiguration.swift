@@ -178,8 +178,15 @@ public enum StudioClientConfiguration {
         for value in catalog.values {
             if let models = value as? [String: Any], let native = models[model.providerModel ?? model.id] as? [String: Any] { return try encoded(native) }
         }
+        // Reviewed addition absent from Pi 0.87.1. The native catalog always
+        // wins once it advertises this ID; never infer an unknown model's limits.
+        // https://platform.claude.com/docs/en/models/sonnet-5-5/overview
+        if provider == "anthropic", model.providerModel == "claude-sonnet-5-5" {
+            return Data(Self.sonnet55Catalog.utf8)
+        }
         throw StudioConfigurationError.missingCatalog
     }
+    static let sonnet55Catalog = #"{"id":"claude-sonnet-5-5","name":"Claude Sonnet 5.5","reasoning":true,"input":["text","image"],"cost":{"input":2,"output":10,"cacheRead":0.2,"cacheWrite":2.5},"contextWindow":1000000,"maxTokens":128000,"thinkingLevelMap":{"off":null,"minimal":null,"low":"low","medium":"medium","high":"high","xhigh":"xhigh","max":"max"},"compat":{"forceAdaptiveThinking":true,"supportsTemperature":false,"supportsStrictTools":true},"promptCache":{"short":300,"long":3600}}"#
     static func privateWrite(_ data: Data, to file: URL, exclusive: Bool = false) throws {
         let temporary = exclusive ? file : file.deletingLastPathComponent().appendingPathComponent(".agentwatch-" + UUID().uuidString)
         let fd = Darwin.open(temporary.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)

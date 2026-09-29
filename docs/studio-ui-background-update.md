@@ -45,3 +45,7 @@ Keychain implementation references: [Apple UI authentication context](https://de
 ## Final installed state
 
 The final installed build starts successfully with the existing Keychain item still protected. Actual AX/screenshot inspection shows the new Studio tab and **Cho phép Keychain** action; no enrollment sheet is present and the app continues emitting background heartbeats. Login Items remains enabled. macOS requires the owner to authorize this locally rebuilt app to read the existing Studio key. Final real-server reconnection/sync therefore remains pending that OS approval; it is not claimed successful from the loopback 304 test. The owner was directed to the explicit button; no password, key, ACL or provider credentials were extracted or changed.
+
+## Source update — 2026-09-29
+
+Version 0.12.0 adds reviewed Sonnet 5.5 metadata for Pi 0.87.1, preferring an installed native catalog entry when available. Unknown IDs remain unsupported. Claude/Codex context defaults remain native. Added explicit Sonnet 5.5 and Opus 5.5 reference prices. Verification: 170 passed, two opt-in live checks skipped; macOS Release build passed. No paid provider requests were made for this update.

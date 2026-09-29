@@ -45,7 +45,7 @@ public enum ModelFamily: String, Sendable, CaseIterable, Codable {
 public enum Pricing {
     /// Version is carried into exports/audit logs so old reports remain
     /// explainable after providers change their public prices.
-    public static let versionLabel = "official-list-2026-09-06"
+    public static let versionLabel = "official-list-2026-09-06+claude-55-2026-09-29"
 
     /// Family fallbacks are retained for backwards-compatible tests and older
     /// Claude aliases. Production cost calculation uses `quote(forModelId:)`
@@ -77,8 +77,8 @@ public enum Pricing {
         let model = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard let base = quote(forModelId: model) else { return nil }
         let modernOpenAI: Set<String> = ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
-        let flatLongClaude: Set<String> = ["claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5",
-                                          "claude-sonnet-4-6", "claude-sonnet-5", "claude-fable-5", "claude-fable-5-1"]
+        let flatLongClaude: Set<String> = ["claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5",
+                                          "claude-sonnet-4-6", "claude-sonnet-5", "claude-sonnet-5-5", "claude-fable-5", "claude-fable-5-1"]
         var inputMultiplier = 1.0, outputMultiplier = 1.0, tierMultiplier = 1.0
         if modernOpenAI.contains(model) {
             if inputContext > 272_000 {
@@ -128,6 +128,8 @@ public enum Pricing {
         "claude-opus-4-1": Price(input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75),
         "claude-opus-4-1-20250805": Price(input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75),
         "claude-opus-4-20250514": Price(input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75),
+        "claude-sonnet-5-5": Price(input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5),
+        "claude-opus-5-5": Price(input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5),
         "claude-sonnet-5": Price(input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5),
         "claude-sonnet-4-6": Price(input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75),
         "claude-sonnet-4-5": Price(input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75),

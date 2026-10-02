@@ -3,18 +3,44 @@ import Observation
 import Security
 import LocalAuthentication
 
+public enum StudioCredentialMode: String, Codable, Sendable { case direct, managed }
+
 public struct StudioProfile: Codable, Equatable, Sendable {
     public let origin: StudioOrigin
     public let id: String
-    public init(origin: StudioOrigin, id: String) throws {
+    public let connectionID: String
+    public let keyID: UUID?
+    public let credentialMode: StudioCredentialMode
+    public init(origin: StudioOrigin, id: String, connectionID: String? = nil, keyID: UUID? = nil, credentialMode: StudioCredentialMode = .direct) throws {
         guard id.count == 64, id.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
             throw StudioError.storage
         }
-        self.origin = origin; self.id = id
+        let connection = connectionID ?? id
+        guard connection.count == 64, connection.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }), credentialMode != .managed || keyID != nil else { throw StudioError.storage }
+        self.origin = origin; self.id = id; self.connectionID = connection; self.keyID = keyID; self.credentialMode = credentialMode
     }
+    enum CodingKeys: String, CodingKey { case origin, id, connectionID, keyID, credentialMode }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        try self.init(origin: c.decode(StudioOrigin.self, forKey: .origin), id: c.decode(String.self, forKey: .id))
+        try self.init(origin: c.decode(StudioOrigin.self, forKey: .origin), id: c.decode(String.self, forKey: .id),
+                      connectionID: c.decodeIfPresent(String.self, forKey: .connectionID), keyID: c.decodeIfPresent(UUID.self, forKey: .keyID),
+                      credentialMode: c.decodeIfPresent(StudioCredentialMode.self, forKey: .credentialMode) ?? .direct)
+    }
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(origin, forKey: .origin); try c.encode(id, forKey: .id)
+        // Preserve the on-disk representation used by existing direct CLI profiles.
+        if keyID != nil || connectionID != id || credentialMode != .direct {
+            try c.encode(connectionID, forKey: .connectionID); try c.encodeIfPresent(keyID, forKey: .keyID)
+            try c.encode(credentialMode, forKey: .credentialMode)
+        }
+    }
+    public func belongsTo(orgID: UUID, ownerID: UUID) -> Bool {
+        origin.profileID(orgID: orgID, ownerID: ownerID) == connectionID
+    }
+    public func matches(_ identity: StudioIdentity) -> Bool {
+        belongsTo(orgID: identity.orgID, ownerID: identity.user.id) &&
+        (keyID == nil || keyID == identity.keyID) && credentialMode == (identity.credentialMode ?? .direct)
     }
 }
 
@@ -31,9 +57,20 @@ extension StudioKeyStorage {
     func load() throws -> StudioProfile?
     func save(_ profile: StudioProfile?)
     func clearCredentialBlock()
+    func profiles() throws -> [StudioProfile]
+    func clearCredentialBlock(profileID: String)
+    /// Every saved slot, even for storage scoped to one slot.
+    func savedProfileIDs() throws -> Set<String>
 }
 extension StudioSettingsStorage {
     public func clearCredentialBlock() {}
+    public func profiles() throws -> [StudioProfile] { try load().map { [$0] } ?? [] }
+    public func savedProfileIDs() throws -> Set<String> { Set(try profiles().map(\.id)) }
+    public func clearCredentialBlock(profileID: String) { clearCredentialBlock() }
+    public func saveChecked(_ profile: StudioProfile?) throws {
+        save(profile)
+        guard try load() == profile else { throw StudioError.storage }
+    }
 }
 
 /// Separate from provider OAuth, personal CLI credentials and supervisor enrollment.
@@ -95,22 +132,56 @@ extension StudioSettingsStorage {
     }
     private let defaults: UserDefaults
     private let name = "studio.activeProfile.v1"
+    private let collection = "studio.profiles.v2"
+    private struct Saved: Codable { var profiles: [StudioProfile]; var selected: String? }
     public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
     public func load() throws -> StudioProfile? {
+        if defaults.data(forKey: collection) != nil {
+            let saved = try savedCollection()
+            guard let selected = saved.selected else { return nil }
+            guard let profile = saved.profiles.first(where: { $0.id == selected }) else { throw StudioError.storage }
+            return profile
+        }
         guard let data = defaults.data(forKey: name) else { return nil }
         do { return try JSONDecoder().decode(StudioProfile.self, from: data) }
         catch { throw StudioError.storage }
     }
     public func clearCredentialBlock() { defaults.removeObject(forKey: "studio.blockedProfile") }
+    public func clearCredentialBlock(profileID: String) {
+        if defaults.string(forKey: "studio.blockedProfile") == profileID { clearCredentialBlock() }
+        defaults.set((defaults.stringArray(forKey: "studio.blockedProfiles.v2") ?? []).filter { $0 != profileID }, forKey: "studio.blockedProfiles.v2")
+    }
+    public func profiles() throws -> [StudioProfile] {
+        guard defaults.data(forKey: collection) != nil else { return try load().map { [$0] } ?? [] }
+        return try savedCollection().profiles
+    }
+    private func savedCollection() throws -> Saved {
+        guard let data = defaults.data(forKey: collection), let saved = try? JSONDecoder().decode(Saved.self, from: data),
+              saved.profiles.count <= 64, Set(saved.profiles.map(\.id)).count == saved.profiles.count,
+              saved.selected == nil || saved.profiles.contains(where: { $0.id == saved.selected }) else { throw StudioError.storage }
+        return saved
+    }
     public func save(_ profile: StudioProfile?) {
-        if let profile { defaults.set(try? JSONEncoder().encode(profile), forKey: name) }
-        else { defaults.removeObject(forKey: name) }
+        // A corrupt collection must not be replaced with an empty one.
+        guard var all = try? profiles() else { return }
+        let activeID = (try? load())?.id
+        if let profile {
+            all.removeAll { $0.id == profile.id }; all.append(profile)
+        } else {
+            all.removeAll { $0.id == activeID }
+        }
+        guard all.count <= 64, let data = try? JSONEncoder().encode(Saved(profiles: all, selected: profile?.id)) else { return }
+        // Selection and records are written together: a crash cannot select a
+        // slot that has not yet been persisted.
+        defaults.set(data, forKey: collection)
+        defaults.removeObject(forKey: name)
     }
 }
 
 @MainActor @Observable public final class StudioConnectionStore {
     public enum State: Equatable { case disconnected, saved, checking, connected, stale, failed }
     public private(set) var profile: StudioProfile?
+    public var availableProfiles: [StudioProfile] { _ = profile; return (try? settings.profiles()) ?? [] }
     public private(set) var snapshot: StudioConnectionSnapshot?
     public private(set) var state: State = .disconnected
     public private(set) var error: StudioError?
@@ -156,12 +227,19 @@ extension StudioSettingsStorage {
             let result = try await client.connect(origin: origin, key: key)
             try Task.checkCancellation()
             guard generation == attempt else { return }
-            let id = origin.profileID(orgID: result.identity.orgID, ownerID: result.identity.user.id)
-            if let profile, profile.id != id { throw StudioError.disconnectFirst }
-            let next = try StudioProfile(origin: origin, id: id)
-            try keys.save(key, profileID: id)
-            settings.clearCredentialBlock()
-            settings.save(next); profile = next; snapshot = result; state = .connected
+            let connectionID = origin.profileID(orgID: result.identity.orgID, ownerID: result.identity.user.id)
+            if let profile, profile.connectionID != connectionID { throw StudioError.disconnectFirst }
+            let mode = result.identity.credentialMode ?? .direct
+            let id = result.identity.keyID.map { origin.credentialSlotID(orgID: result.identity.orgID, ownerID: result.identity.user.id, keyID: $0, mode: mode) } ?? connectionID
+            var next = try StudioProfile(origin: origin, id: id, connectionID: connectionID, keyID: result.identity.keyID, credentialMode: mode)
+            // An unchanged legacy direct key keeps its helper/config references.
+            if let profile, profile.keyID == nil, mode == .direct, try keys.load(profileID: profile.id) == key { next = profile }
+            let saved = try settings.profiles()
+            guard saved.count < 64 || saved.contains(where: { $0.id == next.id }) else { throw StudioError.storage }
+            try keys.save(key, profileID: next.id)
+            try settings.saveChecked(next)
+            settings.clearCredentialBlock(profileID: next.id)
+            profile = next; snapshot = result; state = .connected
             await updateDashboard(key: key, result: result, attempt: attempt)
         } catch {
             guard generation == attempt else { return }
@@ -180,7 +258,7 @@ extension StudioSettingsStorage {
             let result = try await client.connect(origin: profile.origin, key: key)
             try Task.checkCancellation()
             guard generation == attempt else { return }
-            guard profile.origin.profileID(orgID: result.identity.orgID, ownerID: result.identity.user.id) == profile.id else {
+            guard profile.matches(result.identity) else {
                 throw StudioError.identityChanged
             }
             snapshot = result; state = .connected
@@ -214,8 +292,17 @@ extension StudioSettingsStorage {
                 do { try keys.delete(profileID: profile.id) } catch { failed = true }
                 if failed { throw StudioError.storage }
             }
-            settings.save(nil); profile = nil; state = .disconnected
+            try settings.saveChecked(nil); profile = nil; state = .disconnected
         } catch { self.error = .storage; state = .failed }
+    }
+
+    public func selectProfile(_ id: String) async {
+        guard state != .checking, let selected = try? settings.profiles().first(where: { $0.id == id }) else { return }
+        generation += 1; snapshot = nil; clearDashboard(); error = nil
+        do { try settings.saveChecked(selected) }
+        catch { self.error = .storage; state = .failed; return }
+        profile = selected; quotaModelID = nil; state = .saved
+        await refresh()
     }
 
     public func selectQuotaModel(_ id: String) async {
@@ -228,7 +315,7 @@ extension StudioSettingsStorage {
     public func compareSession(_ local: StudioLocalSession, range: Range<Date>, coveragePartial: Bool) async throws -> StudioSessionComparison {
         guard let digest = StudioSessionComparison.digest(sessionID: local.sessionID) else { return .unavailable(.unsupportedIdentity) }
         guard state == .connected, let profile, profile.id == local.profileID, let identity = snapshot?.identity,
-              profile.origin.profileID(orgID: identity.orgID, ownerID: identity.user.id) == profile.id,
+              profile.matches(identity),
               let reporting = client as? any StudioSessionReporting else { throw StudioError.offline }
         let attempt = generation
         guard let key = try keys.load(profileID: profile.id) else { throw StudioError.invalidKey }

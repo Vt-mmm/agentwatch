@@ -20,7 +20,7 @@ struct InsightHistoryView: View {
     var body: some View {
         GroupBox("Tra cứu lịch sử đã lưu trên máy") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Tự chuẩn bị dữ liệu theo ngày và tìm khi anh nhập từ khóa.")
+                Text("Tự chuẩn bị dữ liệu theo ngày và tìm khi nhập từ khóa.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     DatePicker("Từ", selection: $start, displayedComponents: .date)

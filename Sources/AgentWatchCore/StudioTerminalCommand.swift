@@ -20,6 +20,7 @@ public struct StudioTerminalCommand: Sendable {
         let file = root.appendingPathComponent(UUID().uuidString.lowercased() + ".command")
         var args = [helper.path, "run", plan.profile.provider.rawValue, "--profile", plan.profile.connection.id,
                     "--model", plan.model.id, "--project", plan.project.path, "--binary", plan.executable.url.path]
+        if let node = try plan.executable.invocation().interpreter { args += ["--runtime-node", node.path] }
         if let resume = plan.resumeID { args += ["--resume", resume.uuidString.lowercased()] }
         let script = "#!/bin/sh\n# Agent Watch Studio: no credentials in this file.\numask 077\n/bin/rm -f -- \(quote(file.path))\nexec \(args.map(quote).joined(separator: " "))\n"
         try Data(script.utf8).write(to: file, options: [.withoutOverwriting])

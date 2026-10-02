@@ -2,6 +2,68 @@ import XCTest
 @testable import AgentWatchCore
 
 final class StudioBulkConfigurationTests: XCTestCase {
+    func testAnotherCredentialCannotOverwriteOrDisableExistingClientBinding() throws {
+        let dir = try folder(), first = try StudioProfile(origin: StudioOrigin("https://studio.test"), id: String(repeating: "a", count: 64))
+        let second = try StudioProfile(origin: first.origin, id: String(repeating: "b", count: 64))
+        let receipt = StudioClientConfiguration.receiptURL(tool: .claude, directory: dir)
+        addTeardownBlock { try? FileManager.default.removeItem(at: receipt) }
+        let plan = try StudioClientConfiguration.prepareAll(tool: .claude, directory: dir, connection: first, models: [model("claude", "fixture-model")], helper: dir)
+        // Old releases didn't store profileID in the receipt. Recognize the
+        // generated credential argument without changing ownership.
+        var legacy = plan; legacy.profileID = nil
+        try StudioClientConfiguration.apply(legacy, receipt: receipt)
+        XCTAssertEqual(StudioClientConfiguration.bindingOwners(legacy), [first.id])
+        let before = try Data(contentsOf: dir.appendingPathComponent("settings.json"))
+        XCTAssertThrowsError(try StudioClientConfiguration.prepareAll(tool: .claude, directory: dir, connection: second, models: [model("claude", "fixture-model")], helper: dir)) {
+            XCTAssertEqual($0 as? StudioConfigurationError, .destinationInUse)
+        }
+        XCTAssertThrowsError(try StudioClientConfiguration.prepareDisabled(tool: .claude, directory: dir, connection: second))
+        XCTAssertEqual(try Data(contentsOf: dir.appendingPathComponent("settings.json")), before)
+        let update = try StudioClientConfiguration.prepareAll(tool: .claude, directory: dir, connection: first, models: [model("claude", "fixture-model")], helper: dir)
+        try StudioClientConfiguration.apply(update, receipt: receipt)
+        let managed = try StudioProfile(origin: first.origin, id: String(repeating: "c", count: 64), keyID: UUID(), credentialMode: .managed)
+        XCTAssertThrowsError(try StudioClientConfiguration.prepareAll(tool: .claude, directory: dir, connection: managed, models: [model("claude", "fixture-model")], helper: dir))
+        try StudioClientConfiguration.restoreReceipt(at: receipt)
+    }
+    func testDisconnectedSlotReceiptIsTakenOverOnlyWhenNoSavedSlotOwnsIt() throws {
+        let dir = try folder(), origin = try StudioOrigin("https://studio.test")
+        let old = try StudioProfile(origin: origin, id: String(repeating: "a", count: 64))
+        let fresh = try StudioProfile(origin: origin, id: String(repeating: "b", count: 64))
+        let receipt = StudioClientConfiguration.receiptURL(tool: .claude, directory: dir)
+        addTeardownBlock { try? FileManager.default.removeItem(at: receipt) }
+        let settingsFile = dir.appendingPathComponent("settings.json"), personal = Data(#"{"theme":"dark"}"#.utf8)
+        try personal.write(to: settingsFile)
+        let models = [model("claude", "fixture-model")]
+        try StudioClientConfiguration.apply(StudioClientConfiguration.prepareAll(tool: .claude, directory: dir, connection: old, models: models, helper: dir), receipt: receipt)
+        // Both slots saved: the folder still belongs to the other key.
+        XCTAssertFalse(try StudioClientConfiguration.adoptOrphanedReceipt(receipt, owner: fresh.id, savedProfiles: [old.id, fresh.id]))
+        XCTAssertThrowsError(try StudioClientConfiguration.prepareAll(tool: .claude, directory: dir, connection: fresh, models: models, helper: dir)) {
+            XCTAssertEqual($0 as? StudioConfigurationError, .destinationInUse)
+        }
+        XCTAssertFalse(try StudioClientConfiguration.adoptOrphanedReceipt(receipt, owner: fresh.id, savedProfiles: [old.id]), "Only a saved slot can take over")
+        // The old slot was disconnected, but its files were edited afterwards.
+        let imported = try Data(contentsOf: settingsFile)
+        try Data(#"{"edited":true}"#.utf8).write(to: settingsFile)
+        XCTAssertThrowsError(try StudioClientConfiguration.adoptOrphanedReceipt(receipt, owner: fresh.id, savedProfiles: [fresh.id])) {
+            XCTAssertEqual($0 as? StudioConfigurationError, .changed)
+        }
+        try imported.write(to: settingsFile)
+        XCTAssertTrue(try StudioClientConfiguration.adoptOrphanedReceipt(receipt, owner: fresh.id, savedProfiles: [fresh.id]))
+        XCTAssertFalse(try StudioClientConfiguration.adoptOrphanedReceipt(receipt, owner: fresh.id, savedProfiles: [fresh.id]), "Already owned")
+        try StudioClientConfiguration.apply(StudioClientConfiguration.prepareAll(tool: .claude, directory: dir, connection: fresh, models: models, helper: dir), receipt: receipt)
+        XCTAssertTrue(String(decoding: try Data(contentsOf: settingsFile), as: UTF8.self).contains(fresh.id))
+        // Restore still returns to the state before Agent Watch's first import.
+        try StudioClientConfiguration.restoreReceipt(at: receipt)
+        XCTAssertEqual(try Data(contentsOf: settingsFile), personal)
+    }
+    func testUnknownLegacyReceiptIsNeverTakenOver() throws {
+        let dir = try folder(), fresh = try StudioProfile(origin: StudioOrigin("https://studio.test"), id: String(repeating: "b", count: 64))
+        let file = dir.appendingPathComponent("settings.json"), receipt = dir.appendingPathComponent("legacy-receipt.json")
+        let edit = StudioConfigurationEdit(file: file, before: nil, after: Data(#"{"apiKeyHelper":"unknown"}"#.utf8))
+        try StudioClientConfiguration.apply(StudioConfigurationPlan(edits: [edit], tool: .claude), receipt: receipt)
+        XCTAssertFalse(try StudioClientConfiguration.adoptOrphanedReceipt(receipt, owner: fresh.id, savedProfiles: [fresh.id]))
+        XCTAssertNil(try JSONDecoder().decode(StudioConfigurationPlan.self, from: Data(contentsOf: receipt)).profileID)
+    }
     func folder() throws -> URL {
         let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/agentwatch-bulk-test-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -18,7 +80,9 @@ final class StudioBulkConfigurationTests: XCTestCase {
         try before.write(to: dir.appendingPathComponent("models.json"))
         let catalogs = Dictionary(uniqueKeysWithValues: [a,b].map { ($0.id, Data("{\"id\":\"\($0.id)\",\"contextWindow\":272000,\"maxTokens\":128000}".utf8)) })
         let receipt = dir.appendingPathComponent("receipt.json")
-        let p = try StudioClientConfiguration.prepareAll(tool: .pi, directory: dir, connection: profile, models: [a,b], helper: dir.appendingPathComponent("helper"), piCatalogModels: catalogs, piagentExtensions: [dir.appendingPathComponent("guard.ts")])
+        // An API-key vendor model runs only in company Piagent sessions; a direct key's Pi config leaves it out.
+        let vendor = StudioModel(id: "deepseek-flash", displayName: "DeepSeek Flash", ownedBy: "deepseek", nativeProtocol: "chat", providerModel: "deepseek-flash", clientModel: "deepseek-flash", maxOutputTokens: 16384, outputAccounting: "provider_cap", contextMode: "provider_default")
+        let p = try StudioClientConfiguration.prepareAll(tool: .pi, directory: dir, connection: profile, models: [a,b,vendor], helper: dir.appendingPathComponent("helper"), piCatalogModels: catalogs, piagentExtensions: [dir.appendingPathComponent("guard.ts")])
         try StudioClientConfiguration.apply(p, receipt: receipt)
         let json = try StudioClientConfiguration.object(Data(contentsOf: dir.appendingPathComponent("models.json")))
         XCTAssertEqual((json["providers"] as? [String: Any])?.count, 3)

@@ -193,6 +193,7 @@ Click **Settings (gear) → Privacy & Data Access…** để xem **danh sách fi
 | Mỗi 1h (Sparkle auto-check) | `https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/appcast.xml` | Chỉ request — **không** kèm user agent identifier, project info, prompt, cost… |
 | Khi kết nối Google/chọn folder | Google OAuth và Drive API | Yêu cầu cấp quyền, danh tính tài khoản và folder được chọn |
 | Khi duyệt gửi report | Google Drive/Gmail API | PDF report; Gmail có người nhận, tiêu đề và nội dung email |
+| Sau mỗi lần đồng bộ Studio (khi đổi hoặc 30 phút/lần) | Studio của công ty đã kết nối (`/studio/v1/me/client-status`) | Mã cài đặt ngẫu nhiên, phiên bản app/macOS/CLI, trạng thái và mã lỗi đồng bộ từng công cụ, trạng thái chạy nền. Không gửi prompt, đường dẫn, tên máy hay usage local; xem đúng nội dung ở tab Studio → Chẩn đoán |
 | Khi user accept update | `https://github.com/Vt-mmm/agentwatch/releases/download/.../*.zip` | Chỉ request — verify bằng EdDSA pubkey hard-coded trong app |
 
 Kết nối Google dùng OAuth trong trình duyệt; token lưu ở Keychain. Khi làm mới quota Codex theo yêu cầu, app gọi Codex app-server và provider tương ứng. Tự động gửi theo lịch chỉ chạy với bản report đã được duyệt và chính sách cho phép. Source code public tại https://github.com/Vt-mmm/agentwatch để team tự kiểm tra.

@@ -10,7 +10,7 @@ swift build --jobs 2 --product agentwatch
 bin_dir="$(swift build --show-bin-path)"
 xcrun swiftc -swift-version 6 -parse-as-library \
     -I "$bin_dir/Modules" "$bin_dir"/AgentWatchCore.build/*.o \
-    "$root/App/Theme.swift" "$root/App/StudioConnectionView.swift" "$root/App/StudioDashboardView.swift" \
+    "$root/App/Theme.swift" "$root/App/StudioComponents.swift" "$root/App/StudioConnectionView.swift" "$root/App/StudioDashboardView.swift" \
     "$root/App/StudioBackgroundService.swift" "$root/App/StudioConfigurationView.swift" "$root/App/StudioLauncherView.swift" "$root/App/StudioTerminalOpener.swift" "$root/App/StudioLocalLogsView.swift" \
     "$root/scripts/studio-qa/StudioConnectionQA.swift" -o "$output/render"
 "$output/render" "$output/disconnected.png"
@@ -31,3 +31,9 @@ xcrun swiftc -swift-version 6 -parse-as-library \
 "$output/render" "$output/diagnostics-narrow.png" connected diagnostics narrow
 
 "$output/render" "$output/no-grants-narrow.png" connected narrow no-grants
+"$output/render" "$output/expiring-wide.png" connected expiring
+"$output/render" "$output/diagnostics-wide.png" connected diagnostics
+"$output/render" "$output/usage-wide.png" connected usage
+"$output/render" "$output/managed-narrow.png" connected managed narrow long
+"$output/render" "$output/managed-dark.png" connected managed dark
+"$output/render" "$output/managed-launcher.png" connected managed launcher narrow

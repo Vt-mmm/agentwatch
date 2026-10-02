@@ -4,7 +4,7 @@ import Darwin
 
 public enum StudioConfiguredTool: String, CaseIterable, Codable, Sendable { case claude, codex, pi }
 public enum StudioConfigurationError: Error, LocalizedError {
-    case invalid, unsupported, changed, unsafe, missingCatalog, nativeModelUnavailable
+    case invalid, unsupported, changed, unsafe, missingCatalog, nativeModelUnavailable, destinationInUse
     public var errorDescription: String? {
         switch self {
         case .invalid: "Cấu hình hoặc model không hợp lệ. Kết nối lại Studio để lấy giới hạn mới."
@@ -13,6 +13,7 @@ public enum StudioConfigurationError: Error, LocalizedError {
         case .unsafe: "Đường dẫn cấu hình không an toàn hoặc không có quyền ghi."
         case .missingCatalog: "CLI chưa có bộ thông số tương thích cho model này. Cần cập nhật bộ model đã được kiểm chứng."
         case .nativeModelUnavailable: "Studio chưa xác minh được tên model gốc. Làm mới danh sách model trước khi cấu hình CLI."
+        case .destinationInUse: "Thư mục đang dùng key khác. Chọn thư mục riêng hoặc khôi phục cấu hình của key cũ trước."
         }
     }
 }
@@ -24,6 +25,7 @@ public struct StudioConfigurationEdit: Codable, Sendable {
 public struct StudioConfigurationPlan: Codable, Sendable {
     public let edits: [StudioConfigurationEdit]
     public let tool: StudioConfiguredTool
+    public var profileID: String? = nil
 }
 
 /// Pure preparation, followed by explicit application from the UI. No key is
@@ -56,6 +58,8 @@ public enum StudioClientConfiguration {
     }
     public static func prepare(tool: StudioConfiguredTool, directory: URL, connection: StudioProfile,
                                model: StudioModel, helper: URL, piCatalogModel: Data? = nil) throws -> StudioConfigurationPlan {
+        guard connection.credentialMode == .direct else { throw StudioError.permissionDenied }
+        try validateBinding(connection: connection, tool: tool, directory: directory)
         guard ["claude", "codex"].contains(model.ownedBy), let cap = model.maxOutputTokens, cap > 0,
               model.contextMode == "provider_default", !model.id.isEmpty,
               !helper.path.contains("\n"), helper.isFileURL else { throw StudioConfigurationError.invalid }
@@ -158,13 +162,18 @@ public enum StudioClientConfiguration {
                 content["enabledModels"] = [provider + "/" + clientModel]
             }
         }
-        return StudioConfigurationPlan(edits: edits, tool: tool)
+        return StudioConfigurationPlan(edits: edits, tool: tool, profileID: connection.id)
     }
-    public static func piExecutable(home: URL = FileManager.default.homeDirectoryForCurrentUser) throws -> URL {
-        for path in [home.appendingPathComponent(".local/bin/pi"), URL(fileURLWithPath: "/opt/homebrew/bin/pi"), URL(fileURLWithPath: "/usr/local/bin/pi")] {
-            if FileManager.default.isExecutableFile(atPath: path.path) { return path }
-        }
-        throw StudioConfigurationError.missingCatalog
+    /// The Pi host, wherever the member's npm installed it; the qualified
+    /// version wins when several are installed.
+    public static func piExecutable(home: URL = FileManager.default.homeDirectoryForCurrentUser,
+                                    system: [URL] = ["/opt/homebrew", "/usr/local"].map { URL(fileURLWithPath: $0) }) throws -> URL {
+        let prefixes = [home.appendingPathComponent(".pi/npm-global"), home.appendingPathComponent(".local")] + system
+            + StudioInstallLocations.userPrefixes(home: home, package: "@earendil-works/pi-coding-agent") + StudioInstallLocations.versionManagedPrefixes(home: home)
+        let found = prefixes.map { $0.appendingPathComponent("bin/pi") }.filter { FileManager.default.isExecutableFile(atPath: $0.path) }
+        let root = { (pi: URL) in pi.resolvingSymlinksInPath().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent() }
+        guard let pi = found.first(where: { StudioInstallLocations.packageField(root($0), "version") == "0.87.1" }) ?? found.first else { throw StudioConfigurationError.missingCatalog }
+        return pi
     }
     public static func catalogModel(for model: StudioModel, piExecutable: URL) throws -> Data {
         let cli = piExecutable.resolvingSymlinksInPath()
@@ -207,6 +216,9 @@ public enum StudioClientConfiguration {
         var receipt = plan
         if let previous = try read(file) {
             let old = try JSONDecoder().decode(StudioConfigurationPlan.self, from: previous)
+            if let expected = plan.profileID {
+                guard bindingOwners(old) == [expected] else { throw StudioConfigurationError.destinationInUse }
+            } else if old.profileID != nil { throw StudioConfigurationError.destinationInUse }
             guard old.tool == plan.tool, Set(old.edits.map(\.file)).isSubset(of: Set(plan.edits.map(\.file))) else { throw StudioConfigurationError.changed }
             var merged: [StudioConfigurationEdit] = []
             for edit in plan.edits {
@@ -215,12 +227,47 @@ public enum StudioClientConfiguration {
                     merged.append(StudioConfigurationEdit(file: edit.file, before: original.before, after: edit.after))
                 } else { merged.append(edit) }
             }
-            receipt = StudioConfigurationPlan(edits: merged, tool: plan.tool)
+            receipt = StudioConfigurationPlan(edits: merged, tool: plan.tool, profileID: plan.profileID)
             try privateWrite(JSONEncoder().encode(receipt), to: file)
         } else {
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             try privateWrite(JSONEncoder().encode(receipt), to: file, exclusive: true)
         }
+    }
+    static func validateBinding(connection: StudioProfile, tool: StudioConfiguredTool, directory: URL) throws {
+        try validateBinding(connection: connection, receipt: receiptURL(tool: tool, directory: directory))
+    }
+    static func validateBinding(connection: StudioProfile, receipt: URL) throws {
+        guard let data = try read(receipt) else { return }
+        let previous = try JSONDecoder().decode(StudioConfigurationPlan.self, from: data)
+        guard bindingOwners(previous) == [connection.id] else { throw StudioConfigurationError.destinationInUse }
+    }
+    /// Disconnecting removes a slot but leaves its receipt, and a newly entered
+    /// key gets a new slot ID. When every recorded owner is gone from Watch and
+    /// the files still hold that import, `owner` takes the receipt over. The
+    /// original `before` stays, so restore still returns to the state before
+    /// Agent Watch. Receipts of a saved slot and unknown legacy receipts are
+    /// never taken over. Returns whether ownership changed.
+    @discardableResult
+    public static func adoptOrphanedReceipt(_ file: URL, owner: String, savedProfiles: Set<String>) throws -> Bool {
+        try checked(file)
+        guard savedProfiles.contains(owner), let data = try read(file) else { return false }
+        let old = try JSONDecoder().decode(StudioConfigurationPlan.self, from: data)
+        let owners = bindingOwners(old)
+        guard !owners.isEmpty, owners.isDisjoint(with: savedProfiles) else { return false }
+        for edit in old.edits { guard try read(edit.file) == edit.after else { throw StudioConfigurationError.changed } }
+        try privateWrite(JSONEncoder().encode(StudioConfigurationPlan(edits: old.edits, tool: old.tool, profileID: owner)), to: file)
+        return true
+    }
+    /// Legacy receipts predate the explicit slot ID. Only recognize the exact
+    /// generated helper argument; never adopt an unknown receipt silently.
+    static func bindingOwners(_ plan: StudioConfigurationPlan) -> Set<String> {
+        if let id = plan.profileID { return [id] }
+        let expression = try! NSRegularExpression(pattern: #"--profile[\s\"'\\,\[\]]{1,20}([a-f0-9]{64})"#)
+        return Set(plan.edits.flatMap { edit in
+            let text = String(decoding: edit.after, as: UTF8.self) as NSString
+            return expression.matches(in: text as String, range: NSRange(location: 0, length: text.length)).map { text.substring(with: $0.range(at: 1)) }
+        })
     }
     public static func restoreReceipt(at file: URL) throws {
         guard let data = try read(file) else { throw StudioConfigurationError.invalid }

@@ -59,6 +59,23 @@ public struct StudioOrigin: Codable, Hashable, Sendable {
         let input = "agentwatch-studio-profile-v1\u{0}\(value)\u{0}\(orgID.uuidString.lowercased())\u{0}\(ownerID.uuidString.lowercased())"
         return SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
     }
+    public func credentialSlotID(orgID: UUID, ownerID: UUID, keyID: UUID, mode: StudioCredentialMode) -> String {
+        let input = "agentwatch-studio-slot-v2\u{0}\(profileID(orgID: orgID, ownerID: ownerID))\u{0}\(keyID.uuidString.lowercased())\u{0}\(mode.rawValue)"
+        return SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+/// Admin-issued connection code "<Studio origin>#<key>". It is split locally
+/// into the two fields; the combined string is never stored or sent.
+public enum StudioConnectionCode {
+    public static func split(_ input: String) -> (origin: String, key: String)? {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let mark = text.range(of: "#as_live_") else { return nil }
+        let key = String(text[text.index(after: mark.lowerBound)...])
+        guard key.count > 8, !key.contains(where: { $0.isWhitespace || $0 == "#" }),
+              let origin = try? StudioOrigin(String(text[..<mark.lowerBound])) else { return nil }
+        return (origin.value, key)
+    }
 }
 
 public struct StudioUser: Codable, Equatable, Sendable, Identifiable {
@@ -75,7 +92,9 @@ public struct StudioIdentity: Codable, Equatable, Sendable {
     public let user: StudioUser
     public let orgID: UUID
     public let apiVersion: String
-    enum CodingKeys: String, CodingKey { case user, orgID = "org_id", apiVersion = "api_version" }
+    public var keyID: UUID? = nil
+    public var credentialMode: StudioCredentialMode? = nil
+    enum CodingKeys: String, CodingKey { case user, orgID = "org_id", apiVersion = "api_version", keyID = "key_id", credentialMode = "credential_mode" }
 }
 public struct StudioCapabilities: Decodable, Equatable, Sendable {
     public let apiVersion: String
@@ -162,7 +181,9 @@ public protocol StudioConnecting: Sendable {
 public struct StudioClient: StudioConnecting {
     private struct Failure: Decodable { struct Detail: Decodable { let code: String }; let error: Detail }
     public static let maxResponseBytes = 1_048_576
-    private let transport: any StudioHTTPTransport
+    let transport: any StudioHTTPTransport
+    /// Identifies the client version to Studio; carries no user or device data.
+    public static let userAgent = "AgentWatch/" + ((Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).flatMap { StudioClientStatusReport.number(in: $0) } ?? "0")
     public init(transport: any StudioHTTPTransport = StudioURLSessionTransport()) { self.transport = transport }
 
     public static func validKey(_ value: String) -> Bool {
@@ -189,7 +210,7 @@ public struct StudioClient: StudioConnecting {
             guard list.object == "list", list.admissionRequired, list.data.count <= 1000,
                   Set(list.data.map(\.id)).count == list.data.count,
                   list.data.allSatisfy({ !$0.id.isEmpty && $0.id.utf8.count <= 160 &&
-                      (($0.ownedBy == "claude" && $0.nativeProtocol == "messages") || ($0.ownedBy == "codex" && $0.nativeProtocol == "responses")) })
+                      StudioVendor.validModel(ownedBy: $0.ownedBy, nativeProtocol: $0.nativeProtocol) })
             else { throw StudioError.invalidResponse }
             models = .available(list.data)
         } catch let error as StudioError {
@@ -203,6 +224,8 @@ public struct StudioClient: StudioConnecting {
         var request = URLRequest(url: origin.url(path: "studio/v1/client-config"))
         request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(StudioVendor.clientFeatures, forHTTPHeaderField: "X-Studio-Client-Features")
         if let previous { request.setValue("\"" + previous.revision + "\"", forHTTPHeaderField: "If-None-Match") }
         let response = try await transport.send(request, origin: origin)
         if response.status == 304 {
@@ -228,6 +251,8 @@ public struct StudioClient: StudioConnecting {
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!)
         request.httpMethod = "GET"; request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(StudioVendor.clientFeatures, forHTTPHeaderField: "X-Studio-Client-Features")
         if let key { request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
         do {
             let response = try await transport.send(request, origin: origin)

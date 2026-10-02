@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AgentWatchCore
 
 enum StudioSection: String, CaseIterable, Identifiable {
@@ -6,22 +7,25 @@ enum StudioSection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Employee client for Studio: one status line, then tools, usage or diagnostics.
+/// Administrative actions intentionally live only in the Studio web console.
 struct StudioConnectionView: View {
     @Environment(StudioConnectionStore.self) private var studio
     @State private var sync: StudioSyncStore
     @State private var section: StudioSection
-    private let logReader: any StudioLocalLogReading
+    @State private var logs: StudioLocalLogStore
     @State private var origin = ""
     @State private var key = ""
     @State private var editingKey = false
+    @State private var showFolders = false
     @State private var disconnectReview: DisconnectReview?
     @State private var disconnecting = false
-    @State private var disconnectMessage: String?
+    @State private var notice: String?
 
     init(sync: StudioSyncStore = .shared, section: StudioSection = .tools, logReader: any StudioLocalLogReading = StudioLocalLogReader()) {
-        self.logReader = logReader
         _sync = State(initialValue: sync)
         _section = State(initialValue: section)
+        _logs = State(initialValue: StudioLocalLogStore(reader: logReader))
     }
 
     private struct DisconnectReview: Identifiable {
@@ -30,53 +34,55 @@ struct StudioConnectionView: View {
         var id: String { profile.id }
     }
 
+    private var connected: Bool { studio.profile != nil && !editingKey }
+    private var failedTools: Int { sync.results.filter { !$0.success && sync.selected.contains($0.target) }.count }
+    private var employeeStatus: StudioEmployeeStatus {
+        StudioEmployeeStatus.evaluate(hasProfile: studio.profile != nil, state: studio.state, error: studio.error, key: sync.keyInfo,
+                                      quota: StudioQuotaSummary.from(studio.dashboard?.quota), failedTools: failedTools)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Studio").font(ClaudeFont.heading(26))
-                    Spacer()
-                    Text("Kết nối công cụ của bạn").font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
-                }
-                connectionCard
-                if studio.profile != nil && !editingKey {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                header
+                if connected {
+                    statusStrip
                     Picker("Nội dung Studio", selection: $section) {
                         ForEach(StudioSection.allCases) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: .infinity)
+                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
                 }
-            }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 14)
+            }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if disconnecting { ProgressView("Đang ngắt kết nối và kiểm tra phiên CLI…") }
-                    if let disconnectMessage { Text(disconnectMessage).font(ClaudeFont.body()).textSelection(.enabled) }
-                    if studio.profile == nil || editingKey {
-                        form
+                VStack(alignment: .leading, spacing: 14) {
+                    if disconnecting { ProgressView("Đang ngắt kết nối…").controlSize(.small) }
+                    if let notice {
+                        Text(notice).font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted).textSelection(.enabled)
+                    }
+                    if !connected {
+                        StudioConnectForm(origin: $origin, key: $key, editingKey: editingKey, sync: sync) { submitted in
+                            editingKey = false; section = .tools; notice = nil
+                            _ = submitted
+                        }
                     } else {
                         switch section {
-                        case .tools:
-                            StudioConfigurationView(sync: sync)
-                            if let snapshot = studio.snapshot { models(snapshot) }
-                        case .usage:
-                            StudioDashboardView()
-                        case .diagnostics:
-                            if let snapshot = studio.snapshot { account(snapshot) }
-                            DisclosureGroup("Mở CLI trong profile riêng") {
-                                StudioLauncherView().padding(.top, 12)
-                            }.font(ClaudeFont.body()).claudeCard()
-                            StudioLocalLogsView(reader: logReader)
+                        case .tools: StudioToolsTab(sync: sync, openUsage: { section = .usage })
+                        case .usage: StudioDashboardView()
+                        case .diagnostics: StudioDiagnosticsTab(sync: sync, logs: logs, status: employeeStatus)
                         }
                     }
                 }.padding(.horizontal, 20).padding(.bottom, 20)
             }
         }
-        .frame(maxWidth: 900)
+        .frame(maxWidth: 980)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task {
             origin = studio.profile?.origin.value ?? ""
             if studio.state == .saved { await studio.refresh(allowInteraction: false) }
         }
+        .onChange(of: studio.profile?.id) { _, _ in logs.clear(); sync.activateProfile() }
         .onDisappear { key = ""; editingKey = false }
         .disabled(disconnecting)
+        .sheet(isPresented: $showFolders) { StudioFoldersSheet(sync: sync) }
         .sheet(item: $disconnectReview) { review in
             StudioDisconnectSheet(origin: review.profile.origin.value,
                                   running: review.inventory.entries.filter { $0.state == .running }.count,
@@ -88,174 +94,214 @@ struct StudioConnectionView: View {
         }
     }
 
-    private var connectionCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "server.rack")
-                    .font(.system(size: 22)).foregroundStyle(Claude.orange)
-                    .frame(width: 40, height: 40).background(Claude.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
-                VStack(alignment: .leading, spacing: 4) {
-                    if let snapshot = studio.snapshot {
-                        Text(snapshot.identity.user.displayName).font(ClaudeFont.heading(17)).textSelection(.enabled)
-                        Text(snapshot.identity.user.teamName ?? "Chưa có team")
-                            .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
-                    } else {
-                        Text("Tài khoản công ty").font(ClaudeFont.heading(17))
-                        Text("Dùng địa chỉ Studio và key được cấp.").font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
+    private var header: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text("Studio").font(ClaudeFont.heading(24))
+            Spacer()
+            if !studio.availableProfiles.isEmpty {
+                Menu {
+                    ForEach(studio.availableProfiles, id: \.id) { profile in
+                        Button {
+                            Task {
+                                key = ""; editingKey = false
+                                await studio.selectProfile(profile.id)
+                                sync.activateProfile()
+                                if studio.state == .connected && sync.enabled { await sync.synchronize() }
+                            }
+                        } label: {
+                            if profile.id == studio.profile?.id { Label(profileTitle(profile), systemImage: "checkmark") }
+                            else { Text(profileTitle(profile)) }
+                        }
                     }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                if studio.profile != nil {
-                    Button {
-                        Task {
-                            await studio.refresh()
-                            if studio.state == .connected && sync.enabled { await sync.synchronize() }
-                        }
-                    } label: {
-                        if studio.error == .keychainApprovalRequired { Text("Cho phép Keychain").font(ClaudeFont.label(11)) }
-                        else { Image(systemName: "arrow.clockwise").frame(width: 22, height: 22) }
-                    }.help("Kiểm tra kết nối, usage và cấu hình đã chọn").accessibilityLabel(studio.error == .keychainApprovalRequired ? "Cho phép Keychain" : "Kiểm tra lại kết nối")
-                        .disabled(studio.state == .checking)
-                    Menu {
-                        Button(editingKey ? "Hủy thay key" : "Thay key nhân viên") {
-                            key = ""; origin = studio.profile?.origin.value ?? ""; editingKey.toggle()
-                        }
-                        Divider()
-                        Button("Ngắt kết nối", role: .destructive) {
-                            guard let profile = studio.profile else { return }
-                            key = ""; editingKey = false; disconnectMessage = nil
-                            disconnectReview = DisconnectReview(profile: profile, inventory: StudioProcessRegistry().snapshot(connection: profile))
-                        }
-                    } label: { Image(systemName: "ellipsis").frame(width: 22, height: 22) }
-                    .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Quản lý kết nối Studio")
+                } label: { Text(studio.profile.map(profileTitle) ?? "Chọn key đã lưu").lineLimit(1) }
+                .fixedSize().disabled(studio.state == .checking || sync.busy)
+                .accessibilityLabel("Key Studio đang dùng")
+            }
+            if studio.profile != nil {
+                Button {
+                    Task {
+                        await studio.refresh()
+                        if studio.state == .connected && sync.enabled { await sync.synchronize() }
+                    }
+                } label: {
+                    if studio.state == .checking { ProgressView().controlSize(.small).frame(width: 22, height: 22) }
+                    else { Image(systemName: "arrow.clockwise").frame(width: 22, height: 22) }
+                }
+                .help("Kiểm tra kết nối, usage và cấu hình công cụ").accessibilityLabel("Kiểm tra lại kết nối")
+                .disabled(studio.state == .checking)
+                Menu {
+                    Button(editingKey ? "Hủy thêm key" : "Thêm key…") { key = ""; origin = studio.profile?.origin.value ?? ""; editingKey.toggle() }
+                    Button("Thư mục & khôi phục cấu hình…") { showFolders = true }
+                    Button("Sao chép thông tin hỗ trợ") { copySupport() }
+                    Divider()
+                    Button("Ngắt kết nối…", role: .destructive) {
+                        guard let profile = studio.profile else { return }
+                        key = ""; editingKey = false; notice = nil
+                        disconnectReview = DisconnectReview(profile: profile, inventory: StudioProcessRegistry().snapshot(connection: profile))
+                    }
+                } label: { Image(systemName: "ellipsis.circle").frame(width: 22, height: 22) }
+                .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Quản lý kết nối Studio")
+            }
+        }
+    }
+
+    private func profileTitle(_ profile: StudioProfile) -> String {
+        let kind = profile.credentialMode == .managed ? "Piagent công ty" : "CLI trực tiếp"
+        return kind + " · " + (profile.keyID.map { String($0.uuidString.lowercased().prefix(8)) } ?? "key hiện có")
+    }
+
+    /// Identity, key and the single combined state. Everything else is one click away.
+    private var statusStrip: some View {
+        let status = employeeStatus
+        return HStack(alignment: .center, spacing: 12) {
+            Text(String((studio.snapshot?.identity.user.displayName ?? "S").prefix(1)).uppercased())
+                .font(ClaudeFont.heading(14)).foregroundStyle(Claude.orange)
+                .frame(width: 34, height: 34).background(Claude.orange.opacity(0.1), in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(studio.snapshot?.identity.user.displayName ?? "Tài khoản công ty").font(ClaudeFont.heading(15)).lineLimit(1)
+                    if let team = studio.snapshot?.identity.user.teamName {
+                        Text("· " + team).font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted).lineLimit(1)
+                    }
+                }
+                Text(keyLine).font(ClaudeFont.mono(10.5)).foregroundStyle(Claude.textMuted).lineLimit(1).truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 4) {
+                StudioPill(title: status.title, tone: StudioTone(status.tone))
+                if let detail = status.detail, !(status.action == .showTools && section == .tools) {
+                    Text(detail).font(ClaudeFont.body(11)).foregroundStyle(Claude.textMuted).multilineTextAlignment(.trailing).lineLimit(2)
                 }
             }
-            HStack(alignment: .top, spacing: 6) {
-                if studio.state == .checking { ProgressView().controlSize(.mini) }
-                else { Image(systemName: studio.state == .connected ? "checkmark.circle.fill" : "circle.dotted") }
-                Text(status).fixedSize(horizontal: false, vertical: true)
-            }.font(ClaudeFont.body(12)).foregroundStyle(studio.state == .connected ? Claude.live : Claude.textMuted)
-            if let profile = studio.profile {
-                Text(profile.origin.value).font(ClaudeFont.mono(11)).foregroundStyle(Claude.textMuted)
-                    .textSelection(.enabled).lineLimit(2).truncationMode(.middle)
+            if status.action == .allowKeychain {
+                Button("Cho phép Keychain") { Task { await studio.refresh() } }.controlSize(.small)
+            } else if status.action == .replaceKey {
+                Button("Thay key") { key = ""; editingKey = true }.controlSize(.small)
+            } else if status.action == .showTools, section != .tools {
+                Button("Xem") { section = .tools }.controlSize(.small)
             }
-            if let error = studio.error {
-                Text(error.localizedDescription).font(ClaudeFont.body(12)).foregroundStyle(Claude.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }.claudeCard()
+        }.studioCard(padding: 12)
     }
+
+    private var keyLine: String {
+        var parts: [String] = []
+        if let info = sync.keyInfo {
+            parts.append([info.label, info.prefix + "…"].compactMap { $0 }.joined(separator: " · "))
+            parts.append("hết hạn " + StudioFormat.day(info.expiresAt))
+        }
+        if parts.isEmpty, let profile = studio.profile { parts.append(StudioFormat.host(profile.origin.value)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func copySupport() {
+        let bundle = Bundle.main.infoDictionary, os = ProcessInfo.processInfo.operatingSystemVersion
+        var lines = ["Agent Watch \(bundle?["CFBundleShortVersionString"] as? String ?? "?") (\(bundle?["CFBundleVersion"] as? String ?? "?")) · macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"]
+        if let profile = studio.profile { lines.append("Studio: " + profile.origin.value) }
+        if let user = studio.snapshot?.identity.user {
+            lines.append("Thành viên: \(user.id.uuidString.lowercased()) · Team: \(user.teamName ?? "—")")
+        }
+        if let info = sync.keyInfo { lines.append("Key: \(info.prefix) · hết hạn \(info.expiresAt.formatted(.iso8601))") }
+        let tools = sync.lastReport?.tools.filter { $0.status != "not_selected" }.map { "\($0.target) \($0.status)\($0.cli_version.map { " " + $0 } ?? "")\($0.error_code.map { " [" + $0 + "]" } ?? "")" } ?? []
+        if !tools.isEmpty { lines.append("Công cụ: " + tools.joined(separator: ", ")) }
+        lines.append("Trạng thái: " + employeeStatus.title)
+        lines.append("Thời điểm: " + Date().formatted(.iso8601))
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+        notice = "Đã sao chép thông tin hỗ trợ (không gồm key)."
+    }
+
     private func disconnect(_ review: DisconnectReview, choice: StudioDisconnectChoice) {
         disconnectReview = nil; disconnecting = true
         Task { @MainActor in
             defer { disconnecting = false }
             do {
-                sync.reset()
+                sync.reset(); logs.clear()
                 let result = try await StudioDisconnect.perform(store: studio, expected: review.profile, choice: choice)
-                disconnectMessage = result.message
+                notice = result.message
             } catch StudioProcessError.busy {
-                disconnectMessage = "CLI đang khởi động. Chưa ngắt kết nối; thử lại khi CLI mở xong."
+                notice = "CLI đang khởi động. Chưa ngắt kết nối; thử lại khi CLI mở xong."
             } catch {
-                disconnectMessage = (error as? StudioError)?.localizedDescription ?? "Chưa ngắt kết nối: không đọc được danh sách phiên CLI an toàn."
+                notice = (error as? StudioError)?.localizedDescription ?? "Chưa ngắt kết nối: không đọc được danh sách phiên CLI an toàn."
             }
         }
     }
-    private var status: String {
-        switch studio.state {
-        case .disconnected: "Chưa kết nối Studio"
-        case .saved: "Đã lưu kết nối · chưa xác minh lại"
-        case .checking: "Đang xác minh với Studio…"
-        case .connected: "Đã xác minh tài khoản"
-        case .stale: "Chưa cập nhật · đang hiển thị dữ liệu cũ"
-        case .failed: "Chưa thể xác minh kết nối"
-        }
-    }
-    private var form: some View {
-        VStack(alignment: .leading, spacing: 16) {
+}
+
+/// First connection or key replacement: two fields, tool choice, one button.
+struct StudioConnectForm: View {
+    @Environment(StudioConnectionStore.self) private var studio
+    @Binding var origin: String
+    @Binding var key: String
+    let editingKey: Bool
+    let sync: StudioSyncStore
+    let done: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 12) {
-                Text(editingKey ? "Thay key nhân viên" : "1. Kết nối tài khoản").font(ClaudeFont.heading(17))
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Địa chỉ API Studio").font(ClaudeFont.label())
-                    TextField("http://127.0.0.1:17922", text: $origin)
-                        .textFieldStyle(.roundedBorder).disabled(studio.profile != nil)
-                        .accessibilityLabel("Địa chỉ API Studio")
+                Text(editingKey ? "Thêm key Studio" : "Kết nối Studio").font(ClaudeFont.heading(17))
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) { originField; keyField }
+                    VStack(alignment: .leading, spacing: 12) { originField; keyField }
                 }
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Key nhân viên").font(ClaudeFont.label())
-                    SecureField("Dán key do quản trị viên cấp", text: $key)
-                        .textFieldStyle(.roundedBorder).accessibilityLabel("Key nhân viên Studio")
-                }
-                Label("Key được lưu trong Keychain trên máy.", systemImage: "lock.shield")
+                Label("Key lưu trong Keychain của máy.", systemImage: "lock.shield")
                     .font(ClaudeFont.body(11)).foregroundStyle(Claude.textMuted)
-            }.claudeCard()
+                if let error = studio.error {
+                    Text(error.localizedDescription).font(ClaudeFont.body(12)).foregroundStyle(Claude.orange).fixedSize(horizontal: false, vertical: true)
+                }
+            }.studioCard()
             StudioConfigurationView(showApply: false, sync: sync)
             Button {
                 let submittedOrigin = origin, submittedKey = key
+                let submittedTargets = sync.selected, submittedDirectories = sync.directories
                 key = ""
                 Task {
                     await studio.connect(origin: submittedOrigin, key: submittedKey)
                     if studio.state == .connected {
-                        editingKey = false; section = .tools; sync.enabled = true
+                        sync.activateProfile()
+                        sync.selected = studio.profile?.credentialMode == .managed ? submittedTargets.intersection([.pi, .piagent]) : submittedTargets
+                        sync.directories = submittedDirectories
+                        sync.enabled = true
                         StudioBackgroundService.shared.start()
+                        done(true)
                         await sync.synchronize(force: true)
                     }
                 }
             } label: {
                 HStack {
                     if studio.state == .checking || sync.busy { ProgressView().controlSize(.small) }
-                    Text(studio.state == .checking ? "Đang xác minh…" : "Kết nối và áp dụng")
+                    Text(studio.state == .checking ? "Đang xác minh…" : editingKey ? "Lưu key và áp dụng" : "Kết nối và áp dụng")
                 }.frame(maxWidth: .infinity).padding(.vertical, 5)
             }
             .buttonStyle(.borderedProminent).tint(Claude.orange)
             .disabled(origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || key.isEmpty || studio.state == .checking || sync.busy || sync.selected.isEmpty)
         }
     }
-    private func account(_ snapshot: StudioConnectionSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "Tài khoản nhân viên")
-            Text(snapshot.identity.user.displayName).font(ClaudeFont.heading(20))
-            LabeledContent("Vai trò", value: role(snapshot.identity.user.role))
-            if let team = snapshot.identity.user.teamName { LabeledContent("Team", value: team) }
-            LabeledContent("ID tài khoản", value: snapshot.identity.user.id.uuidString.lowercased())
-                .font(ClaudeFont.mono(11)).textSelection(.enabled)
-            LabeledContent("Xác minh lần cuối", value: snapshot.observedAt.formatted(date: .abbreviated, time: .shortened))
-            LabeledContent("API", value: snapshot.capabilities.apiVersion)
-                .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
-        }.claudeCard()
+    private var originField: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Địa chỉ Studio").font(ClaudeFont.label())
+            TextField("https://studio.congty.vn hoặc mã kết nối", text: $origin)
+                .textFieldStyle(.roundedBorder).disabled(studio.profile != nil).accessibilityLabel("Địa chỉ API Studio")
+                .help("Dán mã kết nối (địa chỉ#key) để điền cả hai ô.")
+                .onChange(of: origin) { _, value in fill(value) }
+        }
     }
-    private func role(_ value: String) -> String {
-        switch value { case "owner": "Chủ hệ thống"; case "admin": "Quản trị viên"; case "viewer": "Người xem"; default: "Thành viên" }
+    /// A pasted connection code fills both fields; the origin is only
+    /// replaced when no profile is saved yet (key replacement keeps it).
+    private func fill(_ value: String) {
+        guard let code = StudioConnectionCode.split(value) else { return }
+        if studio.profile == nil { origin = code.origin }
+        key = code.key
     }
-    private func models(_ snapshot: StudioConnectionSnapshot) -> some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 12) {
-                switch snapshot.models {
-                case .available(let models):
-                    if models.isEmpty { Text("Key này chưa được cấp model khả dụng.").foregroundStyle(Claude.textMuted) }
-                    ForEach(models) { model in
-                        HStack(alignment: .top, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(model.displayName.isEmpty ? model.id : model.displayName).font(ClaudeFont.body())
-                                Text(model.id).font(ClaudeFont.mono(11)).foregroundStyle(Claude.textMuted).textSelection(.enabled)
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                            Text(model.ownedBy == "claude" ? "Claude" : model.ownedBy == "codex" ? "Codex" : model.ownedBy)
-                                .font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
-                        }
-                    }
-                case .unavailable(let error):
-                    Text(error.localizedDescription).foregroundStyle(Claude.orange)
-                }
-            }.padding(.top, 12)
-        } label: {
-            HStack {
-                Text("Model được cấp").font(ClaudeFont.heading(15))
-                Spacer()
-                if case .available(let models) = snapshot.models {
-                    Text("\(models.count) model").font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
-                }
-            }
-        }.font(ClaudeFont.body(12)).claudeCard()
+    private var keyField: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Key được cấp").font(ClaudeFont.label())
+            SecureField("Dán key do quản trị viên gửi", text: $key)
+                .textFieldStyle(.roundedBorder).accessibilityLabel("Key nhân viên Studio")
+                .onChange(of: key) { _, value in fill(value) }
+        }
     }
-
 }
 
 struct StudioDisconnectSheet: View {
@@ -267,31 +313,63 @@ struct StudioDisconnectSheet: View {
     let choose: (StudioDisconnectChoice) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Ngắt kết nối Studio").font(ClaudeFont.heading(22))
-            Text(origin).font(ClaudeFont.mono(12)).textSelection(.enabled)
-            Text("CLI công ty đang chạy: \(running) · chưa xác minh: \(unverified)").font(ClaudeFont.body())
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Ngắt kết nối Studio").font(ClaudeFont.heading(20))
+            Text(origin).font(ClaudeFont.mono(12)).foregroundStyle(Claude.textMuted).textSelection(.enabled)
+            HStack(spacing: 8) {
+                StudioPill(title: "\(running) CLI đang chạy", tone: running > 0 ? .warning : .neutral)
+                if unverified > 0 { StudioPill(title: "\(unverified) chưa xác minh", tone: .warning) }
+            }
             if !sessions.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(sessions.enumerated()), id: \.offset) { _, session in Text(session).font(ClaudeFont.mono(11)).lineLimit(2) }
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(sessions.enumerated()), id: \.offset) { _, session in Text(session).font(ClaudeFont.mono(11)).lineLimit(1) }
                 }
             }
             if incomplete {
-                Text("Chưa đọc được đầy đủ danh sách phiên. Hãy kiểm tra thêm các cửa sổ Terminal.")
-                    .font(ClaudeFont.body()).foregroundStyle(Claude.orange)
+                Text("Chưa đọc đủ danh sách phiên. Kiểm tra thêm các cửa sổ Terminal.").font(ClaudeFont.body(12)).foregroundStyle(Claude.orange)
             }
-            Text("Key lưu trên Mac sẽ được xóa. Log công ty, file dự án và cấu hình cá nhân được giữ lại.")
-                .font(ClaudeFont.body())
-            Text("Giữ CLI: phiên đang chạy vẫn có key trong bộ nhớ. Muốn thu hồi quyền ngay, hãy thu hồi key trên Studio.")
-                .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
-            Text("Đóng CLI: chỉ yêu cầu các CLI chính được launcher ghi nhận kết thúc. CLI mở bằng bản cũ, công cụ con và phiên chưa xác minh cần được kiểm tra trong Terminal. Danh sách được kiểm tra lại khi xác nhận.")
-                .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
+            Text("Key trên máy sẽ bị xóa. Log, project và cấu hình cá nhân được giữ.").font(ClaudeFont.body(12))
             HStack {
                 Button("Hủy", action: cancel).keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Ngắt kết nối, giữ CLI") { choose(.keepCLI) }
-                Button("Ngắt kết nối và đóng CLI", role: .destructive) { choose(.closeCLI) }
+                Button("Ngắt, giữ CLI") { choose(.keepCLI) }
+                    .help("Phiên đang chạy vẫn giữ key trong bộ nhớ. Muốn chặn ngay, nhờ quản trị viên thu hồi key.")
+                Button("Ngắt và đóng CLI", role: .destructive) { choose(.closeCLI) }
+                    .help("Chỉ đóng các CLI do launcher ghi nhận. CLI mở bằng cách khác cần kiểm tra trong Terminal.")
             }
-        }.padding(24).frame(width: 580)
+        }.padding(22).frame(width: 520)
+    }
+}
+
+/// Folder overrides and restore live in a sheet: rarely used, never in the main flow.
+struct StudioFoldersSheet: View {
+    let sync: StudioSyncStore
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Thư mục & khôi phục").font(ClaudeFont.heading(18))
+            Text("Bỏ chọn công cụ chỉ dừng đồng bộ. Khôi phục trả lại cấu hình trước khi Agent Watch thay đổi.")
+                .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
+            ForEach(StudioSyncTarget.allCases) { target in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(target.title).font(ClaudeFont.label(12))
+                        Text(sync.directory(target).path).font(ClaudeFont.mono(10.5)).foregroundStyle(Claude.textMuted)
+                            .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    }
+                    Spacer()
+                    Button("Đổi…") { choose(target) }.controlSize(.small)
+                    Button("Khôi phục") { sync.restore(target) }.controlSize(.small)
+                }
+                if target != StudioSyncTarget.allCases.last { Divider() }
+            }
+            Text(sync.status).font(ClaudeFont.body(11)).foregroundStyle(Claude.textMuted)
+            HStack { Spacer(); Button("Xong") { dismiss() }.keyboardShortcut(.defaultAction) }
+        }.padding(22).frame(width: 560)
+    }
+    private func choose(_ target: StudioSyncTarget) {
+        let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.directoryURL = sync.directory(target)
+        if panel.runModal() == .OK, let url = panel.url { sync.directories[target.rawValue] = url.path }
     }
 }

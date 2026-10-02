@@ -82,7 +82,7 @@ struct PrivacyView: View {
             Text("Kiểm tra cập nhật qua Sparkle. Quota có thể được làm mới từ provider theo yêu cầu; Drive/Gmail chỉ dùng khi đã kết nối và chọn gửi.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
-            Text("Report chi tiết có nội dung prompt đã lọc. Các mẫu thông tin xác thực phổ biến được che trước khi xuất; anh có thể xem file trước khi chia sẻ.")
+            Text("Report chi tiết có nội dung prompt đã lọc. Các mẫu thông tin xác thực phổ biến được che trước khi xuất; có thể xem file trước khi chia sẻ.")
                 .font(ClaudeFont.body(11))
                 .foregroundStyle(Claude.textMuted)
         }

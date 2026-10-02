@@ -133,7 +133,7 @@ extension StudioDashboardSnapshot {
               today.models.count <= 10, month.models.count <= 10,
               recent.requests.count <= 20, recent.limit == 20, recent.offset == 0,
               Set(recent.requests.map(\.id)).count == recent.requests.count,
-              recent.requests.allSatisfy({ $0.user_id == identity.user.id && ["confirmed", "unresolved", "disputed"].contains($0.accounting_status) && ["claude", "codex"].contains($0.provider) && $0.created_at >= recent.from && $0.created_at < recent.to && ($0.accounting_status == "confirmed" || $0.confirmed.total_tokens == nil) })
+              recent.requests.allSatisfy({ $0.user_id == identity.user.id && ["confirmed", "unresolved", "disputed"].contains($0.accounting_status) && (["claude", "codex"].contains($0.provider) || StudioVendor.valid($0.provider)) && $0.created_at >= recent.from && $0.created_at < recent.to && ($0.accounting_status == "confirmed" || $0.confirmed.total_tokens == nil) })
         else { throw StudioError.invalidResponse }
         if let quota {
             guard quota.admission_required, quota.user_id == identity.user.id, quota.windows.count <= 1000,

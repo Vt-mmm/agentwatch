@@ -9,6 +9,12 @@ import AgentWatchCore
         if args.first == "credential" {
             exit(StudioCredentialCommand.run(arguments: Array(args.dropFirst())))
         }
+        if args.first == "managed-broker" {
+            exit(await StudioManagedBrokerCommand.run(arguments: Array(args.dropFirst())))
+        }
+        if args.first == "managed-authorize" {
+            exit(StudioManagedBrokerCommand.authorize(arguments: Array(args.dropFirst())))
+        }
         #if DEBUG
         if args.first == "--studio-local-acceptance" {
             await StudioLocalAcceptance.run(arguments: Array(args.dropFirst()))
@@ -132,6 +138,7 @@ struct AgentWatchMacApp: App {
 
         MenuBarExtra {
             MenuBarSummaryView()
+                .environment(studio)
                 .environment(watcher)
                 .environment(projectStore)
                 .environment(appearance)

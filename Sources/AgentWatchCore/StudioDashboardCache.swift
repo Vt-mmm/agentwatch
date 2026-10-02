@@ -34,7 +34,7 @@ import Foundation
             guard data.count <= Self.maxBytes else { throw StudioError.storage }
             let envelope = try JSONDecoder().decode(Envelope.self, from: data)
             guard envelope.version == 1, envelope.profile == profile,
-                  profile.origin.profileID(orgID: envelope.dashboard.identity.orgID, ownerID: envelope.dashboard.identity.user.id) == profile.id else { throw StudioError.storage }
+                  profile.matches(envelope.dashboard.identity) else { throw StudioError.storage }
             try envelope.dashboard.validate()
             return envelope.dashboard
         } catch { throw StudioError.storage }
@@ -42,7 +42,7 @@ import Foundation
     public func save(_ snapshot: StudioDashboardSnapshot, profile: StudioProfile) throws {
         do {
             let url = try file(profile)
-            guard profile.origin.profileID(orgID: snapshot.identity.orgID, ownerID: snapshot.identity.user.id) == profile.id else { throw StudioError.storage }
+            guard profile.matches(snapshot.identity) else { throw StudioError.storage }
             try snapshot.validate()
             let data = try JSONEncoder().encode(Envelope(version: 1, profile: profile, dashboard: snapshot))
             guard data.count <= Self.maxBytes else { throw StudioError.storage }

@@ -1,140 +1,126 @@
 import SwiftUI
 import AgentWatchCore
 
+/// Personal usage: three numbers, remaining quota, then models and recent
+/// requests side by side. Accounting details stay in a tooltip.
 struct StudioDashboardView: View {
     @Environment(StudioConnectionStore.self) private var studio
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("Usage cá nhân").font(ClaudeFont.heading(22))
-                Spacer()
-                if studio.dashboardState == .loading { ProgressView().controlSize(.small) }
-                if studio.dashboardState == .stale { Label("Bản lưu · dữ liệu cũ", systemImage: "clock").foregroundStyle(Claude.orange) }
+        VStack(alignment: .leading, spacing: 14) {
+            if let error = studio.dashboardError, error != studio.error {
+                Text(error.localizedDescription).font(ClaudeFont.body(12)).foregroundStyle(Claude.orange)
             }
-            if let error = studio.dashboardError, error != studio.error { Text(error.localizedDescription).foregroundStyle(Claude.orange) }
             if let report = studio.dashboard {
-                Text("\(report.identity.user.displayName) · Nguồn: Studio ledger · \(report.today.timezone)")
-                    .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
-                if studio.dashboardState == .loading { Text("Đang tải; số bên dưới là lần cập nhật trước.").font(.caption).foregroundStyle(Claude.orange) }
-                usageCards(report)
-                models(report.month)
-                DisclosureGroup("Hạn mức của key") { quota(report).padding(.top, 12) }
-                    .font(ClaudeFont.body()).claudeCard()
-                requests(report.recent)
-                DisclosureGroup("Cách tính usage") {
-                    Text("Nguồn: Studio ledger. Input đã gồm cache; output đã gồm reasoning. Usage chưa rõ không được coi là 0. Token ghi sổ không cộng vào token xác nhận. Chi phí và dung lượng thuê bao chưa có dữ liệu xác minh.")
-                        .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted).padding(.top, 8)
-                }.font(ClaudeFont.body(12))
-            } else if studio.dashboardState != .loading {
-                Text("Chưa có dữ liệu usage đã xác minh từ Studio.").foregroundStyle(Claude.textMuted)
+                tiles(report)
+                quota(report)
+                StudioColumns(trailingWidth: 320) {
+                    requests(report.recent)
+                } trailing: {
+                    models(report.month)
+                }
+                footer(report)
+            } else if studio.dashboardState == .loading {
+                ProgressView("Đang tải usage…").controlSize(.small)
+            } else {
+                Text("Chưa có dữ liệu usage từ Studio.").font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
             }
             if studio.cacheUnavailable {
-                Text("Không đọc/lưu được bản cache trên máy. Dữ liệu đang hiển thị có thể không còn khi mở lại app.")
-                    .font(ClaudeFont.body(12)).foregroundStyle(Claude.orange)
+                Text("Không lưu được bản cache trên máy; số liệu có thể mất khi mở lại app.").font(ClaudeFont.body(11)).foregroundStyle(Claude.orange)
             }
         }
     }
-    private func usageCards(_ report: StudioDashboardSnapshot) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 12) {
-            metric("Ngày · token xác nhận", value: report.today.summary.confirmed.total_tokens?.formatted ?? "—", detail: "Ngày \(date(report.today.from, zone: report.today.timezone)) · \(report.today.summary.requests.formatted) request · cập nhật \(time(report.today.observed_at))")
-            metric("Tháng · token xác nhận", value: report.month.summary.confirmed.total_tokens?.formatted ?? "—", detail: "Từ \(date(report.month.from, zone: report.month.timezone)) · cập nhật \(time(report.month.observed_at))")
-            metric("Chưa xác nhận · trong kỳ", value: report.month.summary.unresolved_requests.formatted, detail: "Gồm \(report.month.summary.disputed_requests.formatted) request có số liệu tranh chấp")
-            metric("Token đã ghi sổ · trong kỳ", value: report.month.summary.charged_tokens.formatted, detail: "Có thể gồm charge đang tranh chấp; không cộng vào token xác nhận")
+
+    private func tiles(_ report: StudioDashboardSnapshot) -> some View {
+        HStack(spacing: 12) {
+            tile("Hôm nay", StudioFormat.tokens(report.today.summary.confirmed.total_tokens), "\(report.today.summary.requests.formatted) request")
+            tile("Tháng này", StudioFormat.tokens(report.month.summary.confirmed.total_tokens), "\(report.month.summary.requests.formatted) request")
+            tile("Chưa xác nhận", report.month.summary.unresolved_requests.formatted, report.month.summary.disputed_requests.value == "0" ? "request trong tháng" : "gồm \(report.month.summary.disputed_requests.formatted) cần đối soát")
         }
     }
-    private func metric(_ label: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(label).font(ClaudeFont.label(12)).foregroundStyle(Claude.textMuted)
-            Text(value).font(.system(size: 24, weight: .semibold)).textSelection(.enabled)
-                .minimumScaleFactor(0.5).lineLimit(1)
-            Text(detail).font(ClaudeFont.body(11)).foregroundStyle(Claude.textMuted)
-        }.frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading).claudeCard()
+    private func tile(_ label: String, _ value: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(ClaudeFont.label(11)).foregroundStyle(Claude.textMuted)
+            Text(value).font(.system(size: 22, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).textSelection(.enabled)
+            Text(detail).font(ClaudeFont.body(10.5)).foregroundStyle(Claude.textMuted).lineLimit(1)
+        }.frame(maxWidth: .infinity, alignment: .leading).studioCard(padding: 12)
     }
-    private func quota(_ report: StudioDashboardSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if case .available(let models) = studio.snapshot?.models, !models.isEmpty {
-                Picker("Model", selection: Binding(get: { studio.quotaModelID ?? models[0].id }, set: { id in Task { await studio.selectQuotaModel(id) } })) {
-                    ForEach(models) { model in Text(model.displayName).tag(model.id) }
-                }.disabled(studio.dashboardState == .loading)
-            } else if let model = report.quotaModel { Text(model.displayName).font(ClaudeFont.heading()) }
-            if let quota = report.quota {
-                if !quota.policy_allowed { Text("Policy hiện tại không cho phép model này.").foregroundStyle(Claude.orange) }
-                else if quota.windows.isEmpty { Text("Studio không trả về cửa sổ hạn mức nào; không suy ra hạn mức vô tận.") }
-                ForEach(quota.windows) { window in
-                    VStack(alignment: .leading, spacing: 5) {
-                        let scope = quota.policies.first(where: { $0.id == window.policy_id })?.scope ?? "unknown"
-                        Text("\(scopeLabel(scope)) · \(window.period == "day" ? "Ngày" : "Tháng") · \(window.model_id ?? "Tất cả model")").font(ClaudeFont.heading(13))
-                        Text("Còn \(window.remaining_tokens.formatted) / \((try? StudioCount(String(window.tokens)).formatted) ?? "—") token")
-                            .font(ClaudeFont.body()).textSelection(.enabled)
-                        Text("Đã xác nhận: \(window.confirmed_tokens.formatted) · Đang giữ: \(window.reserved_tokens.formatted)")
-                            .font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
-                        Text("\(time(window.starts_at)) → \(time(window.ends_at)) · múi giờ policy: \(window.timezone)")
-                            .font(ClaudeFont.label(10)).foregroundStyle(Claude.textMuted)
-                    }
-                    Divider()
-                }
-                Text("Cập nhật \(time(quota.observed_at)). Không cộng các dòng hạn mức. Phần đang giữ có thể bao gồm usage pending; Studio kiểm tra lại khi gửi request.")
-                    .font(ClaudeFont.body(11)).foregroundStyle(Claude.textMuted)
-            } else {
-                Text(report.quotaError?.localizedDescription ?? "Chưa có model khả dụng để kiểm tra quota. Usage cá nhân vẫn độc lập với danh sách model.")
-                    .font(ClaudeFont.body()).foregroundStyle(Claude.textMuted)
-            }
-        }
-    }
-    private func models(_ overview: StudioOverview) -> some View {
+
+    @ViewBuilder private func quota(_ report: StudioDashboardSnapshot) -> some View {
+        let summaries = StudioQuotaSummary.from(report.quota)
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "Theo model · trong kỳ · tối đa 10 model")
-            if overview.models.isEmpty { Text("Chưa có request trong kỳ này.").foregroundStyle(Claude.textMuted) }
-            ForEach(Array(overview.models.enumerated()), id: \.offset) { _, model in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(model.label).font(ClaudeFont.body())
-                        Text("\(model.requests.formatted) request · \(model.unresolved_requests.formatted) chưa xác nhận").font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
+            HStack {
+                SectionLabel(text: "Hạn mức key")
+                Spacer()
+                if case .available(let models) = studio.snapshot?.models, models.count > 1 {
+                    Picker("Model", selection: Binding(get: { studio.quotaModelID ?? models[0].id }, set: { id in Task { await studio.selectQuotaModel(id) } })) {
+                        ForEach(models) { Text($0.displayName.isEmpty ? $0.id : $0.displayName).tag($0.id) }
+                    }.labelsHidden().controlSize(.small).frame(maxWidth: 200).disabled(studio.dashboardState == .loading)
+                        .help("Hạn mức tổng giống nhau cho mọi model; chọn model để xem thêm hạn mức riêng nếu có.")
+                }
+            }
+            if let quota = report.quota, !quota.policy_allowed {
+                Text("Key không được dùng model này.").font(ClaudeFont.body(12)).foregroundStyle(Claude.orange)
+            } else if summaries.isEmpty {
+                Text(report.quotaError?.localizedDescription ?? "Studio chưa trả hạn mức cho key này.").font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 24) { ForEach(summaries, id: \.period) { StudioQuotaBar(summary: $0) } }
+                    VStack(alignment: .leading, spacing: 10) { ForEach(summaries, id: \.period) { StudioQuotaBar(summary: $0) } }
+                }
+            }
+        }.studioCard(padding: 12)
+    }
+
+    private func models(_ overview: StudioOverview) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Theo model · tháng này")
+            if overview.models.isEmpty { Text("Chưa có request.").font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted) }
+            ForEach(Array(overview.models.prefix(6).enumerated()), id: \.offset) { _, model in
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(model.label).font(ClaudeFont.body(12)).lineLimit(1)
+                        Text("\(model.requests.formatted) request").font(ClaudeFont.label(10)).foregroundStyle(Claude.textMuted)
                     }
                     Spacer()
-                    Text(model.confirmed.total_tokens?.formatted ?? "—").monospacedDigit()
+                    Text(StudioFormat.tokens(model.confirmed.total_tokens)).font(ClaudeFont.mono(12)).monospacedDigit()
                 }
             }
-            Text("Token xác nhận · cập nhật \(time(overview.observed_at))").font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
-        }.claudeCard()
+        }.studioCard(padding: 12)
     }
+
     private func requests(_ report: StudioUsageReport) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "20 request gần nhất · trong kỳ")
-            if report.requests.isEmpty { Text("Chưa có request trong kỳ này.").foregroundStyle(Claude.textMuted) }
-            ForEach(report.requests) { request in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(request.model_id).font(ClaudeFont.body())
-                        Spacer()
-                        Text(request.confirmed.total_tokens?.formatted ?? "—").monospacedDigit()
-                        Text(status(request.accounting_status)).font(ClaudeFont.label()).foregroundStyle(request.accounting_status == "confirmed" ? Claude.live : Claude.orange)
-                    }
-                    Text("\(time(request.created_at)) · \(request.provider) · ghi sổ \(request.charged_tokens.formatted) token")
-                        .font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
-                    DisclosureGroup("Chi tiết request") {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(request.id.uuidString.lowercased()).font(ClaudeFont.mono(10)).textSelection(.enabled)
-                            Text("Key: " + request.key_id.uuidString.lowercased()).font(ClaudeFont.mono(10)).textSelection(.enabled)
-                            Text("Input: \(request.confirmed.input_tokens?.formatted ?? "—") · Output: \(request.confirmed.output_tokens?.formatted ?? "—")")
-                        }.padding(.top, 5)
-                    }.font(ClaudeFont.body(11)).foregroundStyle(Claude.textMuted)
+        VStack(alignment: .leading, spacing: 6) {
+            SectionLabel(text: "Request gần đây")
+            if report.requests.isEmpty { Text("Chưa có request trong tháng.").font(ClaudeFont.body(12)).foregroundStyle(Claude.textMuted) }
+            ForEach(report.requests.prefix(10)) { request in
+                HStack(spacing: 8) {
+                    Text(StudioFormat.time(request.created_at)).font(ClaudeFont.mono(10.5)).foregroundStyle(Claude.textMuted).frame(width: 78, alignment: .leading)
+                    Text(request.model_id).font(ClaudeFont.body(12)).lineLimit(1)
+                    Spacer(minLength: 6)
+                    Text(StudioFormat.tokens(request.confirmed.total_tokens)).font(ClaudeFont.mono(11.5)).monospacedDigit()
+                    status(request.accounting_status)
                 }
-                Divider()
+                .help("Mã request: \(request.id.uuidString.lowercased())\nInput \(request.confirmed.input_tokens?.formatted ?? "—") · Output \(request.confirmed.output_tokens?.formatted ?? "—")")
+                .contextMenu { Button("Sao chép mã request") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(request.id.uuidString.lowercased(), forType: .string) } }
             }
-            Text("Nguồn Studio ledger · cập nhật \(time(report.observed_at)). Bao gồm các key khác/đã rotate của cùng nhân viên.")
-                .font(ClaudeFont.label()).foregroundStyle(Claude.textMuted)
-        }.claudeCard()
+        }.studioCard(padding: 12)
     }
-    private func status(_ value: String) -> String {
-        switch value { case "confirmed": "Xác nhận"; case "disputed": "Tranh chấp"; default: "Pending" }
+    @ViewBuilder private func status(_ value: String) -> some View {
+        switch value {
+        case "confirmed": Image(systemName: "checkmark.circle").foregroundStyle(Claude.live).help("Đã xác nhận").font(.system(size: 11))
+        case "disputed": Image(systemName: "exclamationmark.circle").foregroundStyle(Claude.orange).help("Cần đối soát lại").font(.system(size: 11))
+        default: Image(systemName: "clock").foregroundStyle(Claude.textMuted).help("Chưa xác nhận").font(.system(size: 11))
+        }
     }
-    private func scopeLabel(_ value: String) -> String {
-        switch value { case "org": "Tổ chức"; case "team": "Nhóm"; case "user": "Nhân viên"; case "key": "Key"; default: "Phạm vi chưa rõ" }
-    }
-    private func time(_ value: Date) -> String { value.formatted(date: .abbreviated, time: .shortened) }
-    private func date(_ value: Date, zone: String) -> String {
-        let formatter = DateFormatter(); formatter.dateFormat = "dd/MM/yyyy"; formatter.timeZone = TimeZone(identifier: zone)
-        return formatter.string(from: value)
+
+    private func footer(_ report: StudioDashboardSnapshot) -> some View {
+        HStack(spacing: 6) {
+            if studio.dashboardState == .loading { ProgressView().controlSize(.mini) }
+            if studio.dashboardState == .stale { Image(systemName: "clock.arrow.circlepath").foregroundStyle(Claude.orange) }
+            Text("Studio ledger · \(report.today.timezone) · cập nhật \(StudioFormat.time(report.fetchedAt))")
+            Image(systemName: "info.circle")
+                .help("Token xác nhận chỉ cộng request có usage đầy đủ; “—” là chưa rõ, không phải 0. Input đã gồm cache, output đã gồm reasoning. Token ghi sổ tháng này: \(report.month.summary.charged_tokens.formatted). Bao gồm key cũ đã thay của bạn.")
+        }.font(ClaudeFont.body(10.5)).foregroundStyle(Claude.textMuted)
     }
 }

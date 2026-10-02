@@ -71,7 +71,9 @@ enum StudioLocalAcceptance {
             if args[0] == "cleanup" {
                 let state = try JSONDecoder().decode(State.self, from: Data(contentsOf: stateFile))
                 try keys.delete(profileID: state.current.id)
-                if try settings.load()?.id == state.current.id { settings.save(state.previous) }
+                let selected = try settings.load()
+                settings.save(state.current); settings.save(nil)
+                settings.save(selected?.id == state.current.id ? state.previous : selected)
                 try FileManager.default.removeItem(at: stateFile); print("cleanup_ok"); return
             }
             guard args[0] == "prepare" else { throw StudioConfigurationError.invalid }
@@ -80,28 +82,38 @@ enum StudioLocalAcceptance {
             let origin = try StudioOrigin(input.origin)
             let result = try await StudioClient().connect(origin: origin, key: input.key)
             guard case .available(let models) = result.models, let model = models.first(where: {$0.id == input.model}) else { throw StudioConfigurationError.invalid }
-            let profile = try StudioProfile(origin: origin, id: origin.profileID(orgID: result.identity.orgID, ownerID: result.identity.user.id))
+            let mode = result.identity.credentialMode ?? .direct
+            guard let keyID = result.identity.keyID else { throw StudioConfigurationError.invalid }
+            let connection = origin.profileID(orgID: result.identity.orgID, ownerID: result.identity.user.id)
+            let profile = try StudioProfile(origin: origin,
+                id: origin.credentialSlotID(orgID: result.identity.orgID, ownerID: result.identity.user.id, keyID: keyID, mode: mode),
+                connectionID: connection, keyID: keyID, credentialMode: mode)
             let state = State(previous: try settings.load(), current: profile)
             guard !FileManager.default.fileExists(atPath: stateFile.path) else { throw StudioConfigurationError.changed }
             let stateData = try JSONEncoder().encode(state)
             guard FileManager.default.createFile(atPath: stateFile.path, contents: stateData, attributes: [.posixPermissions: 0o600]) else { throw StudioConfigurationError.unsafe }
             try keys.save(input.key, profileID: profile.id); settings.save(profile)
-            let catalog = tool == .pi ? try StudioClientConfiguration.catalogModel(for: model, piExecutable: URL(fileURLWithPath: "/opt/homebrew/bin/pi")) : nil
             let plan: StudioConfigurationPlan
-            if input.all == true {
+            if mode == .managed {
+                guard tool == .pi else { throw StudioConfigurationError.invalid }
+                let manifest = try await StudioClient().configuration(origin: origin, key: input.key)
+                plan = try StudioManagedConfiguration.prepare(directory: URL(fileURLWithPath: input.directory), connection: profile, manifest: manifest,
+                    helper: URL(fileURLWithPath: CommandLine.arguments[0]), runtimeRoot: input.runtimeRoot.map { URL(fileURLWithPath: $0) })
+            } else if input.all == true {
                 let manifest = try await StudioClient().configuration(origin: origin, key: input.key)
                 try manifest.validate(profile: profile)
                 var native: [String: Data] = [:]
-                if tool == .pi { for item in manifest.models { native[item.id] = try StudioClientConfiguration.catalogModel(for: item, piExecutable: URL(fileURLWithPath: "/opt/homebrew/bin/pi")) } }
+                if tool == .pi { for item in manifest.models { native[item.id] = try StudioClientConfiguration.catalogModel(for: item, piExecutable: StudioClientConfiguration.piExecutable()) } }
                 plan = try StudioClientConfiguration.prepareAll(tool: tool, directory: URL(fileURLWithPath: input.directory), connection: profile, models: manifest.models, helper: URL(fileURLWithPath: CommandLine.arguments[0]), codexCatalog: JSONEncoder().encode(manifest.codexCatalog), piCatalogModels: native)
             } else {
+                let catalog = tool == .pi ? try StudioClientConfiguration.catalogModel(for: model, piExecutable: StudioClientConfiguration.piExecutable()) : nil
                 plan = try StudioClientConfiguration.prepare(tool: tool, directory: URL(fileURLWithPath: input.directory), connection: profile, model: model, helper: URL(fileURLWithPath: CommandLine.arguments[0]), piCatalogModel: catalog)
             }
             try StudioClientConfiguration.apply(plan)
             print("prepared_\(input.tool)_\(model.ownedBy)_context_provider_default")
         } catch { FileHandle.standardError.write(Data("Configuration acceptance failed: \(error.localizedDescription)\n".utf8)); exit(1) }
     }
-    struct Input: Decodable { let origin, key, tool, model, directory: String; let all: Bool? }
+    struct Input: Decodable { let origin, key, tool, model, directory: String; let all: Bool?; let runtimeRoot: String? }
     struct State: Codable { let previous: StudioProfile?; let current: StudioProfile }
 }
 

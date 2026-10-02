@@ -55,7 +55,7 @@ struct DailyReportEditor: View {
                             ForEach(draft.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
                         }
                         DisclosureGroup("Gợi ý từ coding agent (tùy chọn)") {
-                            Text("Sao chép prompt và bản nội dung đã lọc để nhờ coding agent gợi ý. Dán JSON trả về để kiểm tra; việc gửi dữ liệu đến model do anh/chị chủ động thực hiện.").font(.caption)
+                            Text("Sao chép prompt và bản nội dung đã lọc để nhờ coding agent gợi ý. Dán JSON trả về để kiểm tra; việc gửi dữ liệu đến model do bạn chủ động thực hiện.").font(.caption)
                             Button("Sao chép prompt và dữ liệu đã lọc") {
                                 do {
                                     if let policy = try ReportTeamPolicyStore.local.load(), !policy.allowNarrativeExport {

@@ -15,7 +15,7 @@ struct TeamReportOverviewView: View {
     var body: some View {
         DisclosureGroup("Tổng hợp báo cáo nhóm đã duyệt") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Kho cục bộ dành cho chủ chính sách nhóm còn hiệu lực. Nhập từ thư mục anh chọn; không tự gửi hoặc đồng bộ lên dịch vụ ngoài.").font(.caption).foregroundStyle(.secondary)
+                Text("Kho cục bộ dành cho chủ chính sách nhóm còn hiệu lực. Nhập từ thư mục được chọn; không tự gửi hoặc đồng bộ lên dịch vụ ngoài.").font(.caption).foregroundStyle(.secondary)
                 Text("Hồ sơ cục bộ: " + (employeeID.isEmpty ? "Chưa cấu hình" : employeeID)).font(.caption)
                 HStack {
                     DatePicker("Ngày báo cáo", selection: $day, displayedComponents: .date).disabled(busy)

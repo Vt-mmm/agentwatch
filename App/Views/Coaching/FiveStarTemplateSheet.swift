@@ -25,7 +25,7 @@ struct FiveStarTemplateSheet: View {
                 Button("Đóng") { dismiss() }.keyboardShortcut(.escape)
             }
 
-            Text("13 section chuẩn rubric — copy về điền content của anh. Skeleton dưới là khung trống; phía dưới là 1 prompt 5★ thực từ project AgentWatchMac để tham khảo phong cách.")
+            Text("13 section chuẩn rubric — copy về điền nội dung của bạn. Skeleton dưới là khung trống; phía dưới là 1 prompt 5★ thực từ project AgentWatchMac để tham khảo phong cách.")
                 .font(ClaudeFont.body(12))
                 .foregroundStyle(Claude.textMuted)
 

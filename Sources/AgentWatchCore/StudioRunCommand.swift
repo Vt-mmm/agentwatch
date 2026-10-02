@@ -27,7 +27,7 @@ import Foundation
         if arguments.isEmpty || arguments == ["--help"] || (arguments.count == 2 && StudioCLIProvider(rawValue: arguments[0]) != nil && arguments[1] == "--help") {
             print("""
             agentwatch run claude|codex --model ID [--project PATH] [--binary PATH]
-                                       [--resume UUID] [--print TEXT] [--check] [--profile ID]
+                                       [--runtime-node PATH] [--resume UUID] [--print TEXT] [--check] [--profile ID]
 
             Kết nối Studio bằng key nhân viên trong app Mac trước khi chạy.
             --check chỉ kiểm tra kết nối/CLI/profile; không gửi inference.
@@ -42,18 +42,19 @@ import Foundation
             while index < arguments.count {
                 let option = arguments[index]
                 if option == "--check" { guard !check else { throw StudioCLIError.invalidArguments }; check = true; index += 1; continue }
-                guard ["--model", "--project", "--binary", "--resume", "--print", "--profile"].contains(option), values[option] == nil, index + 1 < arguments.count else { throw StudioCLIError.invalidArguments }
+                guard ["--model", "--project", "--binary", "--runtime-node", "--resume", "--print", "--profile"].contains(option), values[option] == nil, index + 1 < arguments.count else { throw StudioCLIError.invalidArguments }
                 values[option] = arguments[index + 1]; index += 2
             }
             let resume = values["--resume"].flatMap(UUID.init(uuidString:))
             if values["--resume"] != nil && resume == nil { throw StudioCLIError.invalidArguments }
             guard let modelID = values["--model"], let connection = try settings.load() else { throw StudioError.invalidKey }
+            guard connection.credentialMode == .direct else { throw StudioError.permissionDenied }
             try StudioTerminalCommand.validateProfile(connection, expectedID: values["--profile"])
             guard let key = try keys.load(profileID: connection.id) else { throw StudioError.invalidKey }
             let identity = try await client.connect(origin: connection.origin, key: key)
-            guard connection.origin.profileID(orgID: identity.identity.orgID, ownerID: identity.identity.user.id) == connection.id else { throw StudioError.identityChanged }
+            guard connection.matches(identity.identity) else { throw StudioError.identityChanged }
             guard case .available(let models) = identity.models, let model = models.first(where: { $0.id == modelID && $0.ownedBy == provider.rawValue }) else { throw StudioError.permissionDenied }
-            let executable = try StudioCLIExecutable.resolve(provider, explicit: values["--binary"].map { URL(fileURLWithPath: $0) })
+            let executable = try StudioCLIExecutable.resolve(provider, explicit: values["--binary"].map { URL(fileURLWithPath: $0) }, node: values["--runtime-node"].map { URL(fileURLWithPath: $0) })
             let profile = try StudioCLIProfiles.prepare(connection: connection, provider: provider, directory: directory)
             let plan = try StudioCLILaunchPlan(executable: executable, profile: profile, project: URL(fileURLWithPath: values["--project"] ?? FileManager.default.currentDirectoryPath), model: model, resumeID: resume, prompt: values["--print"])
             try await preflight(plan)

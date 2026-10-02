@@ -18,6 +18,8 @@ let args = Array(CommandLine.arguments.dropFirst())
 let sub = args.first ?? "watch"
 
 switch sub {
+case "managed-authorize": exit(StudioManagedBrokerCommand.authorize(arguments: Array(args.dropFirst())))
+case "managed-broker": exit(await StudioManagedBrokerCommand.run(arguments: Array(args.dropFirst())))
 case "credential": exit(StudioCredentialCommand.run(arguments: Array(args.dropFirst())))
 case "run":        exit(await StudioRunCommand(arguments: Array(args.dropFirst())).run())
 case "watch":      WatchCommand().run()

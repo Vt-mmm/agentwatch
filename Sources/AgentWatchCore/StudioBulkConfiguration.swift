@@ -5,7 +5,9 @@ extension StudioClientConfiguration {
     public static func prepareAll(tool: StudioConfiguredTool, directory: URL, connection: StudioProfile,
                                   models: [StudioModel], helper: URL, codexCatalog: Data? = nil,
                                   piCatalogModels: [String: Data] = [:], piagentExtensions: [URL] = []) throws -> StudioConfigurationPlan {
-        let compatible = models.filter { tool == .pi || $0.ownedBy == tool.rawValue }
+        // Direct CLI keys configure Claude and Codex models; API-key vendor
+        // models run only in company (managed) Piagent sessions.
+        let compatible = models.filter { !StudioVendor.valid($0.ownedBy) && (tool == .pi || $0.ownedBy == tool.rawValue) }
         guard !compatible.isEmpty, compatible.allSatisfy({ $0.clientModel != nil && $0.clientModel == $0.providerModel }) else { throw StudioConfigurationError.nativeModelUnavailable }
         // Keep a member's default when it remains granted.
         let settings = try object(read(directory.appendingPathComponent("settings.json")))
@@ -76,7 +78,7 @@ extension StudioClientConfiguration {
                 value["enabledModels"] = prior.filter { !$0.hasPrefix("agent_watch_") } + compatible.map { "agent_watch_" + $0.ownedBy + "/" + $0.cliModelID }
             }
         }
-        return StudioConfigurationPlan(edits: edits, tool: tool)
+        return StudioConfigurationPlan(edits: edits, tool: tool, profileID: connection.id)
     }
 }
 
@@ -101,7 +103,8 @@ extension StudioClientConfiguration {
 extension StudioClientConfiguration {
     /// Keep the Studio endpoint in place but remove its selectable models and
     /// disable its helper, so loss of grants cannot fall back to personal billing.
-    public static func prepareDisabled(tool: StudioConfiguredTool, directory: URL) throws -> StudioConfigurationPlan? {
+    public static func prepareDisabled(tool: StudioConfiguredTool, directory: URL, connection: StudioProfile? = nil) throws -> StudioConfigurationPlan? {
+        if let connection { try validateBinding(connection: connection, tool: tool, directory: directory) }
         let receipt = receiptURL(tool: tool, directory: directory)
         guard let data = try read(receipt) else { return nil }
         let old = try JSONDecoder().decode(StudioConfigurationPlan.self, from: data)
@@ -128,6 +131,6 @@ extension StudioClientConfiguration {
             }
             edits.append(StudioConfigurationEdit(file: previous.file, before: before, after: after))
         }
-        return StudioConfigurationPlan(edits: edits, tool: tool)
+        return StudioConfigurationPlan(edits: edits, tool: tool, profileID: old.profileID ?? connection?.id)
     }
 }

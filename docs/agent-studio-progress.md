@@ -1,4 +1,69 @@
+## 2026-10-02 — scout and verify helpers pass through to Piagent; 0.13.0
+
+- `StudioHarness.Configuration` gains `scout` and `verify` (optional, omitted when nil). `StudioHarness.helperRoles` (scout, research, verify, review) replaces the hard-coded lists in grant validation and `child(role:)`. The manifest check validates every helper role.
+- An older Watch decodes neither field and drops both when it passes the Harness on, so its Piagent offers neither.
+- The managed card now says the subagents follow the team's Harness, instead of "up to 2".
+- Tests: `testScoutAndVerifyReachRuntimeAndRunAsHelpers` covers the configuration reaching the runtime, both helpers granted, an unknown role refused and a malformed scout role invalidating the manifest. Full suite: 341 tests, 0 failures, 2 skipped.
+- Installed locally and accepted live through Studio: a company turn with scout (mimo-v2.6-flash) and verify (hy3) ended `clean`.
+- Release 0.13.0 also ships the managed company mode, the credential socket, runtime discovery and receipt takeover recorded below.
+
+## 2026-10-01 — process report version 2, offered only when Studio takes it
+
+- The manifest's `process_versions` (Studio lists `[1, 2]`) is read; `broker_features` adds `process-v2` only when Studio takes version 2, so Piagent never sends a version this Studio would refuse.
+- The shape check accepts version 1 (unchanged keys) or version 2 (adds `plan_skipped` bool, `unknown_tools` count) and only a version the manifest lists; v2 keys in a v1 report, a missing v2 key, text values and version 3 are refused before anything leaves the machine.
+- Tests: `StudioManagedTests` (features with and without v2, shapes, a v2 close accepted); full suite 340 tests, 0 failures. A Release build is ready (`xcodebuild … Release`, BUILD SUCCEEDED) but **not installed**: an ad-hoc build asks for Keychain access again, so it waits for the owner. Until then Piagent sends version 1 to this Watch.
+
+## 2026-09-30 — Piagent, Pi and Node found on every member Mac
+
+Audit for "works on one Mac, not another": the managed import only looked for `piagent` in `~/.local`, `/usr/local`, `/opt/homebrew`, for `pi` in four fixed folders and for Node in three, so a member who installed Node with nvm, fnm, asdf, mise or Volta, or used a custom npm prefix (the usual EACCES fix), or Intel Homebrew's `node@22`, got "runtime missing" although Piagent ran in their terminal. `node --version` also had 2 s to answer (a first launch after Gatekeeper or under Rosetta can take longer).
+
+Now: the installed `piagent` command records its entrypoint, the Node running it and the Pi host on its PATH in `<Piagent folder>/piagent-runtime.json`; the import pins exactly that when the record points at an installed `@piagent/platform`. Otherwise `StudioInstallLocations` adds custom npm prefixes, Volta package images and version-manager installs (newest first) after the historical locations, the Node beside the Piagent install is preferred, the qualified Pi (0.87.1) wins when several are installed, and Node gets 10 s. Fixed locations keep their old order, so existing imports resolve the same. Tests: `StudioInstallLocationsTests` (nvm/fnm/Volta ordering, nvm-only and Volta installs, custom prefix, qualified Pi wins) and `testManagedImportPinsThePiagentTheMemberRuns`; full `swift test` 338 executed, 0 failures (2 skipped). Not reinstalled: the running app is unchanged until the next Release install.
+
+Also found on this Mac: the company key's slot has Piagent unticked (`targets: []`), so background sync skips it and the binding stays at the pre-update entrypoint hash; unticking only stops sync by design. Ticking Piagent and applying refreshes it.
+
+## 2026-09-30 — reconnecting a key no longer strands its folders
+
+Reported after the previous fix: Piagent showed "Thư mục đang dùng key khác…" (`config_changed_externally`). The real cause: the Piagent import had been made by a slot that was later disconnected; the user then entered a different company key, which gets a new slot ID. Disconnect deletes the slot but keeps its receipt, so every folder that slot configured refused the new key, and "Khôi phục" refused too (it only accepts the receipt owner). The earlier Pi/Piagent symptom had been masking this.
+
+`StudioClientConfiguration.adoptOrphanedReceipt` now lets the importing slot take a receipt over when every recorded owner is absent from the saved slots and the files still equal that import; the original `before` is kept so restore still returns to the pre-Watch state. A receipt of any saved slot, an unknown legacy receipt, or edited files are never taken over. Background slot workers read all saved slot IDs through `savedProfileIDs()` (their `profiles()` is scoped to one slot). Sync (managed and direct) and restore use it. Restore for a company key now targets the managed Piagent receipt instead of plain Pi's. `managed-authorize` exits 67 when the imported slot is no longer a saved company key (77 remains Keychain refusal), so launchers can say so. Tests: takeover/refusal/edited-file/legacy cases, managed takeover through `prepare`, and restore after reconnect; full `swift test` 334 executed, 0 failures (2 skipped). Release reinstalled (previous build at `.build/previous-install/AgentWatch-20260930-3.app`).
+
+## 2026-09-30 — managed key no longer blocked by a pre-ticked Pi row
+
+Reported: after disconnecting, re-entering a company (managed) key and importing for both Pi and Piagent, Piagent showed "Dùng chung cấu hình với Pi/Piagent. Key chưa có quyền truy cập…". Cause: Pi was still selected from before the key mode was known; the loop visits Pi first, Pi is refused for managed keys, and Piagent shares the same physical `~/.pi/agent` folder, so it reused Pi's failure. `synchronize` now drops every target except Piagent for a managed key before running (and persists that), and the rows for unsupported tools render unchecked instead of checked-and-disabled. New test `testManagedKeyDropsToolsTickedBeforeTheModeWasKnown`; full `swift test` 330 executed, 0 failures (2 skipped).
+
+Release build reinstalled to `~/Applications/AgentWatch.app` (previous copy at `.build/previous-install/AgentWatch-20260930-2.app`); the credential socket is live. The new ad-hoc build changes the broker hash, so the Piagent import must run once more after the Keychain approval (background sync or Import) before `piagent studio` / the dashboard company entry accepts the binding.
+
+## 2026-09-30 — managed harness audit follow-up
+
+Managed credentials now allow only Piagent in Import; plain Pi, Claude Code and Codex require a direct credential. The stored selection is filtered per credential slot and the writer independently enforces the target. Studio thinking capabilities are preserved through the broker manifest. Existing direct configuration remains supported.
+
+Installed the rebuilt Debug app in `~/Applications/AgentWatch.app`; codesign local verification passed and `background-status` returned `login_item_enabled`. Ten relevant Swift tests passed. Regenerated narrow/dark managed QA images and inspected the narrow view: plain Pi disabled, Piagent selected, public Auto label. Backup retained at `~/Library/Application Support/AgentWatch/LocalBackups/managed-review-20260930`.
+
+Real installed app Keychain/import/broker acceptance passed in both mixed-provider directions via Piagent: 4 Claude-main requests and 4 Codex-main requests. No root credential reached inference. Fixture Keychain slots removed and test members disabled. New allowance consumed 8/100, 92 remain (persistent counter 70/162).
+
+Developer ID remains absent; these ad-hoc local acceptance results do not establish Keychain continuity across distributed updates. No remote release in this slice.
+
 # Agent Studio integration progress
+## 2026-09-30 — installed local managed harness checkpoint
+
+Studio schema 22 and final image `agent-studio:harness-queue-20260930` are running at admin 17920 / inference 17922. The installed Watch app and Piagent package were replaced with verified local builds after backups; Watch reports login-item enabled. Pi package: 2,005 packaged files matched source at installation. No Docker Desktop restart, Homebrew repair, remote deployment or release.
+
+Final checks: 42 managed/freeform/helper/sandbox/CLI/WebUI checks pass; TypeScript and architecture pass; full Studio HTTP API suite with PostgreSQL/race passes (55s), including seven cross-repository desktop cases and bounded admission wait cases. A durable-receipt gap affecting final main continuation was reproduced through Swift broker→SDK→Studio→PG and fixed. Only sealed usage settles capacity; no HTTP/TTL refund or request replay.
+
+Real managed main: Claude 2,864 tokens and Codex 1,074 tokens confirmed. Explicit mixed-provider helper probe: research 595, review 726, same run. Natural main-led mixed live path was not accepted before the capacity fix and has not been rerun. Persistent allowance remains 62/62, zero left; additional allowance is pending user input. Provider fixtures are not counted as live acceptance.
+
+Pi historical full suite recorded 5,589 pass / 246 fail / 312 skip before follow-up fixes. PATH/architecture/doctor regressions were corrected, while retired workflow acceptance assertions and release qualification remain open. Local source is not claimed as a complete release. Developer ID/Keychain continuity, broader credential-backed operations and member pilot are still open. See `../piagent-upstream/docs/managed-local-acceptance.md` and the current implementation plan for the exact boundary.
+
+
+## Harness foundation — 2026-09-29, local source
+
+- Fixed cooperative socket ownership using a lifetime inter-process lock, inode-checked cleanup, refusal to replace a live legacy server and close-on-exec descriptors. Nine socket tests pass, including real child-process contention and crash recovery. The direct credential helper remains a legacy same-user channel, not the managed broker.
+- Launcher and version probes resolve and verify both the Node executable and CLI entrypoint. `/usr/local/bin/node` is usable on this machine; Homebrew's broken Node was not modified. Four runtime binding tests pass, including broken-candidate fallback and changed-entrypoint refusal. Persistent managed runtime/package binding remains work for the managed bootstrap.
+- Profiles now have connection identity plus separate credential slots keyed by key ID/mode. The old direct profile migrates without changing existing helper references. Adding a second key preserves the first; deleting/selecting a slot affects that slot; managed keys never leave via the direct helper/config exporter.
+- Sync preferences, metadata, ETags and in-flight generations are separated by credential slot. Cross-slot replies do not repopulate the current UI. Client receipts preserve binding ownership and reject a second key overwriting or disabling the first key's directory. Saved direct helpers work independently of the currently selected UI slot. The sequential background coordinator now checks all enabled saved slots without changing UI selection; each retains an independent ETag/report state, and removal invalidates its worker. Wake/network recovery use the same coordinator.
+- Added the saved-key selector and additive enrollment UI. Core Studio suite: 111 tests executed, 1 opt-in installed-native-CLI test skipped, 0 failures. Actual view sources compile in the isolated UI renderer; narrow layout inspected. Fixture rendering does not establish installed-app or provider E2E.
+- Full Core suite before the background-coordinator addition: 324 tests executed, 2 opt-in tests skipped, 0 failures. After that addition the six sync tests pass, including inactive-slot refresh, separate conditional requests and removal during the coordinator lifecycle.
+- No app install/replacement, Docker restart, production DB migration, push or release in this slice; 0 new provider inference requests. Next: run-grant/broker/worker boundaries before enabling managed inference. Developer ID signing and Keychain behavior across signed upgrades remain separate release checks.
 
 Studio lives in the separate local repository at `/Users/vtamm/Documents/Claude_management/agent-studio` on `codex/agent-studio`.
 
@@ -42,3 +107,27 @@ P10.7 active-native acceptance, 2026-09-28: actual Claude Code 2.1.181/Codex CLI
 Startup follow-up: actual app sampling exposed a blocking interactive Keychain read during connection-store initialization. Startup and automatic refresh now use noninteractive reads; explicit refresh may request macOS approval. A regression test covers that interaction boundary. System Keychain approval is preserved; app startup no longer waits on it.
 
 Final installed build verified: Studio UI opens, background heartbeat continues, and Login Items is enabled. macOS read approval for the existing Studio Keychain item remains pending owner action via Cho phép Keychain. Actual final reconnection/sync is explicitly pending that approval; local loopback304 tests do not substitute for it.
+
+2026-09-29 compact Studio tab and status sharing: rebuilt the Studio tab around one status strip (identity, key label/prefix/expiry from the manifest, one combined employee state) and three tabs. Tools shows four one-line sync rows with coded reasons, quota bars, granted-model chips and a one-row company CLI launcher; folders/restore moved to a sheet; Usage shows three tiles, day/month quota bars, recent requests and top models side by side; Diagnostics shows connection facts, the exact last report shared with Studio and on-demand local log comparison (no longer re-read on every connection state change). The menu bar adds one Studio line from cached state and refreshes at most every 10 minutes when opened. After each sync the app posts a bounded status report (installation UUID, app/macOS/CLI versions, per-tool status and error codes, background state; resent only on change or every 30 minutes; stops for the session on servers without the endpoint). `swift test` 304 tests (2 opt-in skips) passed, Xcode Debug build passed, 17 render fixtures regenerated, and a report produced by the app's encoder was accepted by the Studio Go validator. The installed app was not replaced.
+
+
+2026-09-29 connection code and neutral copy: the Studio connect form accepts an admin-issued connection code (`origin#as_live_…`) pasted into either field and splits it locally (origin only filled when no profile is saved); the combined string is never stored or sent. Remaining personal-pronoun strings were made neutral. `swift test`: 305 passed, 2 skipped. A Release build was installed to `~/Applications/AgentWatch.app` (previous app kept at `.build/previous-install/AgentWatch.app`). The new ad hoc signature needs one Keychain approval via Cho phép Keychain before the saved key can be read; no client-status report was observed before that approval.
+
+2026-09-29 granted-but-paused models: the granted-model panel compares the key manifest with `/v1/models` and shows models the key holds but Studio cannot serve (team account paused or not ready) instead of "no models". Unit test added; Release build succeeded but was not installed, because every new ad hoc build needs Keychain approval again and the credential helper used by Claude Code/Codex/Pi currently cannot read the key (non-interactive, not in the item's access list). A stable signing identity or a helper-to-app key hand-off is pending an owner decision.
+
+2026-09-29 credential hand-off (option B): the app now serves the saved Studio key to the `agentwatch credential` helper over a same-user Unix socket (`~/Library/Application Support/AgentWatch/studio-credential.sock`, mode 0600, peer uid checked, only the saved unblocked profile, validated key format). The helper asks the app first and falls back to its own non-interactive Keychain read when the app is closed, so Claude Code/Codex/Pi no longer depend on the helper binary's per-build Keychain access; the app itself still needs one approval per ad hoc build. 4 channel tests; `swift test` 310 passed (2 skipped); Release build installed to `~/Applications/AgentWatch.app` and the socket verified live.
+
+## 2026-09-30 — managed runtime integration in source
+
+Watch now accepts schema-2 manifests, adds a per-process stdio broker (no API to return enrollment/device credentials), and prepares a pinned managed import/Terminal launch. The first IPC probe found a blocking Foundation read; replaced it with bounded POSIX reads and verified a real Node→Swift exchange. Three managed broker tests pass; production SwiftUI views compile in the isolated renderer. Pi now preserves freeform messages, retires automatic task intake and workflow UI, and removes the 30% gate. 674 targeted regression tests and three composed freeform checks pass; this is not a claim that obsolete workflow acceptance contracts remain valid. Two native SDK provider streams pass against a synthetic local HTTP server. No external inference, app replacement, Docker restart or deployment in this slice. Recovery, full cross-repo E2E and installation remain open in the implementation plan.
+# Managed runtime checkpoint - 2026-09-30
+
+Core suite: 329 tests executed, 2 skipped, zero failures. Managed import binds a selected credential to Node, Pi SDK, entrypoint and broker hashes while preserving personal files. The CLI broker reads the application's explicit preference domain.
+
+Four cross-repository flows passed using the actual Swift broker and native Pi SDK, covering both providers, recovery, Chromium WebUI and settled ledger usage. The provider connector is synthetic; this is not live OAuth acceptance.
+
+Managed launcher offers Terminal/WebUI and shows Auto. Managed imports exclude incompatible direct clients. Mixed-provider helpers passed with read-only/no nested tools, role usage, tracked/untracked patch snapshots and stale-review detection. Eight helper/boundary tests passed. Git inside the sandbox uses its actual installed binary rather than the Xcode launcher.
+
+No installed app or production Docker replacement yet. Live allowance inspected: 55 started / 62 configured, 7 remaining; no increase or consumption in this slice. Developer ID remains unavailable; local ad-hoc signing does not prove update-stable Keychain access.
+
+2026-09-30 vocabulary: the managed card is "Harness công ty" and says Main agent plus up to 2 subagents; managed sync reports "đã nhập Harness". Release build reinstalled to `~/Applications` (previous app kept under `.build/previous-install/AgentWatch-20260930.app`); `swift test` 329 passed.

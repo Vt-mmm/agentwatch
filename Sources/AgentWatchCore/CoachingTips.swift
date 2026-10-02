@@ -200,7 +200,7 @@ public enum CoachingTips {
         case .motivation:
             return CoachingTip(
                 section: section,
-                reason: "Anthropic: 'Providing context or motivation behind instructions helps Claude generalize from the explanation'. Nói WHY → AI tự suy luận edge case anh quên.",
+                reason: "Anthropic: 'Providing context or motivation behind instructions helps Claude generalize from the explanation'. Nói WHY → AI tự suy luận edge case bị bỏ sót.",
                 sourceUrl: "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/be-clear-and-direct",
                 template: """
                 Thêm vào Mục tiêu hoặc constraint, dùng cụm:

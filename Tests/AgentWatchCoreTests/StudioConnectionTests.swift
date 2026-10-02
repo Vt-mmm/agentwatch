@@ -98,10 +98,12 @@ final class StudioClientTests: XCTestCase, @unchecked Sendable {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set("previous-block", forKey: "studio.blockedProfile")
+        defaults.set([try StudioOrigin("https://studio.test").profileID(orgID: studioOrg, ownerID: studioOwner), "other-slot"], forKey: "studio.blockedProfiles.v2")
         let store = StudioConnectionStore(client: FixtureStudioClient(), keys: FixtureStudioKeys(), settings: StudioPreferences(defaults: defaults))
         await store.connect(origin: "https://studio.test", key: fixtureKey)
         XCTAssertEqual(store.state, .connected)
-        XCTAssertNil(defaults.string(forKey: "studio.blockedProfile"), "Reconnect must update its own settings namespace, not global application defaults")
+        XCTAssertEqual(defaults.string(forKey: "studio.blockedProfile"), "previous-block", "Connecting one slot cannot unblock a different credential")
+        XCTAssertEqual(defaults.stringArray(forKey: "studio.blockedProfiles.v2"), ["other-slot"])
     }
 
     func testRealURLSessionDoesNotForwardEmployeeKeyThroughRedirect() async throws {
@@ -234,6 +236,68 @@ source.serve_forever()
 }
 
 @MainActor final class StudioConnectionStoreTests: XCTestCase {
+    func testTwoCredentialsKeepSecretsSeparateAndDisconnectOnlySelectedSlot() async throws {
+        let suite = "studio-slots-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = StudioPreferences(defaults: defaults), keys = FixtureStudioKeys(), client = FixtureStudioClient()
+        let store = StudioConnectionStore(client: client, keys: keys, settings: settings)
+        func result(_ mode: StudioCredentialMode, _ id: UUID) -> StudioConnectionSnapshot {
+            var identity = snapshot().identity; identity.keyID = id; identity.credentialMode = mode
+            return StudioConnectionSnapshot(identity: identity, capabilities: snapshot().capabilities, models: .available([]))
+        }
+        let direct = result(.direct, UUID()), managed = result(.managed, UUID())
+        await client.set(.success(direct)); await store.connect(origin: "https://studio.test", key: "direct_fixture")
+        let directProfile = try XCTUnwrap(store.profile)
+        await client.set(.success(managed)); await store.connect(origin: "https://studio.test", key: "managed_fixture")
+        let managedProfile = try XCTUnwrap(store.profile)
+        XCTAssertEqual(store.state, .connected); XCTAssertEqual(store.availableProfiles.count, 2)
+        XCTAssertNotEqual(directProfile.id, managedProfile.id); XCTAssertEqual(directProfile.connectionID, managedProfile.connectionID)
+        XCTAssertEqual(keys.values[directProfile.id], "direct_fixture")
+        XCTAssertEqual(keys.values[managedProfile.id], "managed_fixture")
+        // Selecting a different UI slot must not redirect the existing direct helper.
+        XCTAssertEqual(StudioCredentialCommand.savedKey(profileID: directProfile.id, defaults: defaults, settings: settings, keys: keys), "direct_fixture")
+        XCTAssertNil(StudioCredentialCommand.savedKey(profileID: managedProfile.id, defaults: defaults, settings: settings, keys: keys))
+        defaults.set([directProfile.id], forKey: "studio.blockedProfiles.v2")
+        XCTAssertNil(StudioCredentialCommand.savedKey(profileID: directProfile.id, defaults: defaults, settings: settings, keys: keys))
+        settings.clearCredentialBlock(profileID: managedProfile.id)
+        XCTAssertEqual(defaults.stringArray(forKey: "studio.blockedProfiles.v2"), [directProfile.id])
+        store.disconnect()
+        XCTAssertEqual(store.availableProfiles, [directProfile]); XCTAssertNil(keys.values[managedProfile.id])
+        XCTAssertEqual(keys.values[directProfile.id], "direct_fixture")
+        await client.set(.success(direct)); await store.selectProfile(directProfile.id)
+        XCTAssertEqual(store.state, .connected); XCTAssertEqual(store.profile, directProfile)
+        await client.set(.success(managed)); await store.refresh()
+        XCTAssertEqual(store.error, .identityChanged)
+    }
+
+    func testLegacyProfileMigrationPreservesExistingConfigIdentity() async throws {
+        let suite = "studio-slot-migration-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let origin = try StudioOrigin("https://studio.test")
+        let legacy = try StudioProfile(origin: origin, id: origin.profileID(orgID: studioOrg, ownerID: studioOwner))
+        defaults.set(try JSONEncoder().encode(legacy), forKey: "studio.activeProfile.v1")
+        let settings = StudioPreferences(defaults: defaults), keys = FixtureStudioKeys(), client = FixtureStudioClient()
+        try keys.save(fixtureKey, profileID: legacy.id)
+        var identity = snapshot().identity; identity.keyID = UUID(); identity.credentialMode = .direct
+        await client.set(.success(StudioConnectionSnapshot(identity: identity, capabilities: snapshot().capabilities, models: .available([]))))
+        let store = StudioConnectionStore(client: client, keys: keys, settings: settings)
+        await store.connect(origin: origin.value, key: fixtureKey)
+        XCTAssertEqual(store.profile, legacy); XCTAssertEqual(try settings.profiles(), [legacy])
+        XCTAssertNil(defaults.data(forKey: "studio.activeProfile.v1"))
+        XCTAssertEqual(try StudioPreferences(defaults: defaults).load(), legacy)
+    }
+
+    func testCorruptCollectionDoesNotOverwriteOrResurrectLegacyProfile() throws {
+        let suite = "studio-slot-corrupt-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let profile = try StudioProfile(origin: StudioOrigin("https://studio.test"), id: String(repeating: "a", count: 64))
+        defaults.set(try JSONEncoder().encode(profile), forKey: "studio.activeProfile.v1")
+        let corrupt = Data("invalid".utf8); defaults.set(corrupt, forKey: "studio.profiles.v2")
+        let settings = StudioPreferences(defaults: defaults)
+        XCTAssertThrowsError(try settings.load()); XCTAssertThrowsError(try settings.saveChecked(profile))
+        XCTAssertEqual(defaults.data(forKey: "studio.profiles.v2"), corrupt)
+    }
+
     func testSaveRestoreRotationAndDisconnectUseOnlyScopedKeychain() async throws {
         let keys = FixtureStudioKeys(), settings = FixtureStudioSettings(), client = FixtureStudioClient()
         let store = StudioConnectionStore(client: client, keys: keys, settings: settings, cache: ConnectionTestCache())
@@ -325,10 +389,12 @@ source.serve_forever()
         let profile = try StudioProfile(origin: StudioOrigin("https://studio.example"), id: String(repeating: "a", count: 64))
         preferences.save(profile)
         XCTAssertEqual(try preferences.load(), profile)
-        let data = try XCTUnwrap(defaults.data(forKey: "studio.activeProfile.v1"))
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
-        XCTAssertEqual(Set(json.keys), ["origin", "id"])
-        defaults.set(Data(#"{"origin":"http://evil.example","id":"secret"}"#.utf8), forKey: "studio.activeProfile.v1")
+        let data = try XCTUnwrap(defaults.data(forKey: "studio.profiles.v2"))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(Set(json.keys), ["profiles", "selected"])
+        let profiles = try XCTUnwrap(json["profiles"] as? [[String: String]])
+        XCTAssertEqual(Set(profiles[0].keys), ["origin", "id"])
+        defaults.set(Data(#"{"profiles":[{"origin":"http://evil.example","id":"secret"}]}"#.utf8), forKey: "studio.profiles.v2")
         XCTAssertThrowsError(try preferences.load())
     }
     func testRealKeychainRoundTripInUniqueFixtureNamespace() throws {

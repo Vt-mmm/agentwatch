@@ -5,9 +5,14 @@ public enum StudioCLIPreflight {
     /// Bulk configuration must not install a catalog schema into an unqualified CLI.
     /// The version probe receives no employee key and does not send inference.
     public static func verifyVersion(_ executable: StudioCLIExecutable) async throws {
+        guard try await installedVersion(executable) == executable.provider.qualifiedVersion else { throw StudioCLIError.unsupportedVersion }
+    }
+    /// Raw `--version` output, trimmed; one short process, no network.
+    public static func installedVersion(_ executable: StudioCLIExecutable) async throws -> String {
         let version = try await Task.detached {
             let process = Process(), output = Pipe()
-            process.executableURL = executable.url; process.arguments = ["--version"]
+            let invocation = try executable.invocation()
+            process.executableURL = invocation.executable; process.arguments = invocation.prefixArguments + ["--version"]
             process.environment = ["HOME": FileManager.default.homeDirectoryForCurrentUser.path,
                 "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", "LANG": "en_US.UTF-8",
                 "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_TELEMETRY": "1"]
@@ -16,9 +21,8 @@ public enum StudioCLIPreflight {
             try process.run()
             return try readBounded(process, output: output, input: nil)
         }.value
-        guard String(data: version, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) == executable.provider.qualifiedVersion else {
-            throw StudioCLIError.unsupportedVersion
-        }
+        guard let text = String(data: version, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) else { throw StudioCLIError.unsupportedVersion }
+        return text
     }
 
     /// Every probe uses the managed profile and receives no employee credential.
@@ -75,7 +79,8 @@ public enum StudioCLIPreflight {
     private static func capture(_ plan: StudioCLILaunchPlan, arguments: [String]) async throws -> Data {
         try await Task.detached {
             let process = Process(), output = Pipe()
-            process.executableURL = plan.executable.url; process.arguments = arguments
+            let invocation = try plan.executable.invocation()
+            process.executableURL = invocation.executable; process.arguments = invocation.prefixArguments + arguments
             process.environment = plan.environment; process.currentDirectoryURL = plan.project
             process.standardOutput = output; process.standardError = FileHandle.nullDevice
             try process.run()
@@ -85,7 +90,8 @@ public enum StudioCLIPreflight {
     private static func codexConfiguration(_ plan: StudioCLILaunchPlan) async throws -> Data {
         try await Task.detached {
             let process = Process(), input = Pipe(), output = Pipe()
-            process.executableURL = plan.executable.url; process.arguments = plan.codexOverrides + ["app-server", "--stdio"]
+            let invocation = try plan.executable.invocation()
+            process.executableURL = invocation.executable; process.arguments = invocation.prefixArguments + plan.codexOverrides + ["app-server", "--stdio"]
             process.environment = plan.environment; process.currentDirectoryURL = plan.project
             process.standardInput = input; process.standardOutput = output; process.standardError = FileHandle.nullDevice
             try process.run()

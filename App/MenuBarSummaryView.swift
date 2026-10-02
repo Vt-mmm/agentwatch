@@ -9,6 +9,7 @@ struct MenuBarSummaryView: View {
     @Environment(CodexLivePoller.self) private var codex
     @Environment(PiAgentLivePoller.self) private var piAgent
     @Environment(SupervisorLockStore.self) private var supervisorLock
+    @Environment(StudioConnectionStore.self) private var studio
     @Environment(\.openWindow) private var openWindow
 
     private var hasAnySnapshot: Bool {
@@ -19,6 +20,10 @@ struct MenuBarSummaryView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             Divider().background(Claude.border)
+            if studio.profile != nil {
+                studioBlock
+                Divider().background(Claude.border)
+            }
             lockBlock
             Divider().background(Claude.border)
             if hasAnySnapshot {
@@ -144,6 +149,29 @@ struct MenuBarSummaryView: View {
                     row("Pi think", thinking, color: .purple)
                 }
             }
+        }
+    }
+
+    /// One line from cached state; refreshes at most every 10 minutes when opened.
+    private var studioBlock: some View {
+        let sync = StudioSyncStore.shared
+        let failed = sync.results.filter { !$0.success && sync.selected.contains($0.target) }.count
+        let status = StudioEmployeeStatus.evaluate(hasProfile: true, state: studio.state, error: studio.error, key: sync.keyInfo,
+                                                   quota: StudioQuotaSummary.from(studio.dashboard?.quota), failedTools: failed)
+        let tone = StudioTone(status.tone)
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: tone.symbol).font(.system(size: 11)).foregroundStyle(tone.foreground).frame(width: 12).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Studio · " + status.title).font(ClaudeFont.body(12)).foregroundStyle(Claude.textPrimary)
+                if let detail = status.detail {
+                    Text(detail).font(ClaudeFont.body(10.5)).foregroundStyle(Claude.textMuted).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .task {
+            let stale = studio.dashboard.map { Date().timeIntervalSince($0.fetchedAt) > 600 } ?? true
+            if stale, [.connected, .saved, .stale].contains(studio.state) { await studio.refresh(allowInteraction: false) }
         }
     }
 

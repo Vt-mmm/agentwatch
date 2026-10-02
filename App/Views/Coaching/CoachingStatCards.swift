@@ -173,7 +173,7 @@ extension CoachingReportView {
                 forecastCell("Forecast / tháng", TokenFormatter.usd(monthly))
                 forecastCell("Forecast / năm",   TokenFormatter.usd(monthly * 12))
             }
-            Text("Tính từ 7 ngày gần nhất (tính cả hôm có data). Giả định pace giữ nguyên — anh dùng để báo budget cho team, không phải số liệu cứng.")
+            Text("Tính từ 7 ngày gần nhất (tính cả hôm có data). Giả định pace giữ nguyên — dùng để báo budget cho team, không phải số liệu cứng.")
                 .font(ClaudeFont.body(10))
                 .foregroundStyle(Claude.textMuted)
         }

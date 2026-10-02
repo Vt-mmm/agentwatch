@@ -2,7 +2,7 @@ import Foundation
 import Darwin
 
 public enum StudioCLIError: String, Error, LocalizedError, Sendable {
-    case binaryMissing, desktopBinary, unsupportedVersion, unsafePath, changedProfile, managedSettings, incompatibleConfiguration, processFailed, invalidArguments, helperMissing, terminalFailed
+    case binaryMissing, desktopBinary, unsupportedVersion, unsafePath, changedProfile, managedSettings, incompatibleConfiguration, processFailed, invalidArguments, helperMissing, terminalFailed, runtimeMissing, runtimeChanged
     public var errorDescription: String? {
         switch self {
         case .binaryMissing: "Không tìm thấy CLI độc lập. Chọn đường dẫn Claude Code hoặc Codex CLI đã cài."
@@ -15,7 +15,9 @@ public enum StudioCLIError: String, Error, LocalizedError, Sendable {
         case .processFailed: "Không khởi chạy hoặc xác minh được CLI."
         case .invalidArguments: "Tham số launcher không hợp lệ. Dùng agentwatch run --help để xem cách dùng."
         case .helperMissing: "Bản app này thiếu launcher đi kèm. Cần build hoặc cập nhật bản có hỗ trợ CLI Studio."
-        case .terminalFailed: "Chưa mở được Terminal. Anh có thể thử lại sau khi kiểm tra ứng dụng Terminal trên máy."
+        case .terminalFailed: "Chưa mở được Terminal. Thử lại sau khi kiểm tra ứng dụng Terminal trên máy."
+        case .runtimeMissing: "Chưa tìm thấy Node hoạt động tương thích với CLI. Kiểm tra runtime trong Agent Watch."
+        case .runtimeChanged: "CLI hoặc Node đã thay đổi sau khi kiểm tra. Đồng bộ và kiểm tra lại trước khi mở."
         }
     }
 }
@@ -28,7 +30,15 @@ public enum StudioCLIProvider: String, Codable, Sendable, CaseIterable {
 public struct StudioCLIExecutable: Sendable {
     public let url: URL
     public let provider: StudioCLIProvider
-    public static func resolve(_ provider: StudioCLIProvider, explicit: URL? = nil, home: URL = FileManager.default.homeDirectoryForCurrentUser) throws -> StudioCLIExecutable {
+    public let runtime: StudioRuntimeBinding?
+    public init(url: URL, provider: StudioCLIProvider, runtime: StudioRuntimeBinding? = nil) {
+        self.url = url; self.provider = provider; self.runtime = runtime
+    }
+    public func invocation() throws -> StudioRuntimeBinding {
+        let binding = try runtime ?? StudioRuntimeBinding.resolve(entrypoint: url)
+        try binding.validate(); return binding
+    }
+    public static func resolve(_ provider: StudioCLIProvider, explicit: URL? = nil, home: URL = FileManager.default.homeDirectoryForCurrentUser, node: URL? = nil) throws -> StudioCLIExecutable {
         var candidates: [URL] = []
         if let explicit { candidates = [explicit] }
         else {
@@ -55,7 +65,7 @@ public struct StudioCLIExecutable: Sendable {
             guard !executable.pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") }) else { throw StudioCLIError.desktopBinary }
             guard FileManager.default.isExecutableFile(atPath: executable.path),
                   (try? executable.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
-            return StudioCLIExecutable(url: executable, provider: provider)
+            return StudioCLIExecutable(url: executable, provider: provider, runtime: try StudioRuntimeBinding.resolve(entrypoint: executable, node: node))
         }
         throw StudioCLIError.binaryMissing
     }
@@ -207,13 +217,14 @@ public struct StudioCLILaunchPlan: Sendable, CustomStringConvertible {
     /// The key is never part of argv or a shell command; the child environment is
     /// still readable by the same macOS user and is not a hostile-code sandbox.
     public func execute(key: String) throws -> Never {
+        let invocation = try executable.invocation()
         let env = try credentialEnvironment(key)
         guard chdir(project.path) == 0 else { throw StudioCLIError.unsafePath }
         umask(0o077)
-        let argv = ([executable.url.path] + arguments).map { strdup($0) } + [nil]
+        let argv = ([invocation.executable.path] + invocation.prefixArguments + arguments).map { strdup($0) } + [nil]
         let envp = env.keys.sorted().map { strdup($0 + "=" + env[$0]!) } + [nil]
         defer { argv.forEach { free($0) }; envp.forEach { free($0) } }
-        execve(executable.url.path, argv, envp)
+        execve(invocation.executable.path, argv, envp)
         throw StudioCLIError.processFailed
     }
 }

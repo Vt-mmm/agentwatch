@@ -67,7 +67,7 @@ final class NotificationService {
         post(
             title: "🔥 Streak \(streakDay) ngày sắp mất",
             subtitle: nil,
-            body: "Hôm nay anh chưa có session — gửi 1 prompt để giữ streak.",
+            body: "Hôm nay chưa có session — gửi 1 prompt để giữ streak.",
             identifier: "streak-risk-\(key)"
         )
     }

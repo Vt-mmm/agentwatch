@@ -13,7 +13,8 @@ private actor FixtureClient: StudioConnecting, StudioReporting, StudioSessionRep
     func setOffline() { offline = true }
     func connect(origin: StudioOrigin, key: String) async throws -> StudioConnectionSnapshot {
         if offline { throw StudioError.offline }
-        let identity = StudioIdentity(user: StudioUser(id: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!, displayName: CommandLine.arguments.contains("long") ? "Nguyễn Hoàng Anh · nhóm phát triển nền tảng" : "Nhân viên mẫu", role: "member", active: true, version: 1, teamID: UUID(), teamName: "Trust WOW · Engineering"), orgID: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, apiVersion: "studio/v1")
+        var identity = StudioIdentity(user: StudioUser(id: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!, displayName: CommandLine.arguments.contains("long") ? "Nguyễn Hoàng Anh · nhóm phát triển nền tảng" : "Nhân viên mẫu", role: "member", active: true, version: 1, teamID: UUID(), teamName: "Trust WOW · Engineering"), orgID: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!, apiVersion: "studio/v1")
+        if CommandLine.arguments.contains("managed") { identity.keyID = UUID(uuidString: "00000000-0000-4000-8000-000000000006"); identity.credentialMode = .managed }
         return StudioConnectionSnapshot(identity: identity, capabilities: StudioCapabilities(apiVersion: "studio/v1", protocols: [], auth: ["bearer"]), models: .available([StudioModel(id: "claude-haiku", displayName: "Claude Haiku", ownedBy: "claude", nativeProtocol: "messages"), StudioModel(id: "codex-fixture", displayName: "Codex (QA)", ownedBy: "codex", nativeProtocol: "responses")]))
     }
     func sessionUsage(origin: StudioOrigin, key: String, identity: StudioIdentity, provider: StudioCLIProvider, digest: String, range: Range<Date>) async throws -> StudioSessionReport {
@@ -100,18 +101,34 @@ private actor FixtureConfigurationTransport: StudioHTTPTransport {
                 """
                 try! Data(unknown.utf8).write(to: project.appendingPathComponent("00000000-0000-4000-8000-000000000004.jsonl"))
             }
+            let logStore = StudioLocalLogStore(reader: StudioLocalLogReader(directory: fixtureRoot))
+            if localLogs, let connection = store.profile, let range = try? StudioReportingRange(now: Date(), timezone: .current) {
+                await logStore.refresh(connection: connection, range: range.month..<range.until); await logStore.compare(using: store)
+            }
             let disconnect = CommandLine.arguments.contains("disconnect")
             let suite = "studio-render-" + UUID().uuidString
             let defaults = UserDefaults(suiteName: suite)!
             defer { defaults.removePersistentDomain(forName: suite) }
             let sync = StudioSyncStore(defaults: defaults, client: StudioClient(transport: FixtureConfigurationTransport()), settings: settings, keys: FixtureKeys())
             sync.directories = Dictionary(uniqueKeysWithValues: StudioSyncTarget.allCases.map { ($0.rawValue, fixtureRoot.appendingPathComponent($0.rawValue).path) })
-            sync.selected = [.claude, .codex]
+            sync.selected = CommandLine.arguments.contains("managed") ? [.piagent] : [.claude, .codex]
             if CommandLine.arguments.contains("no-grants") { await sync.synchronize() }
+            else if store.profile != nil {
+                // Synthetic post-sync state; no CLI process or directory write happens here.
+                let days: Double = CommandLine.arguments.contains("expiring") ? 3 : 45
+                sync.keyInfo = StudioKeyInfo(keyID: UUID(), label: "MacBook Pro", prefix: "as_live_1a2b3c4d", expiresAt: Date().addingTimeInterval(days * 86_400))
+                sync.results = [StudioSyncResult(target: .claude, count: 1, message: "", success: true),
+                                StudioSyncResult(target: .codex, count: 0, message: "Phiên bản CLI chưa được kiểm chứng với Studio.", success: false, code: "cli_unsupported_version")]
+                sync.lastChecked = Date()
+                if CommandLine.arguments.contains("managed") { sync.results = [StudioSyncResult(target: .piagent, count: 1, message: "", success: true)] }
+                sync.lastReport = StudioClientStatusReport.make(installationID: UUID(), appVersion: "0.13.0", appBuild: "130", osVersion: "15.6", revision: nil, autoSync: true,
+                    launchAtLogin: "enabled", selected: sync.selected, results: sync.results, cliVersions: ["claude": "2.1.181", "codex": "0.160.0"], syncedAt: Date())
+                sync.lastReportAt = Date(); sync.reportState = .sent
+            }
             let section: StudioSection = CommandLine.arguments.contains("usage") ? .usage : CommandLine.arguments.contains("diagnostics") ? .diagnostics : .tools
             let width: CGFloat = CommandLine.arguments.contains("narrow") ? 620 : 860
             let height: CGFloat = disconnect ? 530 : localLogs ? 900 : launcher ? 620 : CommandLine.arguments.contains("short") ? 460 : 850
-            let content: AnyView = disconnect ? AnyView(StudioDisconnectSheet(origin: "https://studio.example.com", running: 2, unverified: 1, incomplete: true, sessions: ["claude · claude-haiku", "codex · studio-codex"], cancel: {}, choose: { _ in })) : localLogs ? AnyView(StudioLocalLogsView(reader: StudioLocalLogReader(directory: fixtureRoot)).padding(20)) : launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView(sync: sync, section: section, logReader: StudioLocalLogReader(directory: fixtureRoot)))
+            let content: AnyView = disconnect ? AnyView(StudioDisconnectSheet(origin: "https://studio.example.com", running: 2, unverified: 1, incomplete: true, sessions: ["claude · claude-haiku", "codex · studio-codex"], cancel: {}, choose: { _ in })) : localLogs ? AnyView(StudioLocalLogsView(logs: logStore, expanded: true).padding(20)) : launcher ? AnyView(StudioLauncherView().padding(20)) : AnyView(StudioConnectionView(sync: sync, section: section, logReader: StudioLocalLogReader(directory: fixtureRoot)))
             let dark = CommandLine.arguments.contains("dark")
             let view = NSHostingView(rootView: content.environment(store).frame(width: width, height: height).background(Claude.backgroundGradient).environment(\.colorScheme, dark ? .dark : .light))
             view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)

@@ -1,3 +1,10 @@
+## 2026-10-03 — process report version 3: helper objections and disagreements
+
+- `broker_features` lists `process-v2` and `process-v3` for each version the manifest's `process_versions` includes, so Piagent never sends a version Studio would refuse.
+- `StudioProcessReport.valid` accepts version 3. It must carry the version 2 keys plus three counts (`objections`, `objections_answered`, `disputes`). The outcome `disputed` is allowed only in version 3. Text values are still refused, so nothing but counts leaves the machine.
+- Tests: `StudioManagedTests` cover a valid v3 report, a v3 report sent to a Studio listing only `[1, 2]`, a v2 report claiming `disputed`, a text count, and the three features. 9 managed tests passed; the full suite ran 341 tests with 0 failures and 2 skipped.
+- Installed locally (previous app at `.build/previous-install/AgentWatch-20261003-pre-objections.app`). After the Keychain approval the binding was re-imported, the broker advertised `process-v3`, and a live company turn's version 3 report (`disputed`) reached Studio.
+
 ## 2026-10-02 — scout and verify helpers pass through to Piagent; 0.13.0
 
 - `StudioHarness.Configuration` gains `scout` and `verify` (optional, omitted when nil). `StudioHarness.helperRoles` (scout, research, verify, review) replaces the hard-coded lists in grant validation and `child(role:)`. The manifest check validates every helper role.

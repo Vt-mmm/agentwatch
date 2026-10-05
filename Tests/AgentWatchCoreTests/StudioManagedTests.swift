@@ -159,6 +159,18 @@ private actor ManagedTransport: StudioHTTPTransport {
         XCTAssertFalse(StudioProcessReport.valid(try XCTUnwrap(try StudioManagedBrokerCommand.processValue(v2Text)), versions: [1, 2]))
         var v3 = v2; v3["version"] = 3
         XCTAssertFalse(StudioProcessReport.valid(try XCTUnwrap(try StudioManagedBrokerCommand.processValue(v3)), versions: [1, 2, 3]))
+        // Version 3 adds helper objections and disagreements for the member; "disputed" exists only there.
+        v3["objections"] = 2; v3["objections_answered"] = 1; v3["disputes"] = 1; v3["outcome"] = "disputed"
+        let parsedV3 = try XCTUnwrap(try StudioManagedBrokerCommand.processValue(v3))
+        XCTAssertTrue(StudioProcessReport.valid(parsedV3, versions: [1, 2, 3]))
+        XCTAssertFalse(StudioProcessReport.valid(parsedV3, versions: [1, 2]))
+        var v2Disputed = v2; v2Disputed["outcome"] = "disputed"
+        XCTAssertFalse(StudioProcessReport.valid(try XCTUnwrap(try StudioManagedBrokerCommand.processValue(v2Disputed)), versions: [1, 2, 3]))
+        var v3Text = v3; v3Text["disputes"] = "member decides"
+        XCTAssertFalse(StudioProcessReport.valid(try XCTUnwrap(try StudioManagedBrokerCommand.processValue(v3Text)), versions: [1, 2, 3]))
+        var all = manifest; all.processVersions = [1, 2, 3]
+        guard case .object(let listedAll) = try StudioManagedBrokerCommand.configValue(all), case .array(let three) = listedAll["broker_features"] else { return XCTFail("features v3") }
+        XCTAssertEqual(three.compactMap { if case .string(let s) = $0 { s } else { nil } }, ["process", "process-v2", "process-v3"])
         var listing = manifest; listing.processVersions = [1, 2]
         guard case .object(let listed) = try StudioManagedBrokerCommand.configValue(listing), case .array(let both) = listed["broker_features"] else { return XCTFail("features v2") }
         XCTAssertEqual(both.compactMap { if case .string(let s) = $0 { s } else { nil } }, ["process", "process-v2"])

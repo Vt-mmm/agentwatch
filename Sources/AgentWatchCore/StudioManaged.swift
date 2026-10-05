@@ -201,20 +201,23 @@ public struct StudioManagedClient: Sendable {
 /// Shape check of a process report before it leaves the machine: known keys
 /// and value types only, so no text (prompts, findings, paths) is forwarded.
 /// Studio validates the meaning. Version 2 adds `plan_skipped` and
-/// `unknown_tools`, and is sent only to a Studio that lists it.
+/// `unknown_tools`; version 3 adds helper objections, those answered and
+/// disagreements handed to the member (outcome "disputed"). A version is sent
+/// only to a Studio that lists it.
 public enum StudioProcessReport {
     static let baseCounts: Set<String> = ["plan_steps", "plan_done", "checks", "checks_failed", "reviews", "blocking", "blocking_open", "fix_loops"]
     static let baseFlags: Set<String> = ["changed", "verified", "reviewed"]
     static let outcomes: Set<String> = ["no_change", "interrupted", "blocking_open", "unverified", "review_unavailable", "unreviewed", "clean"]
+    static let v3Counts: Set<String> = ["objections", "objections_answered", "disputes"]
     static let modes: Set<String> = ["off", "suggest", "require"]
     public static func valid(_ report: [String: StudioJSONValue], versions: [Int] = [1]) -> Bool {
-        guard case .number(let raw)? = report["version"], let version = Int(exactly: raw), [1, 2].contains(version), versions.contains(version) else { return false }
-        let counts = version == 2 ? baseCounts.union(["unknown_tools"]) : baseCounts, flags = version == 2 ? baseFlags.union(["plan_skipped"]) : baseFlags
+        guard case .number(let raw)? = report["version"], let version = Int(exactly: raw), [1, 2, 3].contains(version), versions.contains(version) else { return false }
+        let counts = baseCounts.union(version >= 2 ? ["unknown_tools"] : []).union(version == 3 ? v3Counts : []), flags = version >= 2 ? baseFlags.union(["plan_skipped"]) : baseFlags
         guard Set(report.keys) == counts.union(flags).union(["version", "policy", "outcome"]) else { return false }
         for (key, value) in report {
             switch (key, value) {
             case ("version", .number): break
-            case ("outcome", .string(let s)): if !outcomes.contains(s) { return false }
+            case ("outcome", .string(let s)): if !(outcomes.contains(s) || version == 3 && s == "disputed") { return false }
             case ("policy", .object(let p)):
                 guard Set(p.keys) == ["plan", "verify", "review"], p.values.allSatisfy({ if case .string(let m) = $0 { return modes.contains(m) }; return false }) else { return false }
             case (_, .bool): if !flags.contains(key) { return false }

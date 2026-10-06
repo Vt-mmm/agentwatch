@@ -85,6 +85,23 @@ jobs:
         run: |
           Invoke-Expression ([IO.File]::ReadAllText("$env:AGENTWATCH_SETUP_BASE\setup.ps1"))
           Invoke-Expression ([IO.File]::ReadAllText("$env:AGENTWATCH_SETUP_BASE\setup.ps1"))
+      # Step 4 needs a Studio for the connection code; its install half and
+      # the CLI's refusals run here, in Windows PowerShell 5.1.
+      - name: Agent Watch installs from the latest windows-v release
+        shell: powershell
+        env:
+          AGENTWATCH_NO_LAUNCH: "1"
+        run: |
+          Invoke-Expression ([IO.File]::ReadAllText("${{ github.workspace }}\windows\install.ps1"))
+          $cli = Join-Path $env:LOCALAPPDATA "AgentWatch\app\agentwatch.exe"
+          & $cli --version
+          if ($LASTEXITCODE -ne 0) { throw "agentwatch.exe does not run" }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA "AgentWatch\app\AgentWatchApp.exe"))) { throw "the app is missing" }
+          $ErrorActionPreference = "Continue"
+          "not-a-code" | & $cli connect -
+          if ($LASTEXITCODE -eq 0) { throw "connect - accepted a bad code" }
+          & $cli bind-wsl --distro Ubuntu-24.04
+          if ($LASTEXITCODE -ne 1) { throw "bind-wsl without a company key should refuse with 1" }
       - name: Ubuntu opens as the member with Piagent, the sandbox runs, Start menu has Piagent
         shell: powershell
         run: |

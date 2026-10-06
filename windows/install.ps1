@@ -3,8 +3,10 @@
 #   irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 $rid = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "win-arm64" } else { "win-x64" }
-$release = Invoke-RestMethod "https://api.github.com/repos/Vt-mmm/agentwatch/releases?per_page=30" |
-  Where-Object { $_.tag_name -like "windows-v*" -and -not $_.draft -and -not $_.prerelease } | Select-Object -First 1
+# Through a variable: Windows PowerShell 5.1's Invoke-RestMethod writes a JSON
+# array as one object, so a filter piped straight after it never matched.
+$releases = Invoke-RestMethod "https://api.github.com/repos/Vt-mmm/agentwatch/releases?per_page=30"
+$release = $releases | Where-Object { $_.tag_name -like "windows-v*" -and -not $_.draft -and -not $_.prerelease } | Select-Object -First 1
 if (-not $release) { throw "Chưa có bản Agent Watch cho Windows." }
 $zip = $release.assets | Where-Object { $_.name -eq "AgentWatch-$rid.zip" }
 $sums = $release.assets | Where-Object { $_.name -eq "SHA256SUMS" }

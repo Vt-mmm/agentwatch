@@ -22,10 +22,11 @@ function Get-SetupFile([string]$Name) {
   return [IO.File]::ReadAllText((Join-Path $base $Name))
 }
 
-# wsl.exe with its output on the console; returns the exit code.
+# wsl.exe with its output on the console; returns the exit code only (a
+# function's own output would otherwise join what it returns).
 function Invoke-Wsl([string[]]$Arguments) {
   $ErrorActionPreference = "Continue"
-  & wsl.exe @Arguments
+  & wsl.exe @Arguments | Out-Host
   return $LASTEXITCODE
 }
 

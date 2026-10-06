@@ -22,7 +22,9 @@ try
             return StudioCommands.Credential(rest, profiles, keys, stdout, stderr);
         case "connect" when rest.Length == 1:
         {
-            var (profile, connection) = await new StudioConnector(profiles, keys).ConnectAsync(rest[0]);
+            // "-" reads the code from standard input, where no other process can list it.
+            var code = rest[0] == "-" ? (Console.In.ReadLine() ?? "").Trim() : rest[0];
+            var (profile, connection) = await new StudioConnector(profiles, keys).ConnectAsync(code);
             stdout.WriteLine($"Đã kết nối {connection.Identity.User.DisplayName} ({(profile.CredentialMode == StudioCredentialMode.managed ? "key công ty" : "key cá nhân")}) với {profile.Origin}.");
             if (profile.CredentialMode == StudioCredentialMode.managed) stdout.WriteLine("Chạy `agentwatch bind-wsl` để Piagent trong WSL dùng key này.");
             return 0;
@@ -50,6 +52,7 @@ try
             var manifest = await new StudioClient().ConfigurationAsync(profile.StudioOrigin, key);
             var distro = rest.Length == 2 && rest[0] == "--distro" ? rest[1] : null;
             var result = await PiagentWslBinding.BindAsync(profile, manifest, Environment.ProcessPath!, new WslExe(), distro);
+            PiagentWslBinding.Remember(result.Distro);
             stdout.WriteLine($"Piagent trong WSL ({result.Distro}) đã dùng được key công ty: {result.File}");
             stdout.WriteLine("Trong WSL, chạy `piagent dashboard` hoặc `piagent studio --project <folder>`.");
             return 0;
@@ -58,7 +61,7 @@ try
             stdout.WriteLine(StudioClient.UserAgent);
             return 0;
         default:
-            stderr.WriteLine("agentwatch connect \"<mã kết nối>\" | status | disconnect | bind-wsl [--distro <tên>] | credential --profile <id> | managed-broker --profile <id> | managed-authorize --profile <id>");
+            stderr.WriteLine("agentwatch connect \"<mã kết nối>\"|- | status | disconnect | bind-wsl [--distro <tên>] | credential --profile <id> | managed-broker --profile <id> | managed-authorize --profile <id>");
             return 64;
     }
 }

@@ -23,6 +23,7 @@ try {
   $shell = New-Object -ComObject WScript.Shell
   $link = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Programs")) "Agent Watch.lnk"))
   $link.TargetPath = Join-Path $app "AgentWatchApp.exe"; $link.Save()
-  Start-Process (Join-Path $app "AgentWatchApp.exe")
+  # setup.ps1 connects and binds first, then starts the app itself.
+  if ($env:AGENTWATCH_NO_LAUNCH -ne "1") { Start-Process (Join-Path $app "AgentWatchApp.exe") }
   Write-Host "Đã cài Agent Watch $($release.tag_name -replace 'windows-v','') vào $app"
 } finally { Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue }

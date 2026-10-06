@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace AgentWatch;
@@ -86,6 +87,22 @@ public static class PiagentWslBinding
         await wsl.RunAsync(distro, binding.ToJsonString(new() { WriteIndented = true }) + "\n", "sh", "-c",
             "set -eu; umask 077; d=\"$HOME/.pi/agent\"; mkdir -p \"$d\"; cat > \"$d/agent-watch-managed.json.tmp\"; mv \"$d/agent-watch-managed.json.tmp\" \"$d/agent-watch-managed.json\"");
         return new Result(distro, home + "/.pi/agent/agent-watch-managed.json", facts[0], facts[1], broker);
+    }
+
+    // The distribution last bound, kept so a later start of the app (after an
+    // update changed agentwatch.exe) writes the binding again.
+    public static string RememberedFile => Path.Combine(AgentWatchPaths.DataDirectory, "wsl.json");
+
+    public static void Remember(string distro)
+    {
+        Directory.CreateDirectory(AgentWatchPaths.DataDirectory);
+        File.WriteAllText(RememberedFile, JsonSerializer.Serialize(new { distro }));
+    }
+
+    public static string? Remembered()
+    {
+        try { return JsonDocument.Parse(File.ReadAllText(RememberedFile)).RootElement.GetProperty("distro").GetString(); }
+        catch (Exception error) when (error is IOException or JsonException or KeyNotFoundException or InvalidOperationException or UnauthorizedAccessException) { return null; }
     }
 
     static string Sha256(string file)

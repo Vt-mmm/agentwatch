@@ -179,6 +179,18 @@ public class BrokerTests : IDisposable
         return message;
     }
 
+    // bind-wsl (CLI) and the app record the distribution, so the app binds it
+    // again after an update; an unreadable record means no rebind, not a crash.
+    [Fact]
+    public void RemembersTheBoundDistributionForTheNextStart()
+    {
+        Assert.Null(PiagentWslBinding.Remembered());
+        PiagentWslBinding.Remember("Ubuntu-24.04");
+        Assert.Equal("Ubuntu-24.04", PiagentWslBinding.Remembered());
+        File.WriteAllText(PiagentWslBinding.RememberedFile, "{");
+        Assert.Null(PiagentWslBinding.Remembered());
+    }
+
     async Task<(FakeStudio, StudioProfile, string)> Connected()
     {
         var studio = new FakeStudio();

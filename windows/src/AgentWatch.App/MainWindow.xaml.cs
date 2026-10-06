@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.IO;
-using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
 
@@ -10,9 +9,6 @@ public partial class MainWindow : Window
 {
     readonly StudioProfileStore profiles = new();
     readonly StudioKeyStore keys = new();
-    // The WSL distribution last bound, kept so a later start (after an update
-    // changed agentwatch.exe) writes the binding again.
-    static string WslFile => Path.Combine(AgentWatchPaths.DataDirectory, "wsl.json");
     static string Broker => Path.Combine(AppContext.BaseDirectory, "agentwatch.exe");
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
@@ -45,7 +41,7 @@ public partial class MainWindow : Window
             var (profile, connection) = await new StudioConnector(profiles, keys).ConnectAsync(Code.Password);
             Code.Clear();
             ShowStatus($"Đã kết nối {connection.Identity.User.DisplayName} với {profile.Origin}.");
-            if (profile.CredentialMode == StudioCredentialMode.managed && File.Exists(WslFile)) await RefreshWslBindingAsync();
+            if (profile.CredentialMode == StudioCredentialMode.managed && PiagentWslBinding.Remembered() is not null) await RefreshWslBindingAsync();
         }
         catch (StudioException error) { ShowStatus(StudioException.Describe(error.Code)); }
         finally { ConnectButton.IsEnabled = true; }
@@ -67,8 +63,8 @@ public partial class MainWindow : Window
 
     public async Task RefreshWslBindingAsync()
     {
-        if (!File.Exists(WslFile)) return;
-        try { await Bind(JsonDocument.Parse(File.ReadAllText(WslFile)).RootElement.GetProperty("distro").GetString(), quiet: true); }
+        if (PiagentWslBinding.Remembered() is not { } distro) return;
+        try { await Bind(distro, quiet: true); }
         catch (Exception) { /* shown when the member binds again */ }
     }
 
@@ -80,8 +76,7 @@ public partial class MainWindow : Window
             { WslStatus.Text = "Cần kết nối bằng key công ty trước."; return; }
             var manifest = await new StudioClient().ConfigurationAsync(profile.StudioOrigin, key);
             var result = await PiagentWslBinding.BindAsync(profile, manifest, Broker, new WslExe(), distro);
-            Directory.CreateDirectory(AgentWatchPaths.DataDirectory);
-            File.WriteAllText(WslFile, JsonSerializer.Serialize(new { distro = result.Distro }));
+            PiagentWslBinding.Remember(result.Distro);
             WslStatus.Text = $"Piagent trong WSL ({result.Distro}) đã dùng được key công ty. Trong WSL chạy `piagent dashboard`.";
         }
         catch (StudioException error) { if (!quiet) WslStatus.Text = StudioException.Describe(error.Code); }

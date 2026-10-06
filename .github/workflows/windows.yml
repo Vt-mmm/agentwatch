@@ -48,6 +48,66 @@ jobs:
             windows/publish/*.zip
             windows/publish/SHA256SUMS
 
+  # The one-command setup (setup.ps1) end to end, as members run it: Windows
+  # PowerShell 5.1, a fresh Ubuntu in WSL whose only user is root, twice (the
+  # second run is the update path). Agent Watch is skipped: no connection code.
+  setup:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
+        with:
+          distribution: Ubuntu-24.04
+      - name: Parse in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          foreach ($file in "windows/setup.ps1", "windows/install.ps1") {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$null, [ref]$errors)
+            if ($errors) { $errors | Out-String | Write-Host; throw "$file does not parse in Windows PowerShell 5.1" }
+          }
+      - name: Setup, then the same command again
+        shell: powershell
+        env:
+          AGENTWATCH_SETUP_BASE: ${{ github.workspace }}\windows
+          PIAGENT_WSL_DISTRO: Ubuntu-24.04
+          PIAGENT_SETUP_UNATTENDED: "1"
+        run: |
+          Invoke-Expression ([IO.File]::ReadAllText("$env:AGENTWATCH_SETUP_BASE\setup.ps1"))
+          Invoke-Expression ([IO.File]::ReadAllText("$env:AGENTWATCH_SETUP_BASE\setup.ps1"))
+      - name: Ubuntu opens as the member with Piagent, the sandbox runs, Start menu has Piagent
+        shell: powershell
+        run: |
+          $env:WSL_UTF8 = "1"
+          $user = ((wsl.exe -d Ubuntu-24.04 -e id -un) | Out-String).Trim()
+          if (-not $user -or $user -eq "root") { throw "Ubuntu still opens as '$user'" }
+          wsl.exe -d Ubuntu-24.04 --cd "~" -e bash -lic "command -v piagent && test -s ~/.pi/agent/piagent-runtime.json"
+          if ($LASTEXITCODE -ne 0) { throw "piagent is not on the member's PATH, or its runtime record is missing" }
+          wsl.exe -d Ubuntu-24.04 -e bwrap --unshare-user --unshare-net --ro-bind / / true
+          if ($LASTEXITCODE -ne 0) { throw "the bubblewrap sandbox does not run in WSL" }
+          $link = Join-Path ([Environment]::GetFolderPath("Programs")) "Piagent.lnk"
+          if (-not (Test-Path $link)) { throw "no Piagent entry in the Start menu" }
+          (New-Object -ComObject WScript.Shell).CreateShortcut($link).Arguments
+
+  # The Ubuntu half alone on a stock Ubuntu 24.04 VM, where AppArmor restricts
+  # the user namespaces the sandbox needs.
+  setup-ubuntu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: setup-ubuntu.sh as root, then as the member
+        run: |
+          sudo bash windows/setup-ubuntu.sh system "$USER"
+          bash windows/setup-ubuntu.sh piagent "CI Member" ci@example.com | tee setup.log
+          grep -qx SANDBOX-OK setup.log
+          grep -q '^PIAGENT-VERSION ' setup.log
+
   release:
     if: startsWith(github.ref, 'refs/tags/windows-v')
     needs: build

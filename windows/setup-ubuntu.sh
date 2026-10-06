@@ -66,11 +66,15 @@ piagent_phase() {
     echo "Pi settings backed up to $backup"
     ls -1dt "$HOME"/.pi/agent/backups/setup-* | tail -n +6 | xargs -r rm -rf
   fi
-  # Only a first install sets Pi's model list and default model; a member who
-  # already used Pi, or changed them since, keeps their choices.
-  local update=()
-  if [ -s "$HOME/.pi/agent/settings.json" ]; then update=(-- --no-model-scope); fi
   npm install -g --ignore-scripts --no-fund --no-audit --loglevel=error @piagent/platform@latest
+  # Only a first install sets Pi's model list and default model; a member who
+  # already used Pi, or changed them since, keeps their choices. Piagent 1.14.0
+  # and later do that themselves (and still add new models); before it, the
+  # model scope is left alone entirely.
+  local update=()
+  if [ -s "$HOME/.pi/agent/settings.json" ] && ! grep -q -- --keep-member-choices "$(npm root -g)/@piagent/platform/scripts/configure-model-scope.sh" 2>/dev/null; then
+    update=(-- --no-model-scope)
+  fi
   piagent-update "${update[@]}"
   # Records where Piagent and its Node are, for Agent Watch's binding.
   piagent --help >/dev/null

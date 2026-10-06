@@ -59,6 +59,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         # Block scalar: the command contains ": ", which ends a plain one.
+        # Never "latest": that link is the macOS download.
         run: |
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Agent Watch for Windows ${TAG#windows-v}" \
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Agent Watch for Windows ${TAG#windows-v}" --latest=false \
             --notes "Agent Watch for Windows. Install: see windows/README.md." *.zip SHA256SUMS

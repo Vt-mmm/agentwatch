@@ -58,4 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Agent Watch for Windows ${TAG#windows-v}" --notes "Agent Watch for Windows. Install: see windows/README.md." *.zip SHA256SUMS
+        # Block scalar: the command contains ": ", which ends a plain one.
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Agent Watch for Windows ${TAG#windows-v}" \
+            --notes "Agent Watch for Windows. Install: see windows/README.md." *.zip SHA256SUMS

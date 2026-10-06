@@ -14,6 +14,14 @@ Source 0.12.0 bổ sung metadata Sonnet 5.5 cho Pi 0.87.1 với context gốc 1M
 
 [Tải bản phát hành](https://github.com/Vt-mmm/agentwatch/releases/latest) · [Quy trình phát hành và cập nhật](docs/releases.md)
 
+**Windows:** Agent Watch cho Windows (cùng Piagent trong WSL2) cài bằng một lệnh PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex
+```
+
+Chi tiết và cách xử lý lỗi: [windows/README.md](windows/README.md). Bản Windows phát hành dưới tag `windows-v*`.
+
 ## Yêu cầu
 
 - macOS 14+ (MenuBarExtra requirement)

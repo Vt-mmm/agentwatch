@@ -4,6 +4,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import os
 import plistlib
 import re
 import shutil
@@ -14,6 +15,8 @@ from xml.etree import ElementTree as ET
 ROOT = Path(__file__).resolve().parent.parent
 REPO = "Vt-mmm/agentwatch"
 NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+# SHA-1 of the self-signed "Agent Watch Signing" certificate (backup in ~/.config/agentwatch-signing).
+SIGNING_IDENTITY = os.environ.get("AGENTWATCH_SIGNING_IDENTITY", "80D3F43941EFBF4012248EDE9DDA5A9F53F0F1CB")
 
 
 def run(*args, capture=False):
@@ -78,8 +81,12 @@ def main():
         assert info["SUPublicEDKey"] == public_key
         for binary in [app / "Contents/MacOS/AgentWatchMac", app / "Contents/Helpers/agentwatch"]:
             assert set(run("lipo", "-archs", str(binary), capture=True).split()) == {"arm64", "x86_64"}
-        run("codesign", "--force", "--deep", "--sign", "-", "--timestamp=none", str(app))
+        # A fixed certificate keeps the designated requirement stable, so Keychain
+        # approvals survive updates (ad-hoc signing changes it on every build).
+        run("codesign", "--force", "--deep", "--sign", SIGNING_IDENTITY, "--timestamp=none", str(app))
         run("codesign", "--verify", "--deep", "--strict", str(app))
+        requirement = run("codesign", "-d", "-r-", str(app), capture=True)
+        assert SIGNING_IDENTITY.lower() in requirement.lower(), "App is not signed with the stable certificate"
         shutil.copy2(app / "Contents/Helpers/agentwatch", directory / "agentwatch")
         run(str(directory / "agentwatch"), "--help")
         run("ditto", "-c", "-k", "--keepParent", str(app), str(zip_path))

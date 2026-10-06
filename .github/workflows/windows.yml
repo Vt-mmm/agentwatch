@@ -1,0 +1,61 @@
+name: windows
+
+# Agent Watch for Windows: tests on every change, and on a windows-v* tag a
+# release with self-contained builds (x64 and arm64; no .NET install needed).
+on:
+  pull_request:
+    paths: ["windows/**", ".github/workflows/windows.yml"]
+  push:
+    branches: [main]
+    paths: ["windows/**", ".github/workflows/windows.yml"]
+    tags: ["windows-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Test
+        run: dotnet test windows/AgentWatch.Windows.sln -c Release
+      - name: Publish
+        shell: pwsh
+        run: |
+          foreach ($rid in @("win-x64", "win-arm64")) {
+            $out = "windows/publish/AgentWatch-$rid"
+            dotnet publish windows/src/AgentWatch.App -c Release -r $rid --self-contained -o $out
+            dotnet publish windows/src/AgentWatch.Cli -c Release -r $rid --self-contained -o $out
+            Compress-Archive -Path "$out/*" -DestinationPath "windows/publish/AgentWatch-$rid.zip"
+          }
+          Get-FileHash windows/publish/*.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content windows/publish/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentwatch-windows
+          path: |
+            windows/publish/*.zip
+            windows/publish/SHA256SUMS
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/windows-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: agentwatch-windows
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Agent Watch for Windows ${TAG#windows-v}" --notes "Agent Watch for Windows. Install: see windows/README.md." *.zip SHA256SUMS

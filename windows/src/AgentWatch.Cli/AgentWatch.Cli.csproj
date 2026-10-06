@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>agentwatch</AssemblyName>
+    <RootNamespace>AgentWatch.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../AgentWatch.Core/AgentWatch.Core.csproj" />
+  </ItemGroup>
+</Project>

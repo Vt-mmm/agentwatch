@@ -47,3 +47,9 @@ auth.json
 
 # Generated local report previews
 output/
+
+# Agent Watch for Windows (.NET) build output
+windows/**/bin/
+windows/**/obj/
+windows/**/TestResults/
+windows/publish/

@@ -102,6 +102,8 @@ jobs:
           if ($LASTEXITCODE -eq 0) { throw "connect - accepted a bad code" }
           & $cli bind-wsl --distro Ubuntu-24.04
           if ($LASTEXITCODE -ne 1) { throw "bind-wsl without a company key should refuse with 1" }
+          # The runner ends the step with the last native exit code.
+          $global:LASTEXITCODE = 0
       - name: Ubuntu opens as the member with Piagent, the sandbox runs, Start menu has Piagent
         shell: powershell
         run: |

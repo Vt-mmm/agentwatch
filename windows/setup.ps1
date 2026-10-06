@@ -131,7 +131,13 @@ function Install-Piagent {
     # Without the VM service, wsl --install only enables Virtual Machine
     # Platform and waits for a restart.
     if ((Get-Distros) -notcontains $distro -and -not (Test-VmPlatform)) { Request-Restart; return }
-    if ($installed -ne 0) { throw "Không cài được $distro. Kiểm tra mạng, hoặc bật Virtualization trong BIOS, rồi chạy lại lệnh này." }
+    if ($installed -ne 0 -and (Get-Distros) -notcontains $distro) {
+      # The Store download can drop (WININET_E_CONNECTION_ABORTED, seen
+      # 2026-10-06); the web download comes from GitHub instead.
+      Write-Host "  Tải lại Ubuntu theo đường web…"
+      $installed = Invoke-Wsl @("--install", "-d", $distro, "--no-launch", "--web-download")
+    }
+    if ($installed -ne 0 -and (Get-Distros) -notcontains $distro) { throw "Không tải được $distro. Thử mạng khác hoặc tắt VPN/proxy, rồi chạy lại lệnh này." }
     if ((Get-Distros) -notcontains $distro) {
       # Store-packaged Ubuntu registers through its launcher; --root skips its
       # user prompt, the user is made below.

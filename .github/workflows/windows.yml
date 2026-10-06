@@ -34,9 +34,13 @@ jobs:
             $out = "windows/publish/AgentWatch-$rid"
             dotnet publish windows/src/AgentWatch.App -c Release -r $rid --self-contained -o $out
             dotnet publish windows/src/AgentWatch.Cli -c Release -r $rid --self-contained -o $out
+            # Both programs must survive the shared folder (names are case-insensitive here).
+            foreach ($exe in "AgentWatchApp.exe", "agentwatch.exe") { if (-not (Test-Path "$out/$exe")) { throw "$exe missing from $out" } }
             Compress-Archive -Path "$out/*" -DestinationPath "windows/publish/AgentWatch-$rid.zip"
           }
-          Get-FileHash windows/publish/*.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content windows/publish/SHA256SUMS
+          # LF line endings, so `shasum -c` and `sha256sum -c` read it too.
+          $sums = Get-FileHash windows/publish/*.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)`n" }
+          [IO.File]::WriteAllText("$PWD/windows/publish/SHA256SUMS", -join $sums)
       - uses: actions/upload-artifact@v4
         with:
           name: agentwatch-windows

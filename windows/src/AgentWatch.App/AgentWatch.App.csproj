@@ -5,7 +5,9 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <AssemblyName>AgentWatch</AssemblyName>
+    <!-- Not "AgentWatch": Windows names are case-insensitive, and the CLI
+         (agentwatch.exe, the broker Piagent runs) is published next to it. -->
+    <AssemblyName>AgentWatchApp</AssemblyName>
     <RootNamespace>AgentWatch.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>

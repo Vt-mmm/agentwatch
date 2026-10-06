@@ -15,13 +15,14 @@ try {
   Invoke-WebRequest $sums.browser_download_url -OutFile "$temp\SHA256SUMS"
   $expected = (Get-Content "$temp\SHA256SUMS" | Where-Object { $_ -like "*AgentWatch-$rid.zip" }).Split(" ")[0]
   if ((Get-FileHash "$temp\AgentWatch.zip" -Algorithm SHA256).Hash.ToLower() -ne $expected) { throw "Tệp tải về không khớp SHA256SUMS." }
-  Get-Process AgentWatch -ErrorAction SilentlyContinue | Stop-Process -Force
+  # The app and the broker (agentwatch.exe) hold files open in the folder being replaced.
+  Get-Process AgentWatchApp, agentwatch -ErrorAction SilentlyContinue | Stop-Process -Force
   $app = Join-Path $env:LOCALAPPDATA "AgentWatch\app"
   if (Test-Path $app) { Remove-Item $app -Recurse -Force }
   Expand-Archive "$temp\AgentWatch.zip" -DestinationPath $app
   $shell = New-Object -ComObject WScript.Shell
   $link = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Programs")) "Agent Watch.lnk"))
-  $link.TargetPath = Join-Path $app "AgentWatch.exe"; $link.Save()
-  Start-Process (Join-Path $app "AgentWatch.exe")
+  $link.TargetPath = Join-Path $app "AgentWatchApp.exe"; $link.Save()
+  Start-Process (Join-Path $app "AgentWatchApp.exe")
   Write-Host "Đã cài Agent Watch $($release.tag_name -replace 'windows-v','') vào $app"
 } finally { Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue }

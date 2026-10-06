@@ -44,14 +44,9 @@ Bản này có: kết nối Studio bằng mã kết nối, broker cho Piagent, c
 
 Chạy lại lệnh ở bước 3 để cập nhật Agent Watch. Sau mỗi lần cập nhật, Agent Watch tự kết nối lại Piagent trong WSL khi mở.
 
-## Chế độ cá nhân trên Windows (không cần WSL)
+## Chế độ cá nhân
 
-Piagent dùng tài khoản AI của riêng bạn chạy thẳng trên Windows: cài [Git for Windows](https://git-scm.com/download/win) và Node 24, rồi trong PowerShell:
-
-```powershell
-npm install -g --ignore-scripts @piagent/platform
-piagent dashboard
-```
+Piagent dùng tài khoản AI của riêng bạn cũng chạy trong Ubuntu (bước 2 và 5 ở trên), không cần Agent Watch. Chạy thẳng trên Windows mới là bản xem trước: xem [Piagent trên Windows](https://github.com/Vt-mmm/piagent/blob/main/docs/vi/windows.md).
 
 ## Dòng lệnh
 

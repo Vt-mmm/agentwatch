@@ -8,7 +8,7 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $base = if ($env:AGENTWATCH_SETUP_BASE) { $env:AGENTWATCH_SETUP_BASE } else { "https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows" }
-$distro = if ($env:PIAGENT_WSL_DISTRO) { $env:PIAGENT_WSL_DISTRO } else { "Ubuntu" }
+$distro = $env:PIAGENT_WSL_DISTRO
 # CI: no prompts, no password, no reboot, no dashboard window; WSL 1 allowed.
 $unattended = $env:PIAGENT_SETUP_UNATTENDED -eq "1"
 $command = "irm $base/setup.ps1 | iex"
@@ -114,7 +114,7 @@ function Install-Piagent {
 
   Write-Step 1 "WSL"
   # A listed distribution means WSL is there, also where an older wsl.exe has no --status.
-  if ((Get-Distros) -notcontains $distro -and -not (Test-WslInstalled)) {
+  if (@(Get-Distros).Count -eq 0 -and -not (Test-WslInstalled)) {
     if ($unattended) { throw "WSL chưa được cài." }
     Write-Host "  Cài WSL; Windows sẽ hỏi quyền quản trị."
     $install = Start-Process wsl.exe -ArgumentList "--install", "--no-distribution" -Verb RunAs -Wait -PassThru
@@ -124,6 +124,12 @@ function Install-Piagent {
   if (-not $unattended) { $null = Get-Wsl @("--set-default-version", "2") }
   Write-Done "WSL sẵn sàng."
 
+  # An Ubuntu the member already has (Ubuntu, Ubuntu-24.04, Ubuntu-22.04) is
+  # used rather than a second one; otherwise "Ubuntu" is installed.
+  if (-not $distro) {
+    $distro = @(Get-Distros | Where-Object { $_ -match '^Ubuntu(-2[2-9]\.04)?$' } | Sort-Object @{ Expression = { $_ -ne "Ubuntu" } }, @{ Expression = { $_ }; Descending = $true })[0]
+    if (-not $distro) { $distro = "Ubuntu" }
+  }
   Write-Step 2 "Ubuntu ($distro)"
   if ((Get-Distros) -notcontains $distro) {
     if ($unattended) { throw "Chưa có $distro trong WSL." }

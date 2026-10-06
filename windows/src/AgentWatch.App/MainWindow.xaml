@@ -18,7 +18,7 @@
                Text="Chế độ công ty của Piagent trên Windows chạy trong WSL2. Cài Piagent trong Ubuntu (WSL), chạy `piagent --help` một lần, rồi bấm nút dưới đây."/>
     <StackPanel Orientation="Horizontal">
       <Button x:Name="BindButton" Content="Kết nối Piagent trong WSL" Padding="16,6" Click="BindWsl"/>
-      <TextBox x:Name="Distro" Width="150" Margin="8,0,0,0" VerticalContentAlignment="Center" ToolTip="Tên bản WSL (để trống: bản mặc định)"/>
+      <TextBox x:Name="Distro" Width="150" Margin="8,0,0,0" VerticalContentAlignment="Center" ToolTip="Tên bản WSL Piagent đang chạy (để trống: bản mặc định của WSL)"/>
     </StackPanel>
     <TextBlock x:Name="WslStatus" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#555"/>
 

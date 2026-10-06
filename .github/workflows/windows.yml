@@ -80,7 +80,7 @@ jobs:
         shell: powershell
         env:
           AGENTWATCH_SETUP_BASE: ${{ github.workspace }}\windows
-          PIAGENT_WSL_DISTRO: Ubuntu-24.04
+          # No PIAGENT_WSL_DISTRO: setup picks the existing Ubuntu-24.04.
           PIAGENT_SETUP_UNATTENDED: "1"
         run: |
           Invoke-Expression ([IO.File]::ReadAllText("$env:AGENTWATCH_SETUP_BASE\setup.ps1"))
@@ -117,6 +117,38 @@ jobs:
           $link = Join-Path ([Environment]::GetFolderPath("Programs")) "Piagent.lnk"
           if (-not (Test-Path $link)) { throw "no Piagent entry in the Start menu" }
           (New-Object -ComObject WScript.Shell).CreateShortcut($link).Arguments
+
+  # The tray app: one instance per user, and a second start (the Start-menu
+  # entry while it runs in the background) brings its window forward.
+  app:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: A second start shows the running window
+        shell: powershell
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP "awapp"
+          dotnet publish windows/src/AgentWatch.App -c Release -r win-x64 --self-contained -o $out | Out-Null
+          $env:AGENTWATCH_DATA_DIR = Join-Path $env:RUNNER_TEMP "awdata"
+          $exe = Join-Path $out "AgentWatchApp.exe"
+          Start-Process $exe -ArgumentList "--background"
+          Start-Sleep 6
+          $running = @(Get-Process AgentWatchApp)
+          if ($running.Count -ne 1) { throw "expected one app, found $($running.Count)" }
+          if ($running[0].MainWindowHandle -ne 0) { throw "--background showed the window" }
+          Start-Process $exe
+          Start-Sleep 6
+          $running = @(Get-Process AgentWatchApp)
+          if ($running.Count -ne 1) { throw "a second start left $($running.Count) apps" }
+          $running[0].Refresh()
+          if ($running[0].MainWindowHandle -eq 0) { throw "the second start did not show the window" }
+          $running | Stop-Process -Force
 
   # The Ubuntu half alone on a stock Ubuntu 24.04 VM, where AppArmor restricts
   # the user namespaces the sandbox needs.

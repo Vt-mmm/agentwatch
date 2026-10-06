@@ -16,6 +16,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         using (var run = Registry.CurrentUser.OpenSubKey(RunKey)) StartAtLogin.IsChecked = run?.GetValue("AgentWatch") is not null;
+        // The distribution setup (or an earlier bind) used, rather than WSL's default.
+        Distro.Text = PiagentWslBinding.Remembered() ?? "";
         ShowStatus();
     }
 

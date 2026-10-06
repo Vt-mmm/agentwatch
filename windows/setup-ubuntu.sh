@@ -50,8 +50,28 @@ piagent_phase() {
   step "Node $NODE_MAJOR"
   set +u; nvm install "$NODE_MAJOR" >/dev/null; nvm alias default "$NODE_MAJOR" >/dev/null; nvm use "$NODE_MAJOR" >/dev/null; set -u
   step "Piagent"
+  # Pi kept elsewhere (apt, another Node) stays installed; terminals opened
+  # after this find the nvm one first.
+  local other
+  other=$(PATH=/usr/local/bin:/usr/bin:/bin command -v pi 2>/dev/null || true)
+  if [ -n "$other" ]; then echo "NOTE: another pi is at $other; new terminals use Piagent's pinned Pi from nvm."; fi
+  # What the update rewrites is copied first (newest five kept): Pi's settings
+  # and model catalog, and the shared MCP file whose Piagent servers it
+  # refreshes.
+  local backup="$HOME/.pi/agent/backups/setup-$(date -u +%Y%m%dT%H%M%SZ)" file
+  for file in "$HOME/.pi/agent/settings.json" "$HOME/.pi/agent/models.json" "${XDG_CONFIG_HOME:-$HOME/.config}/mcp/mcp.json"; do
+    if [ -s "$file" ]; then mkdir -p "$backup"; cp -p "$file" "$backup/"; fi
+  done
+  if [ -d "$backup" ]; then
+    echo "Pi settings backed up to $backup"
+    ls -1dt "$HOME"/.pi/agent/backups/setup-* | tail -n +6 | xargs -r rm -rf
+  fi
+  # Only a first install sets Pi's model list and default model; a member who
+  # already used Pi, or changed them since, keeps their choices.
+  local update=()
+  if [ -s "$HOME/.pi/agent/settings.json" ]; then update=(-- --no-model-scope); fi
   npm install -g --ignore-scripts --no-fund --no-audit --loglevel=error @piagent/platform@latest
-  piagent-update
+  piagent-update "${update[@]}"
   # Records where Piagent and its Node are, for Agent Watch's binding.
   piagent --help >/dev/null
   if [ -n "$name" ] && [ -z "$(git config --global user.name || true)" ]; then git config --global user.name "$name"; fi

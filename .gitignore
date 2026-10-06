@@ -48,7 +48,9 @@ auth.json
 # Generated local report previews
 output/
 
-# Agent Watch for Windows (.NET) build output
+# Agent Watch for Windows (.NET) build output; its WPF project folder is
+# named like a macOS bundle (*.app above) but is source.
+!windows/src/AgentWatch.App/
 windows/**/bin/
 windows/**/obj/
 windows/**/TestResults/

@@ -1,0 +1,28 @@
+<Window x:Class="AgentWatch.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Agent Watch" Width="560" SizeToContent="Height"
+        ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="14">
+  <StackPanel Margin="20">
+    <TextBlock Text="Agent Watch" FontSize="22" FontWeight="SemiBold"/>
+    <TextBlock x:Name="Status" Margin="0,6,0,14" TextWrapping="Wrap" Foreground="#555"/>
+
+    <TextBlock Text="Mã kết nối Studio (admin gửi cho bạn)" FontWeight="SemiBold"/>
+    <PasswordBox x:Name="Code" Margin="0,6,0,8" Height="30" VerticalContentAlignment="Center"/>
+    <StackPanel Orientation="Horizontal">
+      <Button x:Name="ConnectButton" Content="Kết nối" Padding="16,6" Click="Connect"/>
+      <Button x:Name="DisconnectButton" Content="Ngắt kết nối" Padding="16,6" Margin="8,0,0,0" Click="Disconnect"/>
+    </StackPanel>
+
+    <Separator Margin="0,18"/>
+    <TextBlock Text="Piagent trong WSL" FontWeight="SemiBold"/>
+    <TextBlock Margin="0,4,0,8" TextWrapping="Wrap" Foreground="#555"
+               Text="Chế độ công ty của Piagent trên Windows chạy trong WSL2. Cài Piagent trong Ubuntu (WSL), chạy `piagent --help` một lần, rồi bấm nút dưới đây."/>
+    <StackPanel Orientation="Horizontal">
+      <Button x:Name="BindButton" Content="Kết nối Piagent trong WSL" Padding="16,6" Click="BindWsl"/>
+      <TextBox x:Name="Distro" Width="150" Margin="8,0,0,0" VerticalContentAlignment="Center" ToolTip="Tên bản WSL (để trống: bản mặc định)"/>
+    </StackPanel>
+    <TextBlock x:Name="WslStatus" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#555"/>
+
+    <Separator Margin="0,18"/>
+    <CheckBox x:Name="StartAtLogin" Content="Mở Agent Watch khi đăng nhập Windows" Checked="ToggleStartup" Unchecked="ToggleStartup"/>
+  </StackPanel>
+</Window>

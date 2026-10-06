@@ -61,14 +61,21 @@ jobs:
       - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
         with:
           distribution: Ubuntu-24.04
-      - name: Parse in Windows PowerShell 5.1
+      # Members run the scripts as `irm ... | iex`: Windows PowerShell 5.1
+      # decodes the download as UTF-8 (raw.githubusercontent.com sends
+      # charset=utf-8), so parse the UTF-8 text, not the file (5.1 reads a
+      # BOM-less file as ANSI), and check that decoding on the published copy.
+      - name: Parse as irm | iex does in Windows PowerShell 5.1
         shell: powershell
         run: |
           foreach ($file in "windows/setup.ps1", "windows/install.ps1") {
             $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$null, [ref]$errors)
+            [void][System.Management.Automation.Language.Parser]::ParseInput([IO.File]::ReadAllText((Resolve-Path $file).Path, [Text.Encoding]::UTF8), [ref]$null, [ref]$errors)
             if ($errors) { $errors | Out-String | Write-Host; throw "$file does not parse in Windows PowerShell 5.1" }
           }
+          $published = Invoke-RestMethod "https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/install.ps1"
+          $expected = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("Q2jGsGEgY8OzIGLhuqNuIEFnZW50IFdhdGNoIGNobyBXaW5kb3dzLg=="))
+          if (-not $published.Contains($expected)) { throw "irm did not decode the published script as UTF-8" }
       - name: Setup, then the same command again
         shell: powershell
         env:

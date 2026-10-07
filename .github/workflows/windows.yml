@@ -167,6 +167,26 @@ jobs:
           $running[0].Refresh()
           if ($running[0].MainWindowHandle -eq 0) { throw "the second start did not show the window" }
           $running | Stop-Process -Force
+      - name: Updating replaces the running app and broker
+        shell: powershell
+        env:
+          AGENTWATCH_NO_LAUNCH: "1"
+        run: |
+          $install = [IO.File]::ReadAllText("${{ github.workspace }}\windows\install.ps1")
+          Invoke-Expression $install
+          $app = Join-Path $env:LOCALAPPDATA "AgentWatch\app"
+          Start-Process (Join-Path $app "AgentWatchApp.exe") -ArgumentList "--background"
+          # The broker Piagent in WSL keeps open: it waits on its standard input.
+          $broker = New-Object Diagnostics.ProcessStartInfo (Join-Path $app "agentwatch.exe"), ("managed-broker --profile " + ("a" * 64))
+          $broker.UseShellExecute = $false; $broker.RedirectStandardInput = $true
+          $broker = [Diagnostics.Process]::Start($broker)
+          Start-Sleep 6
+          if (@(Get-Process AgentWatchApp).Count -ne 1 -or $broker.HasExited) { throw "the app and the broker should be running" }
+          # The member's failure: the old copy's DLLs were still held.
+          Invoke-Expression $install
+          if (Get-Process AgentWatchApp, agentwatch -ErrorAction SilentlyContinue) { throw "the old app or broker kept running" }
+          if (-not (Test-Path (Join-Path $app "AgentWatchApp.exe"))) { throw "the update left no app" }
+          if (Get-ChildItem (Split-Path $app) -Directory -Filter "app-*") { throw "the unpacked copy was left behind" }
 
   # The Ubuntu half alone on a stock Ubuntu 24.04 VM, where AppArmor restricts
   # the user namespaces the sandbox needs.

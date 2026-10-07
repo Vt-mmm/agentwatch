@@ -4,6 +4,11 @@
 $ErrorActionPreference = "Stop"
 $rid = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "win-arm64" } else { "win-x64" }
 $download = "https://github.com/Vt-mmm/agentwatch/releases/download"
+# Windows PowerShell 5.1 redraws a progress bar per chunk, which took each
+# 70 MB download two minutes; put back at the end, since `irm | iex` runs in
+# the caller's session.
+$progress = $ProgressPreference
+$ProgressPreference = "SilentlyContinue"
 $temp = Join-Path $env:TEMP ("agentwatch-" + [guid]::NewGuid())
 New-Item -ItemType Directory $temp | Out-Null
 try {
@@ -27,15 +32,35 @@ try {
   Invoke-WebRequest -UseBasicParsing "$download/$tag/AgentWatch-$rid.zip" -OutFile "$temp\AgentWatch.zip"
   $expected = (Get-Content "$temp\SHA256SUMS" | Where-Object { $_ -like "*AgentWatch-$rid.zip" }).Split(" ")[0]
   if ((Get-FileHash "$temp\AgentWatch.zip" -Algorithm SHA256).Hash.ToLower() -ne $expected) { throw "Tệp tải về không khớp SHA256SUMS." }
-  # The app and the broker (agentwatch.exe) hold files open in the folder being replaced.
-  Get-Process AgentWatchApp, agentwatch -ErrorAction SilentlyContinue | Stop-Process -Force
   $app = Join-Path $env:LOCALAPPDATA "AgentWatch\app"
-  if (Test-Path $app) { Remove-Item $app -Recurse -Force }
-  Expand-Archive "$temp\AgentWatch.zip" -DestinationPath $app
+  # Unpacked beside the installed copy first, so a failure up to the swap
+  # leaves that copy working.
+  $staged = "$app-" + [guid]::NewGuid()
+  Expand-Archive "$temp\AgentWatch.zip" -DestinationPath $staged
+  try {
+    # The app and the broker (agentwatch.exe, which Piagent in WSL starts again
+    # on its next call) hold the folder's DLLs. A killed process lets go of them
+    # only once it has fully exited, which Stop-Process does not wait for: the
+    # member's "Access to the path 'AgentWatch.Core.dll' is denied".
+    for ($attempt = 1; Test-Path $app; $attempt++) {
+      $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -in @("AgentWatchApp", "agentwatch") -or ($_.Path -and $_.Path.StartsWith("$app\", [StringComparison]::OrdinalIgnoreCase)) })
+      $running | Stop-Process -Force -ErrorAction SilentlyContinue
+      $running | Wait-Process -Timeout 5 -ErrorAction SilentlyContinue
+      try { Remove-Item $app -Recurse -Force; break } catch {
+        if ($attempt -ge 6) { throw "Agent Watch vẫn đang chạy nên chưa thay được bản cũ. Thoát Agent Watch ở khay hệ thống (cạnh đồng hồ; nếu đã mở bằng quyền Administrator thì chạy lệnh này trong cửa sổ Administrator) rồi chạy lại lệnh. Chi tiết: $($_.Exception.Message)" }
+        Start-Sleep -Seconds 1
+      }
+    }
+    Move-Item $staged $app
+  } finally { if (Test-Path $staged) { Remove-Item $staged -Recurse -Force -ErrorAction SilentlyContinue } }
   $shell = New-Object -ComObject WScript.Shell
   $link = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Programs")) "Agent Watch.lnk"))
   $link.TargetPath = Join-Path $app "AgentWatchApp.exe"; $link.Save()
   # setup.ps1 connects and binds first, then starts the app itself.
   if ($env:AGENTWATCH_NO_LAUNCH -ne "1") { Start-Process (Join-Path $app "AgentWatchApp.exe") }
   Write-Host "Đã cài Agent Watch $($tag -replace 'windows-v','') vào $app"
-} finally { Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue }
+} finally {
+  Remove-Item $temp -Recurse -Force -ErrorAction SilentlyContinue
+  $ProgressPreference = $progress
+}

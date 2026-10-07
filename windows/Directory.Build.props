@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
     <Company>Agent Watch</Company>
     <Product>Agent Watch for Windows</Product>
     <InvariantGlobalization>true</InvariantGlobalization>

@@ -3,7 +3,10 @@ $ErrorActionPreference = 'Stop'
 $windows = Split-Path $PSScriptRoot -Parent
 foreach ($file in @('install.ps1', 'setup.ps1')) {
     $tokens = $null; $errors = $null
-    $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $windows $file), [ref]$tokens, [ref]$errors)
+    # The scripts are UTF-8 without a BOM (they run as `irm ... | iex`, which
+    # decodes UTF-8); Windows PowerShell 5.1's ParseFile would read them as ANSI.
+    $source = [IO.File]::ReadAllText((Join-Path $windows $file), [Text.Encoding]::UTF8)
+    $ast = [Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
     if ($errors.Count) { throw ($errors | Out-String) }
     if ($file -eq 'install.ps1') {
         foreach ($function in $ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst]}, $false)) {

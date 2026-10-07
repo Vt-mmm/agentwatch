@@ -57,11 +57,24 @@ try
             stdout.WriteLine("Trong WSL, chạy `piagent dashboard` hoặc `piagent studio --project <folder>`.");
             return 0;
         }
+        case "check-wsl":
+        {
+            // What bind-wsl would read, without a key or a write: for support.
+            var distro = rest.Length == 2 && rest[0] == "--distro" ? rest[1] : null;
+            var runtime = await PiagentWslBinding.InspectAsync(new WslExe(), distro);
+            stdout.WriteLine($"WSL: {runtime.Distro} · user {runtime.User} · {runtime.Home}");
+            stdout.WriteLine($"Piagent: {runtime.Entrypoint}");
+            stdout.WriteLine($"Node: {runtime.Node}");
+            stdout.WriteLine($"Pi: {runtime.PiVersion}");
+            if (runtime.User == "root") { stderr.WriteLine("Ubuntu đang mở bằng root: chạy lại lệnh cài, hoặc đặt user mặc định (wsl --manage <bản WSL> --set-default-user <user>)."); return 1; }
+            stdout.WriteLine("Sẵn sàng nối với key công ty (agentwatch bind-wsl).");
+            return 0;
+        }
         case "--version":
             stdout.WriteLine(StudioClient.UserAgent);
             return 0;
         default:
-            stderr.WriteLine("agentwatch connect \"<mã kết nối>\"|- | status | disconnect | bind-wsl [--distro <tên>] | credential --profile <id> | managed-broker --profile <id> | managed-authorize --profile <id>");
+            stderr.WriteLine("agentwatch connect \"<mã kết nối>\"|- | status | disconnect | bind-wsl [--distro <tên>] | check-wsl [--distro <tên>] | credential --profile <id> | managed-broker --profile <id> | managed-authorize --profile <id>");
             return 64;
     }
 }
@@ -72,7 +85,7 @@ catch (InvalidOperationException error) when (error.Message.StartsWith("wsl-", S
     {
         "wsl-runtime-unreadable" or "wsl-runtime-invalid" => "Chưa thấy Piagent trong WSL. Trong WSL, cài Piagent (npm install -g @piagent/platform) rồi chạy `piagent --help` một lần.",
         "wsl-runtime-unsupported" => "Piagent hoặc Pi trong WSL chưa đúng bản (cần Pi 0.87.1). Chạy `piagent-update` trong WSL.",
-        _ => "Không chạy được lệnh trong WSL. Kiểm tra WSL đã cài (wsl --install) và có một bản Ubuntu.",
+        _ => "Không chạy được lệnh trong WSL" + (error is WslCommandException failed ? $" ({failed.Detail})" : "") + ". Kiểm tra WSL đã cài (wsl --install), có một bản Ubuntu, và Ubuntu mở bằng user của bạn (không phải root).",
     });
     return 1;
 }

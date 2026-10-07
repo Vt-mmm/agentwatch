@@ -175,7 +175,11 @@ function Install-Piagent {
       $first = $null; $second = $null
       if ($set.Code -ne 0) { throw "Không đặt được mật khẩu cho $user." }
     }
-    # Ubuntu opens as this user from now on.
+  }
+  # Ubuntu opens as the member: Agent Watch's binding (and the member's own
+  # terminals) run as WSL's default user, which can be root even when the
+  # user exists (2026-10-06: bind-wsl looked in /root for Piagent).
+  if ((Get-Wsl @("-d", $distro, "-e", "id", "-un")).Text -ne $user) {
     $conf = "f=/etc/wsl.conf; touch `$f; if grep -q '^\[user\]' `$f; then sed -i '/^\[user\]/,/^\[/{/^default *=/d}' `$f; sed -i '/^\[user\]/a default=$user' `$f; else printf '\n[user]\ndefault=%s\n' $user >> `$f; fi"
     if ((Get-Wsl @("-d", $distro, "-u", "root", "-e", "sh", "-c", $conf)).Code -ne 0) { throw "Không đặt được user mặc định cho Ubuntu." }
     $null = Get-Wsl @("--terminate", $distro)

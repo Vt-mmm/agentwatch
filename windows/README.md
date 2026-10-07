@@ -52,6 +52,7 @@ Piagent dùng tài khoản AI của riêng bạn cũng chạy trong Ubuntu: ch�
 | `agentwatch connect "<mã kết nối>"` | Kết nối Studio (`connect -` đọc mã từ đầu vào chuẩn, như lệnh cài) |
 | `agentwatch status` | Các kết nối đã lưu |
 | `agentwatch bind-wsl [--distro Ubuntu]` | Cho Piagent trong WSL dùng key công ty |
+| `agentwatch check-wsl [--distro Ubuntu]` | Kiểm tra Piagent trong WSL (user, Node, bản Pi) mà không cần key |
 | `agentwatch disconnect` | Ngắt kết nối, xoá key khỏi máy |
 
 Chỉ cài hoặc cập nhật Agent Watch (không đụng tới Ubuntu): `irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/install.ps1 | iex`.

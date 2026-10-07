@@ -88,7 +88,7 @@ public partial class MainWindow : Window
             {
                 "wsl-runtime-unreadable" or "wsl-runtime-invalid" => "Chưa thấy Piagent trong WSL. Trong WSL: npm install -g @piagent/platform, rồi chạy `piagent --help` một lần.",
                 "wsl-runtime-unsupported" => "Piagent hoặc Pi trong WSL chưa đúng bản (cần Pi 0.87.1). Chạy `piagent-update` trong WSL.",
-                _ => "Không chạy được lệnh trong WSL. Cài WSL (wsl --install) với Ubuntu rồi thử lại.",
+                _ => "Không chạy được lệnh trong WSL" + (error is WslCommandException failed ? $" ({failed.Detail})" : "") + ". Kiểm tra Ubuntu đã cài và mở bằng user của bạn (không phải root), rồi thử lại.",
             };
         }
     }

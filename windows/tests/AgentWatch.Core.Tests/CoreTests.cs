@@ -270,7 +270,7 @@ sealed class FakeWsl : IWsl
         return Task.FromResult(script switch
         {
             _ when script.Contains("WSL_DISTRO_NAME") => "Ubuntu",
-            _ when script.Contains("piagent-runtime.json") => "{\"schema_version\":1,\"entrypoint\":\"/home/dev/.local/lib/node_modules/@piagent/platform/scripts/piagent-studio.mjs\",\"node\":\"/usr/bin/node\",\"pi_sdk_root\":\"/home/dev/.pi/sdk\"}\n--home--\n/home/dev\n",
+            _ when script.Contains("piagent-runtime.json") => "{\"schema_version\":1,\"entrypoint\":\"/home/dev/.local/lib/node_modules/@piagent/platform/scripts/piagent-studio.mjs\",\"node\":\"/usr/bin/node\",\"pi_sdk_root\":\"/home/dev/.pi/sdk\"}\n--home--\n/home/dev\n--user--\ndev\n",
             _ when script.Contains("sha256sum") => "/home/dev/.local/lib/node_modules/@piagent/platform/scripts/piagent-studio.mjs\n/usr/bin/node\n/home/dev/.pi/sdk\n" + new string('e', 64) + "\n" + new string('f', 64) + "\n0.87.1\n",
             _ when command[0] == "wslpath" => "/mnt/c/Users/dev/AppData/Local/AgentWatch/agentwatch.exe\n",
             _ => "",
@@ -291,6 +291,8 @@ public class WslBindingTests
         var wsl = new FakeWsl();
         var result = await PiagentWslBinding.BindAsync(profile, manifest, broker, wsl);
         Assert.Equal("Ubuntu", result.Distro);
+        var runtime = await PiagentWslBinding.InspectAsync(new FakeWsl());
+        Assert.Equal(("dev", "/home/dev", "0.87.1"), (runtime.User, runtime.Home, runtime.PiVersion));
         var written = (JsonObject)JsonNode.Parse(wsl.Calls.Last().Input!)!;
         Assert.Equal(profile.Id, written["profile_id"]!.GetValue<string>());
         Assert.Equal("/mnt/c/Users/dev/AppData/Local/AgentWatch/agentwatch.exe", written["broker"]!.GetValue<string>());

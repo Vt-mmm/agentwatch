@@ -188,7 +188,8 @@ function Install-Piagent {
   [IO.File]::WriteAllText($local, ((Get-SetupFile "setup-ubuntu.sh") -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
   $script = (Get-Wsl @("-d", $distro, "-u", "root", "-e", "wslpath", "-a", $local)).Text
   if (-not $script) { throw "Ubuntu không đọc được ổ C: (wslpath)." }
-  if ((Invoke-Wsl @("-d", $distro, "-u", "root", "-e", "bash", $script, "system", $user)) -ne 0) { throw "Cài gói Ubuntu không xong; xem lỗi phía trên rồi chạy lại lệnh này." }
+  $epoch = [string][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+  if ((Invoke-Wsl @("-d", $distro, "-u", "root", "-e", "bash", $script, "system", $user, $epoch)) -ne 0) { throw "Cài gói Ubuntu không xong; xem lỗi phía trên rồi chạy lại lệnh này." }
   $gitName = ""; $gitEmail = ""
   if (Get-Command git.exe -ErrorAction SilentlyContinue) {
     $ErrorActionPreference = "Continue"
@@ -202,7 +203,12 @@ function Install-Piagent {
   $exit = $LASTEXITCODE
   $ErrorActionPreference = "Stop"
   Remove-Item $local -ErrorAction SilentlyContinue
-  if ($exit -ne 0) { throw "Cài Piagent trong Ubuntu không xong; xem lỗi phía trên rồi chạy lại lệnh này." }
+  if ($exit -ne 0) {
+    if ($lines -contains "HINT-CLOCK") { throw "Ubuntu không kết nối HTTPS được vì đồng hồ lệch. Chạy: wsl --shutdown, rồi chạy lại lệnh này." }
+    if ($lines -contains "HINT-DNS") { throw "Ubuntu không phân giải được tên miền (DNS). Chạy: wsl --shutdown, rồi chạy lại lệnh này; vẫn lỗi thì tắt VPN hoặc thử mạng khác." }
+    if ($lines -contains "HINT-NETWORK") { throw "Ubuntu không tải được từ nodejs.org. Kiểm tra mạng, tắt VPN/proxy, chạy wsl --shutdown, rồi chạy lại lệnh này." }
+    throw "Cài Piagent trong Ubuntu không xong; xem lỗi phía trên rồi chạy lại lệnh này."
+  }
   $version = ($lines | Where-Object { $_ -like "PIAGENT-VERSION *" } | Select-Object -Last 1) -replace '^PIAGENT-VERSION\s+', ''
   Write-Done "Piagent $version đã cài trong Ubuntu."
   if ($lines -contains "SANDBOX-UNAVAILABLE") { Write-Host "  Sandbox của chế độ công ty chưa chạy được trong $distro (cần WSL2). Chế độ cá nhân vẫn dùng được." -ForegroundColor Yellow }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Piagent inside WSL (Ubuntu): the part of windows/setup.ps1 that runs in the
 # distribution. Safe to run again; a second run updates.
-#   bash setup-ubuntu.sh system <user>          as root: packages, the sandbox
+#   bash setup-ubuntu.sh system <user> [epoch]  as root: clock, packages, the sandbox
 #   bash setup-ubuntu.sh piagent [name] [email]  as the member: Node, Piagent
 set -euo pipefail
 
@@ -12,9 +12,19 @@ PACKAGES=(bubblewrap git ripgrep fd-find build-essential curl ca-certificates)
 step() { printf '\n==> %s\n' "$*"; }
 
 system_phase() {
-  local user=${1:?member user}
+  local user=${1:?member user} windows_epoch=${2:-}
   [ "$(id -u)" = 0 ] || { echo "system phase runs as root" >&2; exit 64; }
   id "$user" >/dev/null 2>&1 || { echo "no user $user" >&2; exit 67; }
+  # WSL's clock drifts after Windows sleeps; HTTPS (nodejs.org, npm, GitHub)
+  # then fails on certificate dates while apt over HTTP still works. Windows'
+  # time comes along: more than two minutes apart, Ubuntu takes it.
+  if [[ "$windows_epoch" =~ ^[0-9]+$ ]]; then
+    local skew=$(( $(date -u +%s) - windows_epoch ))
+    if [ "${skew#-}" -gt 120 ]; then
+      step "Setting Ubuntu's clock to Windows' time (it was ${skew}s off)"
+      date -u -s "@$windows_epoch" >/dev/null
+    fi
+  fi
   step "Ubuntu packages: ${PACKAGES[*]}"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
@@ -36,6 +46,19 @@ piagent_phase() {
   [ "$name" != - ] || name=""; [ "$email" != - ] || email=""
   [ "$(id -u)" != 0 ] || { echo "piagent phase runs as the member, not root" >&2; exit 64; }
   cd "$HOME"
+  # Node, nvm and npm all come over HTTPS; nvm alone would only say "Version
+  # not found" when it cannot list nodejs.org. Say why instead.
+  local reach
+  if ! reach=$(curl -fsS -o /dev/null --max-time 30 https://nodejs.org/dist/index.tab 2>&1); then
+    echo "PROBLEM: Ubuntu cannot reach https://nodejs.org: ${reach}"
+    echo "Ubuntu clock (UTC): $(date -u '+%Y-%m-%d %H:%M')"
+    case "$reach" in
+      *certificate*|*SSL*|*TLS*) echo "HINT-CLOCK" ;;
+      *resolve*|*"Could not resolve"*) echo "HINT-DNS" ;;
+      *) echo "HINT-NETWORK" ;;
+    esac
+    exit 69
+  fi
   export NVM_DIR="$HOME/.nvm"
   # nvm from its tagged source (no install script piped to a shell); the
   # member's shells load it from ~/.bashrc.

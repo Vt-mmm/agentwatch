@@ -177,14 +177,20 @@ jobs:
           $app = Join-Path $env:LOCALAPPDATA "AgentWatch\app"
           Start-Process (Join-Path $app "AgentWatchApp.exe") -ArgumentList "--background"
           # The broker Piagent in WSL keeps open: it waits on its standard input.
-          $broker = New-Object Diagnostics.ProcessStartInfo (Join-Path $app "agentwatch.exe"), ("managed-broker --profile " + ("a" * 64))
-          $broker.UseShellExecute = $false; $broker.RedirectStandardInput = $true
-          $broker = [Diagnostics.Process]::Start($broker)
+          # A copy under another name stands for anything else run from the
+          # folder; either holds AgentWatch.Core.dll, the member's
+          # "Access to the path is denied".
+          Copy-Item (Join-Path $app "agentwatch.exe") (Join-Path $app "holder.exe")
+          $brokers = foreach ($exe in "agentwatch.exe", "holder.exe") {
+            $start = New-Object Diagnostics.ProcessStartInfo (Join-Path $app $exe), ("managed-broker --profile " + ("a" * 64))
+            $start.UseShellExecute = $false; $start.RedirectStandardInput = $true
+            [Diagnostics.Process]::Start($start)
+          }
           Start-Sleep 6
-          if (@(Get-Process AgentWatchApp).Count -ne 1 -or $broker.HasExited) { throw "the app and the broker should be running" }
-          # The member's failure: the old copy's DLLs were still held.
+          if (@(Get-Process AgentWatchApp).Count -ne 1 -or @($brokers | Where-Object HasExited).Count) { throw "the app and both brokers should be running" }
           Invoke-Expression $install
-          if (Get-Process AgentWatchApp, agentwatch -ErrorAction SilentlyContinue) { throw "the old app or broker kept running" }
+          if (Get-Process AgentWatchApp, agentwatch, holder -ErrorAction SilentlyContinue) { throw "something from the old copy kept running" }
+          if (Test-Path (Join-Path $app "holder.exe")) { throw "the old copy was not replaced" }
           if (-not (Test-Path (Join-Path $app "AgentWatchApp.exe"))) { throw "the update left no app" }
           if (Get-ChildItem (Split-Path $app) -Directory -Filter "app-*") { throw "the unpacked copy was left behind" }
 

@@ -4,6 +4,9 @@ using AgentWatch;
 // agentwatch.exe: what Piagent (in WSL) and the coding CLIs run, and the same
 // connection steps the app offers, for a terminal.
 var utf8 = new UTF8Encoding(false);
+// A member's console reads bytes in its own code page, which showed the
+// Vietnamese messages garbled; pipes (the broker, setup.ps1) get UTF-8 anyway.
+if (!Console.IsOutputRedirected || !Console.IsErrorRedirected) Console.OutputEncoding = utf8;
 var stdout = new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true };
 var stderr = new StreamWriter(Console.OpenStandardError(), utf8) { AutoFlush = true };
 var profiles = new StudioProfileStore();

@@ -1,4 +1,5 @@
 import Foundation
+import SystemConfiguration
 
 public struct StudioAuthority: Codable, Equatable, Sendable {
     public let instanceID: UUID
@@ -81,6 +82,31 @@ public struct StudioRunGrant: Codable, Sendable {
         // Lease validity is enforced using server time. Do not trust the laptop clock.
     }
 }
+/// Studio's own reason for refusing a managed call (`run_state_conflict`,
+/// `harness_profile_unavailable`…), carried beside the coarse error so the
+/// runtime can say what happened instead of one word for every 409.
+public struct StudioManagedRefusal: Error, Sendable, Equatable {
+    public let error: StudioError
+    public let code: String
+    static func code(in body: Data) -> String? {
+        struct Envelope: Decodable { struct Detail: Decodable { let code: String? }; let error: Detail? }
+        guard let code = (try? JSONDecoder().decode(Envelope.self, from: body))?.error?.code, (1...64).contains(code.utf8.count),
+              code.utf8.allSatisfy({ (97...122).contains($0) || (48...57).contains($0) || $0 == 95 }) else { return nil }
+        return code
+    }
+}
+/// The machine's name for Studio's log of managed calls, so an admin can tell
+/// a member's computers apart. Percent-encoded: a header carries ASCII only.
+public enum StudioMachine {
+    public static let header = "X-Agent-Watch-Machine"
+    static let current = name(SCDynamicStoreCopyComputerName(nil, nil) as String? ?? ProcessInfo.processInfo.hostName)
+    static func name(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.prefix(80))
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~")))
+    }
+}
 public struct StudioManagedClient: Sendable {
     let transport: any StudioHTTPTransport
     public init(transport: any StudioHTTPTransport = StudioURLSessionTransport()) { self.transport = transport }
@@ -105,6 +131,7 @@ public struct StudioManagedClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(StudioClient.userAgent, forHTTPHeaderField: "User-Agent")
+        if let machine = StudioMachine.current { request.setValue(machine, forHTTPHeaderField: StudioMachine.header) }
         request.httpBody = try JSONEncoder().encode(body)
         let response: StudioHTTPResponse
         do { response = try await transport.send(request, origin: origin) }
@@ -113,17 +140,21 @@ public struct StudioManagedClient: Sendable {
         catch { throw StudioError.offline }
         if (300..<400).contains(response.status) { throw StudioError.redirectDenied }
         guard response.body.count <= StudioClient.maxResponseBytes else { throw StudioError.invalidResponse }
+        let refused: StudioError
         switch response.status {
-        case 200, 201: guard response.contentType.split(separator: ";").first?.lowercased() == "application/json" else { throw StudioError.invalidResponse }
+        case 200, 201:
+            guard response.contentType.split(separator: ";").first?.lowercased() == "application/json" else { throw StudioError.invalidResponse }
+            return response.body
         case 204: return Data()
-        case 401: throw StudioError.invalidKey
-        case 403: throw StudioError.permissionDenied
-        case 409: throw StudioError.identityChanged
-        case 429: throw StudioError.rateLimited
-        case 400: throw StudioError.invalidResponse
-        default: throw StudioError.serverUnavailable
+        case 401: refused = .invalidKey
+        case 403: refused = .permissionDenied
+        case 409: refused = .identityChanged
+        case 429: refused = .rateLimited
+        case 400: refused = .invalidResponse
+        default: refused = .serverUnavailable
         }
-        return response.body
+        if let code = StudioManagedRefusal.code(in: response.body) { throw StudioManagedRefusal(error: refused, code: code) }
+        throw refused
     }
 }
 

@@ -205,6 +205,19 @@ private actor ManagedTransport: StudioHTTPTransport {
         _ = try await broker.start(operation: UUID(), effort: "medium", taskClass: "simple")
         do { _ = try await broker.renew(role: "main"); XCTFail("changed route accepted") } catch { XCTAssertEqual(error as? StudioError, .identityChanged) }
     }
+    func testRefusalKeepsStudiosReasonAndNamesTheMachine() async throws {
+        let transport = ManagedTransport([(201, grant()), (409, ["error": ["code": "harness_profile_unavailable", "message": "harness_profile_unavailable"]]), (409, ["error": ["code": "Not A Code!"]])])
+        let broker = try broker(transport)
+        _ = try await broker.start(operation: UUID(), effort: "medium", taskClass: "simple")
+        do { _ = try await broker.child(role: "research"); XCTFail("refusal accepted") }
+        catch { XCTAssertEqual(error as? StudioManagedRefusal, StudioManagedRefusal(error: .identityChanged, code: "harness_profile_unavailable")) }
+        // A body that is not Studio's error shape keeps the coarse error.
+        do { _ = try await broker.child(role: "research"); XCTFail("refusal accepted") } catch { XCTAssertEqual(error as? StudioError, .identityChanged) }
+        let sent = await transport.captured()
+        XCTAssertEqual(sent.first?.value(forHTTPHeaderField: StudioMachine.header), StudioMachine.current)
+        XCTAssertEqual(StudioMachine.name(" MacBook của Vũ\n"), "MacBook%20c%E1%BB%A7a%20V%C5%A9")
+        XCTAssertNil(StudioMachine.name("  "))
+    }
     /// Pinned runtime, Pi SDK and helper fixtures under a disposable folder.
     func managedRuntime() throws -> (base: URL, runtime: URL, entry: URL, pi: URL, helper: URL, dir: URL) {
         let base = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cache/watch-managed-import-" + UUID().uuidString)

@@ -12,6 +12,9 @@ public enum StudioError
 public sealed class StudioException(StudioError code) : Exception(code.ToString())
 {
     public StudioError Code { get; } = code;
+    // Studio's own reason for a refused managed call (run_state_conflict…),
+    // passed to the runtime beside the coarse code.
+    public string? StudioCode { get; init; }
 
     public static string Describe(StudioError code) => code switch
     {

@@ -48,6 +48,7 @@ public sealed class StudioManagedBroker
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.TryAddWithoutValidation("User-Agent", StudioClient.UserAgent);
+        if (MachineName() is { } machine) request.Headers.TryAddWithoutValidation(MachineHeader, machine);
         var response = await transport.SendAsync(request, origin, cancellation);
         if (response.Status is >= 300 and < 400) throw new StudioException(StudioError.redirectDenied);
         switch (response.Status)
@@ -56,13 +57,34 @@ public sealed class StudioManagedBroker
                 if (!response.ContentType.Split(';')[0].Trim().Equals("application/json", StringComparison.OrdinalIgnoreCase)) throw new StudioException(StudioError.invalidResponse);
                 return response.Body;
             case 204: return [];
-            case 401: throw new StudioException(StudioError.invalidKey);
-            case 403: throw new StudioException(StudioError.permissionDenied);
-            case 409: throw new StudioException(StudioError.identityChanged);
-            case 429: throw new StudioException(StudioError.rateLimited);
-            case 400: throw new StudioException(StudioError.invalidResponse);
-            default: throw new StudioException(StudioError.serverUnavailable);
         }
+        var refused = response.Status switch
+        {
+            401 => StudioError.invalidKey, 403 => StudioError.permissionDenied, 409 => StudioError.identityChanged,
+            429 => StudioError.rateLimited, 400 => StudioError.invalidResponse, _ => StudioError.serverUnavailable,
+        };
+        throw new StudioException(refused) { StudioCode = RefusalCode(response.Body) };
+    }
+
+    // Studio's error code from its {"error":{"code":…}} body, when well formed.
+    internal static string? RefusalCode(byte[] body)
+    {
+        try
+        {
+            var code = JsonNode.Parse(body)?["error"]?["code"]?.GetValue<string>();
+            return code is { Length: >= 1 and <= 64 } && code.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '_') ? code : null;
+        }
+        catch (Exception) { return null; }
+    }
+
+    // The machine's name for Studio's log of managed calls, so an admin can
+    // tell a member's computers apart. Percent-encoded: a header is ASCII.
+    public const string MachineHeader = "X-Agent-Watch-Machine";
+    internal static string? MachineName(string? raw = null)
+    {
+        try { raw ??= Environment.MachineName; } catch (InvalidOperationException) { return null; }
+        var trimmed = new string(raw.Trim().Where(c => !char.IsControl(c)).Take(80).ToArray());
+        return trimmed.Length == 0 ? null : Uri.EscapeDataString(trimmed);
     }
 
     async Task<StudioRunGrant> Grant(string path, JsonObject body, CancellationToken cancellation)

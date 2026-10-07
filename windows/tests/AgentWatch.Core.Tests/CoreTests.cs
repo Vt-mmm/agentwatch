@@ -305,4 +305,14 @@ public class WslBindingTests
         Assert.Contains("umask 077", string.Join(' ', wsl.Calls.Last().Command));
         File.Delete(broker);
     }
+
+    [Fact]
+    public void ManagedRefusalKeepsStudiosReasonAndNamesTheMachine()
+    {
+        Assert.Equal("harness_profile_unavailable", StudioManagedBroker.RefusalCode(Encoding.UTF8.GetBytes("{\"error\":{\"code\":\"harness_profile_unavailable\"}}")));
+        Assert.Null(StudioManagedBroker.RefusalCode(Encoding.UTF8.GetBytes("{\"error\":{\"code\":\"Not A Code!\"}}")));
+        Assert.Null(StudioManagedBroker.RefusalCode(Encoding.UTF8.GetBytes("not json")));
+        Assert.Equal("MacBook%20c%E1%BB%A7a%20V%C5%A9", StudioManagedBroker.MachineName(" MacBook của Vũ\n"));
+        Assert.Null(StudioManagedBroker.MachineName("  "));
+    }
 }

@@ -52,11 +52,12 @@ public static class StudioCommands
     {
         if (arguments.Length != 2 || arguments[0] != "--profile" || arguments[1].Length != 64) return 64;
         StudioManagedBroker? broker = null;
-        void Answer(string id, JsonNode? value, string? failure = null)
+        void Answer(string id, JsonNode? value, string? failure = null, string? studioCode = null)
         {
             var result = new JsonObject { ["id"] = id };
             if (value is not null) result["result"] = value;
             if (failure is not null) result["error"] = failure;
+            if (studioCode is not null) result["studio_code"] = studioCode;
             output.Write(result.ToJsonString() + "\n"); output.Flush();
         }
         for (string? line; (line = await input.ReadLineAsync(cancellation)) is not null;)
@@ -94,7 +95,7 @@ public static class StudioCommands
                     default: throw new StudioException(StudioError.permissionDenied);
                 }
             }
-            catch (StudioException failure) { Answer(id, null, failure.Code.ToString()); }
+            catch (StudioException failure) { Answer(id, null, failure.Code.ToString(), failure.StudioCode); }
             catch (OperationCanceledException) { throw; }
             catch (Exception) { Answer(id, null, "broker_failed"); }
         }

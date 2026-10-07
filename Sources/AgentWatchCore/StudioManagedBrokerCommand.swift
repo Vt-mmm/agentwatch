@@ -37,10 +37,11 @@ public enum StudioManagedBrokerCommand {
         guard arguments.count == 2, arguments[0] == "--profile", arguments[1].count == 64 else { return 64 }
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         var broker: StudioManagedBroker?
-        func output(_ id: String, _ value: StudioJSONValue?, error: String? = nil) {
+        func output(_ id: String, _ value: StudioJSONValue?, error: String? = nil, studioCode: String? = nil) {
             var result: [String: StudioJSONValue] = ["id": .string(id)]
             if let value { result["result"] = value }
             if let error { result["error"] = .string(error) }
+            if let studioCode { result["studio_code"] = .string(studioCode) }
             if let data = try? encoder.encode(result) { FileHandle.standardOutput.write(data + Data([10])) }
         }
         func value<T: Encodable>(_ input: T) throws -> StudioJSONValue {
@@ -93,7 +94,8 @@ public enum StudioManagedBrokerCommand {
                         try await active.close(role: message["role"] as? String ?? "", process: try processValue(message["process"])); output(id, .bool(true))
                     default: throw StudioError.permissionDenied
                     }
-                } catch let error as StudioError { output(id, nil, error: error.rawValue) }
+                } catch let refusal as StudioManagedRefusal { output(id, nil, error: refusal.error.rawValue, studioCode: refusal.code) }
+                catch let error as StudioError { output(id, nil, error: error.rawValue) }
                 catch { output(id, nil, error: "broker_failed") }
             }
         }

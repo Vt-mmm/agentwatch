@@ -81,7 +81,9 @@ public static class PiagentWslBinding
     {
         distro ??= (await wsl.RunAsync(null, null, "sh", "-c", "printf %s \"$WSL_DISTRO_NAME\"")).Trim();
         if (distro.Length == 0) throw new InvalidOperationException("wsl-distro-unknown");
-        var inspected = await wsl.RunAsync(distro, null, "sh", "-c", Inspect);
+        // LF only: a Windows checkout gives this source CRLF, and sh then
+        // reads "set -eu\r" ("set: Illegal option -", the member's bind failure).
+        var inspected = await wsl.RunAsync(distro, null, "sh", "-c", Inspect.ReplaceLineEndings("\n"));
         var parts = inspected.Split("--home--", 2);
         if (parts.Length != 2) throw new InvalidOperationException("wsl-runtime-unreadable");
         var tail = parts[1].Split("--user--", 2);

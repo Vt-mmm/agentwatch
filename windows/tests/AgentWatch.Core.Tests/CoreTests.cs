@@ -291,6 +291,8 @@ public class WslBindingTests
         var wsl = new FakeWsl();
         var result = await PiagentWslBinding.BindAsync(profile, manifest, broker, wsl);
         Assert.Equal("Ubuntu", result.Distro);
+        // What reaches sh is LF only, also when Git checked the source out as CRLF.
+        Assert.DoesNotContain(wsl.Calls, call => call.Command.Any(part => part.Contains('\r')));
         var runtime = await PiagentWslBinding.InspectAsync(new FakeWsl());
         Assert.Equal(("dev", "/home/dev", "0.87.1"), (runtime.User, runtime.Home, runtime.PiVersion));
         var written = (JsonObject)JsonNode.Parse(wsl.Calls.Last().Input!)!;

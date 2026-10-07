@@ -1,7 +1,7 @@
 # Piagent and Agent Watch on Windows, in one command (PowerShell):
 #   irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/setup.ps1 | iex
 # Installs WSL2 and Ubuntu when missing, Piagent inside Ubuntu and Agent Watch,
-# connects the company key the member pastes and binds Piagent in WSL to it,
+# opens the manual Agent Watch wizard for company credentials and WSL binding,
 # then adds a "Piagent" Start-menu entry and opens the dashboard. Running the
 # same command again updates everything. Windows PowerShell 5.1 compatible.
 & {
@@ -109,6 +109,12 @@ function Read-Secret([string]$Prompt) {
   try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
 }
 
+function Install-Watch {
+  $previousNoLaunch = $env:AGENTWATCH_NO_LAUNCH
+  $env:AGENTWATCH_NO_LAUNCH = "1"
+  try { Invoke-Expression (Get-SetupFile "install.ps1") } finally { $env:AGENTWATCH_NO_LAUNCH = $previousNoLaunch }
+}
+
 function Install-Piagent {
   if ([Environment]::OSVersion.Version.Build -lt 19041) { throw "WSL2 cần Windows 10 bản 2004 (build 19041) trở lên hoặc Windows 11." }
 
@@ -127,8 +133,13 @@ function Install-Piagent {
   # An Ubuntu the member already has (Ubuntu, Ubuntu-24.04, Ubuntu-22.04) is
   # used rather than a second one; otherwise "Ubuntu" is installed.
   if (-not $distro) {
-    $distro = @(Get-Distros | Where-Object { $_ -match '^Ubuntu(-2[2-9]\.04)?$' } | Sort-Object @{ Expression = { $_ -ne "Ubuntu" } }, @{ Expression = { $_ }; Descending = $true })[0]
-    if (-not $distro) { $distro = "Ubuntu" }
+    $available = @(Get-Distros | Where-Object { $_ -match '^Ubuntu(-2[2-9]\.04)?$' } | Sort-Object @{ Expression = { $_ -ne "Ubuntu" } }, @{ Expression = { $_ }; Descending = $true })
+    $distro = if ($available.Count) { $available[0] } else { "Ubuntu" }
+    if (-not $unattended -and $available.Count -gt 1) {
+      for ($i = 0; $i -lt $available.Count; $i++) { Write-Host "  $($i + 1). $($available[$i])" }
+      do { $selection = Read-Host "Chọn Ubuntu để cài/cập nhật (1-$($available.Count))"; $index = 0 } while (-not [int]::TryParse($selection, [ref]$index) -or $index -lt 1 -or $index -gt $available.Count)
+      $distro = $available[$index - 1]
+    }
   }
   Write-Step 2 "Ubuntu ($distro)"
   if ((Get-Distros) -notcontains $distro) {
@@ -217,30 +228,31 @@ function Install-Piagent {
   Write-Done "Piagent $version đã cài trong Ubuntu."
   if ($lines -contains "SANDBOX-UNAVAILABLE") { Write-Host "  Sandbox của chế độ công ty chưa chạy được trong $distro (cần WSL2). Chế độ cá nhân vẫn dùng được." -ForegroundColor Yellow }
 
-  Write-Step 4 "Agent Watch và key công ty"
+  Write-Step 4 "Agent Watch: nhập key và kiểm tra từng bước"
   $cli = Join-Path $env:LOCALAPPDATA "AgentWatch\app\agentwatch.exe"
-  $code = if ($env:AGENTWATCH_CODE) { $env:AGENTWATCH_CODE } elseif ($unattended) { "" } else { Read-Secret "  Dán mã kết nối admin gửi (Enter để bỏ qua nếu chỉ dùng tài khoản AI của riêng bạn)" }
-  if (-not $code -and -not (Test-Path $cli)) {
-    Write-Done "Bỏ qua: chỉ dùng chế độ cá nhân. Chạy lại lệnh này khi có mã kết nối."
+  if ($unattended -and -not $env:AGENTWATCH_CODE -and -not (Test-Path $cli)) {
+    Write-Done "Bỏ qua Agent Watch: không có mã kết nối trong chế độ tự động."
   } else {
-    if (Get-Process agentwatch -ErrorAction SilentlyContinue) { Write-Host "  Cập nhật Agent Watch sẽ dừng phiên Piagent công ty đang chạy; mở lại sau khi xong." -ForegroundColor Yellow }
-    $env:AGENTWATCH_NO_LAUNCH = "1"
-    try { Invoke-Expression (Get-SetupFile "install.ps1") } finally { Remove-Item Env:AGENTWATCH_NO_LAUNCH -ErrorAction SilentlyContinue }
-    $ErrorActionPreference = "Continue"
-    if ($code) {
-      $code | & $cli connect - | ForEach-Object { Write-Host "  $_" }
-      if ($LASTEXITCODE -ne 0) { $ErrorActionPreference = "Stop"; throw "Mã kết nối không dùng được; hỏi admin mã mới rồi chạy lại lệnh này." }
+    Install-Watch
+    $watchRoot = Join-Path $env:LOCALAPPDATA "AgentWatch"
+    $remembered = Join-Path $watchRoot "wsl.json"
+    $temporary = "$remembered.$([guid]::NewGuid().ToString('N')).tmp"
+    try {
+      [IO.File]::WriteAllText($temporary, (@{ distro = $distro } | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
+      Move-Item $temporary $remembered -Force
+    } finally { Remove-Item $temporary -ErrorAction SilentlyContinue }
+    # Explicit automation remains supported; interactive users enter the key
+    # in the native masked field and choose Apply after reviewing all checks.
+    if ($env:AGENTWATCH_CODE) {
+      $ErrorActionPreference = "Continue"
+      $env:AGENTWATCH_CODE | & $cli connect - | Out-Host
+      if ($LASTEXITCODE -ne 0) { throw "Mã kết nối không dùng được; hỏi admin mã mới rồi chạy lại." }
+      & $cli bind-wsl --distro $distro | Out-Host
+      if ($LASTEXITCODE -ne 0) { throw "Chưa nối được Piagent với key công ty. Mở Agent Watch để kiểm tra lại." }
+      $ErrorActionPreference = "Stop"
     }
-    $code = $null
-    & $cli bind-wsl --distro $distro | ForEach-Object { Write-Host "  $_" }
-    $bound = $LASTEXITCODE -eq 0
-    $ErrorActionPreference = "Stop"
-    if (-not $bound) { Write-Host "  Chưa nối được Piagent với key công ty (chỉ key công ty mới cần). Chế độ cá nhân vẫn dùng được." -ForegroundColor Yellow }
-    # Starts with Windows, so it binds Piagent again after its own updates.
-    $app = Join-Path $env:LOCALAPPDATA "AgentWatch\app\AgentWatchApp.exe"
-    Set-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" "AgentWatch" "`"$app`" --background"
-    if (-not $unattended) { Start-Process $app -ArgumentList "--background" }
-    Write-Done "Agent Watch đã cài$(if ($bound) { ' và Piagent trong Ubuntu dùng được key công ty' })."
+    if (-not $unattended) { Start-Process (Join-Path $watchRoot "app\AgentWatchApp.exe") }
+    Write-Done "Mở Agent Watch: chọn cách nhập key, kiểm tra Ubuntu, xem lại rồi Áp dụng."
   }
 
   Write-Step 5 "Mở Piagent"
@@ -250,7 +262,7 @@ function Install-Piagent {
   $link = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Programs")) "Piagent.lnk"))
   $link.TargetPath = $wsl; $link.Arguments = $arguments; $link.Description = "Piagent dashboard ($distro)"; $link.Save()
   Write-Done "Start menu có mục Piagent: mở dashboard trong trình duyệt. Giữ cửa sổ Ubuntu đó mở khi dùng."
-  if (-not $unattended) { Start-Process $wsl -ArgumentList $arguments }
+  if (-not $unattended -and (Read-Host "Mở dashboard Piagent ngay? (y/N)") -match '^[yY]$') { Start-Process $wsl -ArgumentList $arguments }
   Write-Host ""
   Write-Host "Xong. Cập nhật sau này: chạy lại đúng lệnh vừa dùng." -ForegroundColor Green
 }
@@ -260,7 +272,15 @@ $previousWslUtf8 = $env:WSL_UTF8
 try {
   try { [Console]::OutputEncoding = New-Object Text.UTF8Encoding $false } catch { }
   $env:WSL_UTF8 = "1"
-  Install-Piagent
+  if ($unattended) { Install-Piagent } else {
+    Write-Host "Piagent + Agent Watch: cài đặt từng bước" -ForegroundColor Cyan
+    Write-Host "  1. Cài/cập nhật đầy đủ: WSL2, Ubuntu, Piagent và Agent Watch"
+    Write-Host "  2. Chỉ cài/cập nhật Agent Watch (đã chuẩn bị Piagent trong WSL)"
+    Write-Host "  Q. Thoát"
+    do { $choice = Read-Host "Chọn 1, 2 hoặc Q" } while ($choice -notmatch '^(1|2|[qQ])$')
+    if ($choice -eq '1') { Install-Piagent }
+    if ($choice -eq '2') { Install-Watch; Start-Process (Join-Path $env:LOCALAPPDATA "AgentWatch\app\AgentWatchApp.exe") }
+  }
 } catch {
   Write-Host ""
   Write-Host "Chưa cài xong: $($_.Exception.Message)" -ForegroundColor Red

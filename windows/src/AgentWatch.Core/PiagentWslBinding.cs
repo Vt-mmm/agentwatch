@@ -28,21 +28,34 @@ public sealed class WslExe : IWsl
         if (distro is not null) { start.ArgumentList.Add("-d"); start.ArgumentList.Add(distro); }
         start.ArgumentList.Add("-e");
         foreach (var part in command) start.ArgumentList.Add(part);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         using var process = Process.Start(start) ?? throw new InvalidOperationException("wsl-unavailable");
-        if (input is not null)
+        // Drain both pipes before writing stdin: WSL can fill stderr while
+        // starting a distribution, otherwise neither process can make progress.
+        var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        string output, errors;
+        try
         {
-            await process.StandardInput.BaseStream.WriteAsync(new UTF8Encoding(false).GetBytes(input));
-            process.StandardInput.Close();
+            if (input is not null)
+            {
+                await process.StandardInput.BaseStream.WriteAsync(new UTF8Encoding(false).GetBytes(input), timeout.Token);
+                process.StandardInput.Close();
+            }
+            await process.WaitForExitAsync(timeout.Token);
+            output = await outputTask;
+            errors = await errorTask;
         }
-        // Both streams at once: an unread stderr could fill and stall the command.
-        var reading = process.StandardOutput.ReadToEndAsync();
-        var errors = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        var output = await reading;
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+            try { await Task.WhenAll(outputTask, errorTask); } catch (OperationCanceledException) { }
+            throw new InvalidOperationException("wsl-timeout");
+        }
         if (process.ExitCode != 0)
         {
-            // wsl.exe's own messages are UTF-16: drop the NULs read as UTF-8.
-            var error = (await errors).Replace("\0", "").Trim();
+            var error = errors.Replace("\0", "").Trim();
             if (error.Contains("no-runtime", StringComparison.Ordinal)) throw new InvalidOperationException("wsl-runtime-unreadable");
             var first = error.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? "";
             throw new WslCommandException($"exit {process.ExitCode}{(first.Length > 0 ? ": " + first[..Math.Min(first.Length, 200)] : "")}");
@@ -128,12 +141,18 @@ public static class PiagentWslBinding
     public static void Remember(string distro)
     {
         Directory.CreateDirectory(AgentWatchPaths.DataDirectory);
-        File.WriteAllText(RememberedFile, JsonSerializer.Serialize(new { distro }));
+        var temporary = RememberedFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temporary, JsonSerializer.Serialize(new { distro }));
+            File.Move(temporary, RememberedFile, overwrite: true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
     public static string? Remembered()
     {
-        try { return JsonDocument.Parse(File.ReadAllText(RememberedFile)).RootElement.GetProperty("distro").GetString(); }
+        try { using var document = JsonDocument.Parse(File.ReadAllText(RememberedFile)); return document.RootElement.GetProperty("distro").GetString(); }
         catch (Exception error) when (error is IOException or JsonException or KeyNotFoundException or InvalidOperationException or UnauthorizedAccessException) { return null; }
     }
 

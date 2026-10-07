@@ -55,3 +55,7 @@ windows/**/bin/
 windows/**/obj/
 windows/**/TestResults/
 windows/publish/
+
+# Local review packages and native UI smoke screenshots
+.cache/
+windows/tests/artifacts/

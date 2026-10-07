@@ -27,6 +27,12 @@ jobs:
           dotnet-version: "8.0.x"
       - name: Test
         run: dotnet test windows/AgentWatch.Windows.sln -c Release
+      - name: Installer fixtures (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./windows/tests/install.Tests.ps1
+      - name: Installer fixtures (PowerShell 7)
+        shell: pwsh
+        run: ./windows/tests/install.Tests.ps1
       - name: Publish
         shell: pwsh
         run: |
@@ -167,6 +173,15 @@ jobs:
           $running[0].Refresh()
           if ($running[0].MainWindowHandle -eq 0) { throw "the second start did not show the window" }
           $running | Stop-Process -Force
+      - name: Manual wizard navigation and credential gate
+        shell: powershell
+        run: ./windows/tests/ui-smoke.ps1 -AppPath "$env:RUNNER_TEMP/awapp/AgentWatchApp.exe"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-wizard-smoke
+          path: windows/tests/artifacts/
+          if-no-files-found: ignore
       - name: Updating replaces the running app and broker
         shell: powershell
         env:

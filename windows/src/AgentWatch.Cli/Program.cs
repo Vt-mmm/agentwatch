@@ -40,7 +40,7 @@ try
                 stdout.WriteLine($"{(profile.Id == active?.Id ? "*" : " ")} {profile.Origin} · {profile.CredentialMode} · {profile.Id[..12]}");
             return 0;
         }
-        case "disconnect":
+        case "disconnect" when rest.Length == 0 || (rest.Length == 2 && rest[0] == "--profile"):
         {
             var target = rest.Length == 2 && rest[0] == "--profile" ? profiles.Find(rest[1]) : profiles.Active();
             if (target is null) { stderr.WriteLine("Không có kết nối nào để ngắt."); return 1; }
@@ -48,7 +48,7 @@ try
             stdout.WriteLine("Đã ngắt kết nối và xoá key khỏi máy này.");
             return 0;
         }
-        case "bind-wsl":
+        case "bind-wsl" when rest.Length == 0 || (rest.Length == 2 && rest[0] == "--distro" && !string.IsNullOrWhiteSpace(rest[1])):
         {
             if (profiles.Active() is not { CredentialMode: StudioCredentialMode.managed } profile || keys.Load(profile.Id) is not { } key)
             { stderr.WriteLine("Cần kết nối bằng key công ty trước (agentwatch connect)."); return 1; }
@@ -60,7 +60,7 @@ try
             stdout.WriteLine("Trong WSL, chạy `piagent dashboard` hoặc `piagent studio --project <folder>`.");
             return 0;
         }
-        case "check-wsl":
+        case "check-wsl" when rest.Length == 0 || (rest.Length == 2 && rest[0] == "--distro" && !string.IsNullOrWhiteSpace(rest[1])):
         {
             // What bind-wsl would read, without a key or a write: for support.
             var distro = rest.Length == 2 && rest[0] == "--distro" ? rest[1] : null;
@@ -90,5 +90,11 @@ catch (InvalidOperationException error) when (error.Message.StartsWith("wsl-", S
         "wsl-runtime-unsupported" => "Piagent hoặc Pi trong WSL chưa đúng bản (cần Pi 0.87.1). Chạy `piagent-update` trong WSL.",
         _ => "Không chạy được lệnh trong WSL" + (error is WslCommandException failed ? $" ({failed.Detail})" : "") + ". Kiểm tra WSL đã cài (wsl --install), có một bản Ubuntu, và Ubuntu mở bằng user của bạn (không phải root).",
     });
+    return 1;
+}
+
+catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Text.Json.JsonException)
+{
+    stderr.WriteLine("Không đọc được dữ liệu hoặc khởi chạy WSL. Kiểm tra quyền truy cập, mở Ubuntu rồi thử lại.");
     return 1;
 }

@@ -1,28 +1,105 @@
 <Window x:Class="AgentWatch.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Agent Watch" Width="560" SizeToContent="Height"
-        ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="14">
-  <StackPanel Margin="20">
-    <TextBlock Text="Agent Watch" FontSize="22" FontWeight="SemiBold"/>
-    <TextBlock x:Name="Status" Margin="0,6,0,14" TextWrapping="Wrap" Foreground="#555"/>
-
-    <TextBlock Text="Mã kết nối Studio (admin gửi cho bạn)" FontWeight="SemiBold"/>
-    <PasswordBox x:Name="Code" Margin="0,6,0,8" Height="30" VerticalContentAlignment="Center"/>
-    <StackPanel Orientation="Horizontal">
-      <Button x:Name="ConnectButton" Content="Kết nối" Padding="16,6" Click="Connect"/>
-      <Button x:Name="DisconnectButton" Content="Ngắt kết nối" Padding="16,6" Margin="8,0,0,0" Click="Disconnect"/>
-    </StackPanel>
-
-    <Separator Margin="0,18"/>
-    <TextBlock Text="Piagent trong WSL" FontWeight="SemiBold"/>
-    <TextBlock Margin="0,4,0,8" TextWrapping="Wrap" Foreground="#555"
-               Text="Chế độ công ty của Piagent trên Windows chạy trong WSL2. Cài Piagent trong Ubuntu (WSL), chạy `piagent --help` một lần, rồi bấm nút dưới đây."/>
-    <StackPanel Orientation="Horizontal">
-      <Button x:Name="BindButton" Content="Kết nối Piagent trong WSL" Padding="16,6" Click="BindWsl"/>
-      <TextBox x:Name="Distro" Width="150" Margin="8,0,0,0" VerticalContentAlignment="Center" ToolTip="Tên bản WSL Piagent đang chạy (để trống: bản mặc định của WSL)"/>
-    </StackPanel>
-    <TextBlock x:Name="WslStatus" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#555"/>
-
-    <Separator Margin="0,18"/>
-    <CheckBox x:Name="StartAtLogin" Content="Mở Agent Watch khi đăng nhập Windows" Checked="ToggleStartup" Unchecked="ToggleStartup"/>
-  </StackPanel>
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Agent Watch" Width="1060" Height="790"
+        MinWidth="880" MinHeight="640" WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="14"
+        Background="#FAF9F5" Foreground="#3D3929">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Accent" Color="#B75E43"/>
+    <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+    <Style x:Key="Hint" TargetType="TextBlock"><Setter Property="Foreground" Value="#6F6B5A"/><Setter Property="LineHeight" Value="21"/><Setter Property="Margin" Value="0,6,0,0"/></Style>
+    <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="#FFFFFC"/><Setter Property="BorderBrush" Value="#E5E1D8"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="12"/><Setter Property="Padding" Value="22"/><Setter Property="Margin" Value="0,0,0,16"/></Style>
+    <Style TargetType="Button">
+      <Setter Property="Padding" Value="16,10"/><Setter Property="MinHeight" Value="40"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Background" Value="#FFFFFC"/><Setter Property="Foreground" Value="#3D3929"/><Setter Property="BorderBrush" Value="#DDD7CA"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.82"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#3D3929"/><Setter TargetName="Chrome" Property="BorderThickness" Value="2"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="{StaticResource Accent}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="{StaticResource Accent}"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+    <Style TargetType="TextBox"><Setter Property="Padding" Value="11,9"/><Setter Property="MinHeight" Value="40"/><Setter Property="BorderBrush" Value="#D5CEBF"/><Setter Property="Background" Value="#FFFFFC"/></Style>
+    <Style TargetType="PasswordBox"><Setter Property="Padding" Value="11,9"/><Setter Property="MinHeight" Value="40"/><Setter Property="BorderBrush" Value="#D5CEBF"/><Setter Property="Background" Value="#FFFFFC"/></Style>
+  </Window.Resources>
+  <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Border Background="#F3F0E8" BorderBrush="#E5E1D8" BorderThickness="0,0,1,0" Padding="24,30">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top">
+          <TextBlock Text="◈  Agent Watch" FontSize="22" FontWeight="SemiBold"/>
+          <TextBlock Text="KHÔNG GIAN LÀM VIỆC" FontSize="10" Foreground="#6F6B5A" Margin="0,8,0,34"/>
+          <Button x:Name="SetupNav" Content="Thiết lập từng bước" HorizontalContentAlignment="Left" Click="ShowSetup"/>
+          <Button x:Name="ToolsNav" Content="Công cụ &amp; kết nối" Margin="0,10,0,0" Click="ShowTools"/>
+          <Button x:Name="DiagnosticsNav" Content="Chẩn đoán" Margin="0,10,0,0" Click="ShowDiagnostics"/>
+          <StackPanel x:Name="Steps" Margin="0,34,0,0">
+            <TextBlock Text="TIẾN TRÌNH THIẾT LẬP" FontSize="10" Foreground="#6F6B5A" Margin="0,0,0,16"/>
+            <TextBlock x:Name="StepLabel0" Text="01  Bắt đầu" Margin="0,0,0,18"/>
+            <TextBlock x:Name="StepLabel1" Text="02  Studio &amp; key" Margin="0,0,0,18"/>
+            <TextBlock x:Name="StepLabel2" Text="03  Piagent &amp; WSL2" Margin="0,0,0,18"/>
+            <TextBlock x:Name="StepLabel3" Text="04  Xem lại &amp; áp dụng"/>
+          </StackPanel>
+        </StackPanel>
+        <StackPanel VerticalAlignment="Bottom">
+          <Border Background="#E7ECDF" CornerRadius="6" Padding="10"><TextBlock Text="Windows · WSL2" Foreground="#41623C" FontSize="12"/></Border>
+          <TextBlock Text="Key được mã hoá cho tài khoản Windows của bạn." Style="{StaticResource Hint}" FontSize="12" Margin="0,12,0,0"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <Grid Grid.Column="1" Margin="34,30">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <StackPanel>
+        <TextBlock x:Name="Eyebrow" Text="THIẾT LẬP · 1 / 4" Foreground="#9C503B" FontSize="11" FontWeight="SemiBold"/>
+        <TextBlock x:Name="PageTitle" Text="Bắt đầu với Agent Watch" FontSize="28" FontWeight="SemiBold" Margin="0,7,0,0"/>
+        <TextBlock x:Name="PageDescription" Style="{StaticResource Hint}" Margin="0,8,0,18"/>
+      </StackPanel>
+      <StackPanel Grid.Row="1">
+        <Border x:Name="StatusBox" Background="#F0ECE1" CornerRadius="8" Padding="12" Margin="0,0,0,14"><TextBlock x:Name="Status" AutomationProperties.LiveSetting="Polite"/></Border>
+        <ProgressBar x:Name="Progress" IsIndeterminate="True" Height="3" Margin="0,0,0,12" Visibility="Collapsed" Foreground="{StaticResource Accent}"/>
+      </StackPanel>
+      <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
+        <StackPanel>
+          <StackPanel x:Name="Page0">
+            <Border Style="{StaticResource Card}"><StackPanel>
+              <TextBlock Text="Piagent công ty" FontSize="19" FontWeight="SemiBold"/>
+              <TextBlock Text="Dùng model và hạn mức quản trị viên cấp. Agent Watch giữ key trên Windows; Piagent làm việc trong Ubuntu với sandbox WSL2." Style="{StaticResource Hint}"/>
+              <Border Background="#F7F4EC" CornerRadius="8" Padding="14" Margin="0,18,0,0"><StackPanel><TextBlock Text="Chuẩn bị trước khi bắt đầu" FontWeight="SemiBold"/><TextBlock Text="• Mã kết nối hoặc địa chỉ Studio + key&#10;• Kết nối Internet&#10;• Ubuntu trong WSL2 (có thể thiết lập ở bước 3)" Style="{StaticResource Hint}"/></StackPanel></Border>
+            </StackPanel></Border>
+            <Border x:Name="ExistingCard" Style="{StaticResource Card}" Visibility="Collapsed"><StackPanel><TextBlock Text="Đã có kết nối trên máy này" FontWeight="SemiBold"/><TextBlock x:Name="ExistingSummary" Style="{StaticResource Hint}"/><Button Content="Giữ key hiện có và kiểm tra lại" Click="ReuseConnection" HorizontalAlignment="Left" Margin="0,14,0,0"/></StackPanel></Border>
+            <TextBlock Text="Bạn chọn và kiểm tra từng bước. Key mới chỉ được lưu khi bấm “Áp dụng thiết lập” ở bước cuối." Style="{StaticResource Hint}"/>
+          </StackPanel>
+          <StackPanel x:Name="Page1" Visibility="Collapsed">
+            <Border Style="{StaticResource Card}"><StackPanel>
+              <TextBlock Text="Bạn nhận thông tin kết nối theo cách nào?" FontWeight="SemiBold" Margin="0,0,0,14"/>
+              <WrapPanel><RadioButton x:Name="CodeMode" Content="Mã kết nối" IsChecked="True" Checked="ChangeInputMode" Margin="0,0,24,12"/><RadioButton x:Name="SeparateMode" Content="Địa chỉ + key riêng" Checked="ChangeInputMode" Margin="0,0,0,12"/></WrapPanel>
+              <StackPanel x:Name="CodeFields"><TextBlock Text="Mã kết nối Studio" Margin="0,4,0,7"/><PasswordBox x:Name="Code" PasswordChanged="CredentialsChanged" AutomationProperties.Name="Mã kết nối Studio"/><TextBlock Text="Dán toàn bộ mã quản trị viên gửi. Mã được ẩn khi nhập." Style="{StaticResource Hint}" FontSize="12"/></StackPanel>
+              <StackPanel x:Name="SeparateFields" Visibility="Collapsed"><TextBlock Text="Địa chỉ API Studio" Margin="0,4,0,7"/><TextBox x:Name="Origin" TextChanged="CredentialsChanged" AutomationProperties.Name="Địa chỉ API Studio"/><TextBlock Text="Ví dụ: https://studio.congty.vn" Style="{StaticResource Hint}" FontSize="12"/><TextBlock Text="Key được cấp" Margin="0,16,0,7"/><PasswordBox x:Name="Key" PasswordChanged="CredentialsChanged" AutomationProperties.Name="Key Studio"/></StackPanel>
+              <Button x:Name="VerifyKeyButton" Content="Kiểm tra kết nối &amp; key" Click="VerifyCredentials" HorizontalAlignment="Left" Margin="0,18,0,0"/>
+              <TextBlock x:Name="IdentitySummary" Style="{StaticResource Hint}" Margin="0,14,0,0" AutomationProperties.LiveSetting="Polite"/>
+            </StackPanel></Border>
+            <TextBlock Text="Key công ty dùng cho Piagent. Nếu nhận key CLI trực tiếp, nhờ quản trị viên cấp key Piagent công ty. Lựa chọn model tuân theo cấu hình của team." Style="{StaticResource Hint}"/>
+          </StackPanel>
+          <StackPanel x:Name="Page2" Visibility="Collapsed">
+            <Border Style="{StaticResource Card}"><StackPanel>
+              <TextBlock Text="Chọn nơi chạy Piagent" FontSize="18" FontWeight="SemiBold"/>
+              <TextBlock Text="Dùng Ubuntu đã cài hoặc nhập tên bản phân phối khác. Kiểm tra không thay đổi key hoặc cấu hình đang dùng." Style="{StaticResource Hint}"/>
+              <Grid Margin="0,16,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><ComboBox x:Name="Distro" IsEditable="True" MinHeight="40" VerticalContentAlignment="Center" Padding="8" TextBoxBase.TextChanged="DistributionChanged" AutomationProperties.Name="Bản phân phối WSL"/><Button Grid.Column="1" Content="Tải lại" Margin="10,0,0,0" Click="ReloadDistributions"/></Grid>
+              <Button x:Name="CheckWslButton" Content="Kiểm tra WSL &amp; Piagent" Click="CheckWsl" HorizontalAlignment="Left"/>
+              <TextBlock x:Name="WslStatus" Style="{StaticResource Hint}" Margin="0,14,0,0" AutomationProperties.LiveSetting="Polite" Text="Chưa kiểm tra. Để trống để dùng bản WSL mặc định."/>
+            </StackPanel></Border>
+            <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Máy mới hoặc cần cập nhật?" FontWeight="SemiBold"/><TextBlock Text="Chạy trình thiết lập trong PowerShell. Bạn chọn từng phần cần cài; nếu Windows yêu cầu khởi động lại, chạy lại cùng lệnh để tiếp tục." Style="{StaticResource Hint}"/><Button Content="Sao chép lệnh thiết lập" Click="CopySetup" HorizontalAlignment="Left" Margin="0,14,0,0"/></StackPanel></Border>
+          </StackPanel>
+          <StackPanel x:Name="Page3" Visibility="Collapsed">
+            <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Kiểm tra trước khi áp dụng" FontSize="18" FontWeight="SemiBold"/><TextBlock x:Name="ReviewSummary" Style="{StaticResource Hint}" Margin="0,16,0,0"/><Separator Margin="0,18"/><CheckBox x:Name="StartAtLogin" Content="Mở Agent Watch khi đăng nhập Windows"/><TextBlock Text="Áp dụng sẽ lưu key, kết nối Piagent với Studio và ghi nhớ bản WSL đã chọn. Không thay đổi project hoặc hội thoại của bạn." Style="{StaticResource Hint}" Margin="0,16,0,0"/></StackPanel></Border>
+            <TextBlock x:Name="ApplySummary" Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite"/>
+          </StackPanel>
+          <StackPanel x:Name="ToolsPage" Visibility="Collapsed">
+            <Border Style="{StaticResource Card}"><StackPanel><TextBlock x:Name="ConnectionTitle" Text="Chưa kết nối" FontSize="20" FontWeight="SemiBold"/><TextBlock x:Name="ConnectionSummary" Style="{StaticResource Hint}"/><WrapPanel Margin="0,16,0,0"><Button Content="Kiểm tra lại" Click="RefreshConnection"/><Button x:Name="DisconnectButton" Content="Ngắt kết nối…" Margin="10,0,0,0" Click="Disconnect"/></WrapPanel></StackPanel></Border>
+            <Border Style="{StaticResource Card}"><StackPanel><DockPanel><Border DockPanel.Dock="Right" Background="#E7ECDF" CornerRadius="5" Padding="8,4"><TextBlock x:Name="ToolBadge" Text="Chưa kiểm tra" FontSize="12" Foreground="#41623C"/></Border><TextBlock Text="Piagent" FontSize="20" FontWeight="SemiBold"/></DockPanel><TextBlock x:Name="ToolDetail" Text="Chế độ công ty · Ubuntu / WSL2" Style="{StaticResource Hint}"/><Button x:Name="LaunchButton" Content="Mở Piagent" Click="LaunchPiagent" Style="{StaticResource Primary}" HorizontalAlignment="Left" Margin="0,16,0,0" IsEnabled="False"/></StackPanel></Border>
+            <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Model được cấp" FontWeight="SemiBold"/><TextBlock x:Name="ModelsSummary" Style="{StaticResource Hint}" Text="Kiểm tra kết nối để tải model từ Studio."/></StackPanel></Border>
+            <TextBlock Text="Claude Code và Codex: đồng bộ CLI trực tiếp hiện có trên macOS. Báo cáo và coaching chưa được chuyển sang Windows." Style="{StaticResource Hint}" FontSize="12"/>
+          </StackPanel>
+          <StackPanel x:Name="DiagnosticsPage" Visibility="Collapsed">
+            <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Tình trạng trên máy" FontSize="18" FontWeight="SemiBold"/><TextBlock x:Name="DiagnosticsSummary" Style="{StaticResource Hint}" Margin="0,16,0,16"/><WrapPanel><Button Content="Kiểm tra lại" Click="RefreshConnection"/><Button Content="Sao chép thông tin hỗ trợ" Click="CopyDiagnostics" Margin="10,0,0,0"/></WrapPanel></StackPanel></Border>
+            <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Khôi phục khi cài đặt bị gián đoạn" FontWeight="SemiBold"/><TextBlock Text="1. Mở Ubuntu một lần để hoàn tất tài khoản Linux.&#10;2. Chạy lại trình thiết lập, chọn phần cần sửa.&#10;3. Quay lại Thiết lập để kiểm tra WSL và áp dụng.&#10;&#10;Cập nhật Agent Watch giữ kết nối đã lưu và giữ bản app trước đó để khôi phục nếu thay bản mới thất bại." Style="{StaticResource Hint}"/></StackPanel></Border>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+      <Grid x:Name="Footer" Grid.Row="3" Margin="0,20,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Button x:Name="BackButton" Content="Quay lại" Click="GoBack"/><TextBlock x:Name="FooterHint" Grid.Column="1" VerticalAlignment="Center" Margin="18,0" Foreground="#6F6B5A" FontSize="12"/><Button x:Name="NextButton" Grid.Column="2" Content="Tiếp tục" Click="GoNext" Style="{StaticResource Primary}"/></Grid>
+    </Grid>
+  </Grid>
 </Window>

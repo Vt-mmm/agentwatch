@@ -126,6 +126,23 @@ public sealed class StudioConnector(StudioProfileStore profiles, IStudioKeyStore
 
     public async Task<(StudioProfile Profile, StudioConnection Connection)> ConnectAsync(string code, CancellationToken cancellation = default)
     {
+        var result = await VerifyAsync(code, cancellation);
+        var key = StudioConnectionCode.Split(code)!.Value.Key;
+        var previousKey = keys.Load(result.Profile.Id);
+        keys.Save(result.Profile.Id, key);
+        try { profiles.Save(result.Profile); }
+        catch
+        {
+            if (previousKey is not null) keys.Save(result.Profile.Id, previousKey);
+            else keys.Delete(result.Profile.Id);
+            throw;
+        }
+        return result;
+    }
+
+    // Preview identity and models without persisting the submitted credential.
+    public async Task<(StudioProfile Profile, StudioConnection Connection)> VerifyAsync(string code, CancellationToken cancellation = default)
+    {
         if (StudioConnectionCode.Split(code) is not var (originText, key)) throw new StudioException(StudioError.invalidKey);
         var origin = new StudioOrigin(originText);
         var connection = await client.ConnectAsync(origin, key, cancellation);
@@ -136,8 +153,6 @@ public sealed class StudioConnector(StudioProfileStore profiles, IStudioKeyStore
         var mode = connection.Identity.CredentialMode ?? StudioCredentialMode.direct;
         var id = connection.Identity.KeyId is { } keyId ? origin.CredentialSlotId(connection.Identity.OrgId, connection.Identity.User.Id, keyId, mode) : connectionId;
         var profile = new StudioProfile(origin.Value, id, connectionId, connection.Identity.KeyId, mode);
-        keys.Save(profile.Id, key);
-        profiles.Save(profile);
         return (profile, connection);
     }
 

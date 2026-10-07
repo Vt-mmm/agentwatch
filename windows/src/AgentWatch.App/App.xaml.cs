@@ -11,6 +11,7 @@ public partial class App : Application
     EventWaitHandle? showRequest;
     RegisteredWaitHandle? showWait;
     TrayIcon? tray;
+    UpdateOffer? updates;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -28,6 +29,7 @@ public partial class App : Application
         tray = new TrayIcon(window, () => { tray?.Dispose(); Shutdown(); });
         if (!e.Args.Contains("--background")) window.Show();
         _ = window.RefreshWslBindingAsync();
+        updates = new UpdateOffer(window);
     }
 
     protected override void OnExit(ExitEventArgs e) { showWait?.Unregister(null); showRequest?.Dispose(); tray?.Dispose(); single?.Dispose(); base.OnExit(e); }

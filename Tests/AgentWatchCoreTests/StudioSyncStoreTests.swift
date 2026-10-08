@@ -40,6 +40,18 @@ private actor SyncTransport: StudioHTTPTransport {
     func save(_ key: String, profileID: String) {}
     func delete(profileID: String) {}
 }
+/// A key macOS will only hand over after the member allows it once.
+@MainActor private final class ApprovalKeys: StudioKeyStorage {
+    var approved = false, prompts = 0
+    func load(profileID: String) throws -> String? { try load(profileID: profileID, allowInteraction: false) }
+    func load(profileID: String, allowInteraction: Bool) throws -> String? {
+        if allowInteraction { prompts += 1; approved = true }
+        guard approved else { throw StudioError.keychainApprovalRequired }
+        return "fixture-key"
+    }
+    func save(_ key: String, profileID: String) {}
+    func delete(profileID: String) {}
+}
 @MainActor private final class SyncFixture {
     let suite = "studio-sync-test-" + UUID().uuidString
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -55,6 +67,23 @@ private actor SyncTransport: StudioHTTPTransport {
     func clean() { store.stop(); defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: root) }
 }
 final class StudioSyncStoreTests: XCTestCase {
+    @MainActor func testKeychainApprovalIsReportedAndAllowingItSynchronizesAtOnce() async throws {
+        let suite = "studio-keychain-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let keys = ApprovalKeys(), transport = SyncTransport()
+        let store = StudioSyncStore(defaults: defaults, client: StudioClient(transport: transport), settings: try SyncSettings(), keys: keys)
+        store.selected = [.claude]; store.directories = ["claude": root.path]; store.enabled = true
+        await store.synchronize()
+        XCTAssertTrue(store.needsKeychainApproval, "The background sync cannot read the key without macOS asking")
+        XCTAssertEqual(keys.prompts, 0, "The background sync never shows macOS's prompt itself")
+        let allowed = await store.authorizeKeychain()
+        XCTAssertTrue(allowed); XCTAssertEqual(keys.prompts, 1)
+        XCTAssertFalse(store.needsKeychainApproval); XCTAssertNotNil(store.lastChecked)
+        let headers = await transport.conditionalHeaders()
+        XCTAssertEqual(headers.count, 1, "Allowing synchronizes at once")
+    }
     @MainActor func testBackgroundSyncCoversInactiveSlotWithoutChangingSelectionOrSharingETag() async throws {
         let suite = "studio-background-slots-" + UUID().uuidString, defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }

@@ -31,6 +31,10 @@ public struct StudioSyncResult: Codable, Identifiable, Sendable {
     public private(set) var status = "Chọn công cụ để tự động cấu hình."
     public internal(set) var lastChecked: Date?
     public private(set) var lastError: String?
+    /// The background sync could not read the key without asking macOS (often
+    /// right after Agent Watch updated): Piagent's company binding is stale
+    /// until the member allows it.
+    public private(set) var needsKeychainApproval = false
     public var enabled: Bool { didSet { if !loadingPreferences { persistPreferences() } } }
     /// Key facts from the last manifest; kept after an invalid-key failure so
     /// the app can explain an expiry without reading the secret.
@@ -255,7 +259,7 @@ public struct StudioSyncResult: Codable, Identifiable, Sendable {
                 }
             }
             guard generation == attempt else { return }
-            results = next; lastError = nil
+            results = next; lastError = nil; needsKeychainApproval = false
             status = next.allSatisfy(\.success) ? "Đã đồng bộ tất cả công cụ đã chọn." : "Có công cụ cần xử lý."
             await report(profile: profile, key: key, manifest: manifest)
         } catch {
@@ -267,8 +271,20 @@ public struct StudioSyncResult: Codable, Identifiable, Sendable {
                 }
                 models = []; results = []; cachedManifest = nil
             }
+            needsKeychainApproval = error as? StudioError == .keychainApprovalRequired
             lastError = error.localizedDescription; status = error.localizedDescription
         }
+    }
+    /// Reads the active key once with macOS's prompt (the member chooses
+    /// "Always Allow"), then synchronizes at once so Piagent's binding follows.
+    public func authorizeKeychain() async -> Bool {
+        activateProfile()
+        guard let profile = activeProfile else { return false }
+        do {
+            _ = try (keys ?? StudioKeychainStorage()).load(profileID: profile.id, allowInteraction: true)
+        } catch { return false }
+        await synchronize(force: true)
+        return !needsKeychainApproval && lastError == nil
     }
     private func rememberCLI(_ target: StudioSyncTarget, version raw: String) {
         guard let version = StudioClientStatusReport.number(in: raw), cliVersions[target.rawValue] != version else { return }

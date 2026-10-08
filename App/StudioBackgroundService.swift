@@ -8,6 +8,9 @@ import AgentWatchCore
     static let shared = StudioBackgroundService()
     private var monitor: NWPathMonitor?
     private var wakeObserver: NSObjectProtocol?
+    private var keychainWatch: Task<Void, Never>?
+    private var keychainAskAfter = Date.distantPast
+    static let keychainRemindAfter: TimeInterval = 3600
     private(set) var message = ""
     private(set) var needsApproval = false
     /// Answers the direct helper when the running app has Keychain access.
@@ -39,6 +42,16 @@ import AgentWatchCore
                 Task { @MainActor in await StudioSyncStore.shared.synchronizeSavedProfiles() }
             }
         }
+        // A key macOS will not let the background sync read (often right after
+        // an update) leaves Piagent's company mode stale: say so in a dialog.
+        if keychainWatch == nil {
+            keychainWatch = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(60))
+                    await self?.offerKeychainApproval()
+                }
+            }
+        }
         // Reuse the application's existing login-item owner and audit trail.
         SupervisorLockStore.shared.ensureLaunchAtLogin()
         let status = SMAppService.mainApp.status
@@ -50,4 +63,29 @@ import AgentWatchCore
         }
     }
     func openSettings() { SMAppService.openSystemSettingsLoginItems() }
+
+    private var askingKeychain = false
+    func offerKeychainApproval() async {
+        let sync = StudioSyncStore.shared
+        guard sync.needsKeychainApproval, !askingKeychain, Date() >= keychainAskAfter else { return }
+        askingKeychain = true; defer { askingKeychain = false }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Agent Watch cần quyền đọc key công ty"
+        alert.informativeText = "macOS cần bạn cho phép Agent Watch đọc key Studio trong Keychain (thường sau khi Agent Watch cập nhật). "
+            + "Trong lúc chờ, chế độ công ty của Piagent (Terminal và dashboard) chưa mở được.\n\n"
+            + "Bấm “Cho phép ngay”, rồi chọn “Luôn cho phép” trong hộp thoại của macOS."
+        alert.addButton(withTitle: "Cho phép ngay")
+        alert.addButton(withTitle: "Để sau")
+        guard alert.runModal() == .alertFirstButtonReturn else { keychainAskAfter = Date().addingTimeInterval(Self.keychainRemindAfter); return }
+        if await sync.authorizeKeychain() {
+            let done = NSAlert()
+            done.messageText = "Đã cho phép"
+            done.informativeText = "Agent Watch đã cập nhật cấu hình cho Piagent. Mở lại Piagent nếu nó đang báo lỗi công ty."
+            done.runModal()
+        } else {
+            keychainAskAfter = Date().addingTimeInterval(300)
+        }
+    }
 }

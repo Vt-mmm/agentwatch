@@ -10,6 +10,10 @@ public static class ReleaseCheck
 {
     public static readonly Uri Feed = new("https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/Directory.Build.props");
     public const string InstallCommand = "irm https://raw.githubusercontent.com/Vt-mmm/agentwatch/main/windows/install.ps1 | iex";
+    // What the update dialog runs: a failed update keeps its window open with
+    // the reason, instead of closing before the member can read it.
+    public const string UpdaterCommand = "try { " + InstallCommand + " } catch { Write-Host $_.Exception.Message -ForegroundColor Red; "
+        + "Write-Host 'Chưa cập nhật được. Agent Watch đang dùng vẫn giữ nguyên; thử lại sau hoặc chạy lại lệnh cài.'; Read-Host 'Nhấn Enter để đóng' }";
     public static readonly TimeSpan Every = TimeSpan.FromHours(1);
 
     public static Version? Installed(Assembly? assembly = null)

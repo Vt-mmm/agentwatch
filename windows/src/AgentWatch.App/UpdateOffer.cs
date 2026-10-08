@@ -48,7 +48,7 @@ sealed class UpdateOffer
     {
         try
         {
-            Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{ReleaseCheck.InstallCommand}\"")
+            Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{ReleaseCheck.UpdaterCommand}\"")
                 { UseShellExecute = true });
         }
         catch (Exception error)

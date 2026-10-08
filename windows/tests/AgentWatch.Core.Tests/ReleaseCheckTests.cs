@@ -27,5 +27,14 @@ public class ReleaseCheckTests
     }
 
     [Fact]
+    public void UpdaterRunsTheInstallerAndKeepsAFailureOnScreen()
+    {
+        // The dialog passes it inside -Command "..." to powershell.exe.
+        Assert.DoesNotContain('"', ReleaseCheck.UpdaterCommand);
+        Assert.Contains(ReleaseCheck.InstallCommand, ReleaseCheck.UpdaterCommand);
+        Assert.Contains("Read-Host", ReleaseCheck.UpdaterCommand);
+    }
+
+    [Fact]
     public void ChecksEveryHour() => Assert.Equal(TimeSpan.FromHours(1), ReleaseCheck.Every);
 }

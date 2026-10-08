@@ -37,6 +37,23 @@ try {
     Must-Fail { Get-AgentWatchChecksum @("$digest  AgentWatch-win-x64.zip", "$digest  AgentWatch-win-x64.zip") 'AgentWatch-win-x64.zip' } 'ambiguous'
     Must-Fail { Get-AgentWatchChecksum @('bad  AgentWatch-win-x64.zip') 'AgentWatch-win-x64.zip' } 'Missing'
 
+    # A connection reset mid-download is retried; the partial file is kept for curl to continue.
+    function Write-Host { }
+    $script:resets = 2; $script:fetches = 0
+    function Invoke-AgentWatchFetch($Url, $OutFile) {
+        $script:fetches++
+        if ($script:resets-- -gt 0) { throw 'An existing connection was forcibly closed by the remote host.' }
+        Set-Content $OutFile 'done'
+    }
+    New-Item -ItemType Directory -Force $testRoot | Out-Null
+    $retried = Join-Path $testRoot 'retried.zip'
+    Save-AgentWatchDownload 'zip' $retried -DelaySeconds 0
+    Assert ($script:fetches -eq 3 -and (Get-Content $retried) -eq 'done') 'Two resets must be retried'
+    $script:resets = 99; $script:fetches = 0
+    Must-Fail { Save-AgentWatchDownload 'zip' $retried -Attempts 3 -DelaySeconds 0 } 'failed 3 times.*forcibly closed.*not been changed'
+    Assert ($script:fetches -eq 3) 'Gives up after the attempt limit'
+    Remove-Item function:Write-Host
+
     $source = Join-Path $testRoot 'source'
     New-Item -ItemType Directory -Force $source | Out-Null
     foreach ($file in @('AgentWatchApp.exe','AgentWatchApp.dll','agentwatch.exe','agentwatch.dll')) { Set-Content (Join-Path $source $file) 'new' }
@@ -57,6 +74,7 @@ try {
         if ($Uri -eq 'zip' -or $Uri -like '*/AgentWatch-win-x64.zip') { Copy-Item $archive $OutFile }
         else { $value = if ($script:wrongHash) { '0' * 64 } else { $hash }; Set-Content $OutFile "$value  AgentWatch-win-x64.zip" }
     }
+    function Invoke-AgentWatchFetch($Url, $OutFile) { Invoke-WebRequest $Url -OutFile $OutFile }
     function Get-Process { return @() }
     function New-AgentWatchShortcut { }
     function Test-AgentWatchCli { if ($script:failSmoke) { throw 'smoke failure' } }
@@ -90,7 +108,7 @@ try {
     $script:useFeed = $true
     Install-AgentWatch -NoLaunch
     Assert (Test-Path "$app/AgentWatchApp.exe") 'Direct version-feed installation preserves the current GUI name'
-    Write-Host 'PASS: syntax, native architecture, checksums, missing assets, rollback, preservation and concurrent install lock.'
+    Write-Host 'PASS: syntax, native architecture, checksums, download retries, missing assets, rollback, preservation and concurrent install lock.'
 } finally {
     foreach ($name in $original.Keys) { [Environment]::SetEnvironmentVariable($name, $original[$name]) }
     if (Test-Path $testRoot) { Remove-Item $testRoot -Recurse -Force }

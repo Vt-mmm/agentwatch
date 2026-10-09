@@ -208,6 +208,20 @@ jobs:
           if (Test-Path (Join-Path $app "holder.exe")) { throw "the old copy was not replaced" }
           if (-not (Test-Path (Join-Path $app "AgentWatchApp.exe"))) { throw "the update left no app" }
           if (Get-ChildItem (Split-Path $app) -Directory -Filter "app-*") { throw "the unpacked copy was left behind" }
+          # 2026-10-08: a process still running from app.previous made the next
+          # update fail deleting that copy (AgentWatch.Core.dll denied).
+          $previous = Join-Path (Split-Path $app) "app.previous"
+          if (-not (Test-Path $previous)) { throw "the update kept no previous copy" }
+          Copy-Item (Join-Path $previous "agentwatch.exe") (Join-Path $previous "holder.exe")
+          $start = New-Object Diagnostics.ProcessStartInfo (Join-Path $previous "holder.exe"), ("managed-broker --profile " + ("a" * 64))
+          $start.UseShellExecute = $false; $start.RedirectStandardInput = $true
+          $stale = [Diagnostics.Process]::Start($start)
+          Start-Sleep 4
+          if ($stale.HasExited) { throw "the stale broker should be running" }
+          Invoke-Expression $install
+          if (-not $stale.HasExited) { throw "the process from app.previous kept running" }
+          if (Test-Path (Join-Path $previous "holder.exe")) { throw "the stale previous copy was not replaced" }
+          if (-not (Test-Path (Join-Path $app "AgentWatchApp.exe"))) { throw "the second update left no app" }
 
   # The Ubuntu half alone on a stock Ubuntu 24.04 VM, where AppArmor restricts
   # the user namespaces the sandbox needs.

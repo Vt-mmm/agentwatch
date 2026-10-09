@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
@@ -46,15 +47,20 @@ sealed class UpdateOffer
 
     static void Install()
     {
-        try
+        var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgentWatch");
+        var workingDirectory = Directory.Exists(root) ? root : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var errors = new List<string>();
+        foreach (var start in ReleaseCheck.UpdaterStarts(windows, workingDirectory))
         {
-            Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{ReleaseCheck.UpdaterCommand}\"")
-                { UseShellExecute = true });
+            try { Process.Start(start); return; }
+            catch (Exception error) { errors.Add(error.Message); }
         }
-        catch (Exception error)
-        {
-            MessageBox.Show($"Chưa mở được trình cập nhật: {error.Message}\n\nChạy lệnh sau trong PowerShell:\n{ReleaseCheck.InstallCommand}",
-                "Agent Watch", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+        var copied = false;
+        try { Clipboard.SetText(ReleaseCheck.InstallCommand); copied = true; } catch { }
+        MessageBox.Show($"Chưa mở được trình cập nhật: {errors.LastOrDefault()}\n\n"
+            + (copied ? "Lệnh cài đã được chép sẵn: mở PowerShell, dán (Ctrl+V) rồi Enter.\n" : "Chạy lệnh sau trong PowerShell:\n")
+            + ReleaseCheck.InstallCommand,
+            "Agent Watch", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }

@@ -36,5 +36,19 @@ public class ReleaseCheckTests
     }
 
     [Fact]
+    public void UpdaterStartsByFullPathOutsideSystem32()
+    {
+        var starts = ReleaseCheck.UpdaterStarts(@"C:\WINDOWS", @"C:\Users\a\AppData\Local\AgentWatch").ToList();
+        Assert.Equal(3, starts.Count);
+        Assert.False(starts[0].UseShellExecute);
+        Assert.EndsWith(Path.Combine("System32", "WindowsPowerShell", "v1.0", "powershell.exe"), starts[0].FileName);
+        Assert.All(starts, start =>
+        {
+            Assert.Equal(@"C:\Users\a\AppData\Local\AgentWatch", start.WorkingDirectory);
+            Assert.Contains($"-Command \"{ReleaseCheck.UpdaterCommand}\"", start.Arguments);
+        });
+    }
+
+    [Fact]
     public void ChecksEveryHour() => Assert.Equal(TimeSpan.FromHours(1), ReleaseCheck.Every);
 }

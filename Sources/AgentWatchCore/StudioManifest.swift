@@ -32,6 +32,8 @@ public struct StudioManifest: Codable, Sendable {
     /// How many grants of one helper role Studio holds at once (absent on an
     /// older Studio, which holds one).
     public var helperSlots: Int? = nil
+    /// Which program company conversations open in: "piagent" (absent) or "pi".
+    public var runtime: String? = nil
     public let schemaVersion: Int
     public let revision: String
     public let orgID: UUID
@@ -45,7 +47,7 @@ public struct StudioManifest: Codable, Sendable {
     public let models: [StudioModel]
     public let codexCatalog: StudioJSONValue
     enum CodingKeys: String, CodingKey {
-        case thinkingLevels = "thinking_levels", processVersions = "process_versions", helperSlots = "helper_slots", authority, harness, schemaVersion = "schema_version", revision, orgID = "org_id", user, keyID = "key_id", keyLabel = "key_label", keyPrefix = "key_prefix", credentialMode = "credential_mode", expiresAt = "expires_at", refreshSeconds = "refresh_seconds", models, codexCatalog = "codex_catalog"
+        case runtime, thinkingLevels = "thinking_levels", processVersions = "process_versions", helperSlots = "helper_slots", authority, harness, schemaVersion = "schema_version", revision, orgID = "org_id", user, keyID = "key_id", keyLabel = "key_label", keyPrefix = "key_prefix", credentialMode = "credential_mode", expiresAt = "expires_at", refreshSeconds = "refresh_seconds", models, codexCatalog = "codex_catalog"
     }
     public func validate(profile: StudioProfile? = nil) throws {
         guard ((schemaVersion == 1 && (credentialMode ?? .direct) == .direct && authority == nil && harness == nil) || (schemaVersion == 2 && credentialMode == .managed && authority?.generation ?? 0 > 0 && (harness?.valid ?? true))), revision.count == 64, revision.allSatisfy({ $0.isHexDigit }),

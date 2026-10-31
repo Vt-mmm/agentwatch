@@ -3,8 +3,8 @@ import CryptoKit
 import Darwin
 
 public enum StudioManagedConfiguration {
-    public static func authorize(directory: URL, profileID: String) async throws {
-        let object = try StudioClientConfiguration.object(StudioClientConfiguration.read(directory.appendingPathComponent("agent-watch-managed.json")))
+    public static func authorize(directory: URL, profileID: String, binding: String = "agent-watch-managed.json") async throws {
+        let object = try StudioClientConfiguration.object(StudioClientConfiguration.read(directory.appendingPathComponent(binding)))
         guard object["profile_id"] as? String == profileID,
               let broker = object["broker"] as? String, let expected = object["broker_sha256"] as? String,
               broker.hasPrefix("/"), URL(fileURLWithPath: broker).resolvingSymlinksInPath().path == broker,

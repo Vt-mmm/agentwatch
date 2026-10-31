@@ -162,6 +162,7 @@ public struct StudioManagedClient: Sendable {
         case 409: refused = .identityChanged
         case 429: refused = .rateLimited
         case 400: refused = .invalidResponse
+        case 426: refused = .bundleTooOld
         default: refused = .serverUnavailable
         }
         if let code = StudioManagedRefusal.code(in: response.body) { throw StudioManagedRefusal(error: refused, code: code) }
@@ -179,13 +180,15 @@ public struct StudioManagedClient: Sendable {
     private var root: UUID?
     private var unconfirmed: UUID? // a run whose close Studio did not confirm
     private var grants: [String: StudioRunGrant] = [:]
-    public init(profile: StudioProfile, manifest: StudioManifest, device: StudioManagedDevice, client: StudioManagedClient) throws {
+    /// The Pi bundle version a `runtime = pi` binding pins; sent with `start` so Studio can hold a floor. Nil (Piagent) sends nothing extra.
+    private let bundleVersion: String?
+    public init(profile: StudioProfile, manifest: StudioManifest, device: StudioManagedDevice, client: StudioManagedClient, bundleVersion: String? = nil) throws {
         try manifest.validate(profile: profile)
         guard profile.credentialMode == .managed, let authority = manifest.authority,
               device.authority == authority, StudioManagedClient.validToken(device.token, kind: "device", id: device.deviceID) else { throw StudioError.invalidResponse }
-        self.profile = profile; self.manifest = manifest; self.device = device; self.client = client
+        self.profile = profile; self.manifest = manifest; self.device = device; self.client = client; self.bundleVersion = bundleVersion
     }
-    public static func enroll(profile: StudioProfile, key: String, client: StudioClient = StudioClient(), managed: StudioManagedClient = StudioManagedClient()) async throws -> StudioManagedBroker {
+    public static func enroll(profile: StudioProfile, key: String, client: StudioClient = StudioClient(), managed: StudioManagedClient = StudioManagedClient(), bundleVersion: String? = nil) async throws -> StudioManagedBroker {
         guard profile.credentialMode == .managed else { throw StudioError.permissionDenied }
         let manifest = try await client.configuration(origin: profile.origin, key: key)
         try manifest.validate(profile: profile)
@@ -193,12 +196,13 @@ public struct StudioManagedClient: Sendable {
         // An independent broker instance must not rotate another running device.
         let device: StudioManagedDevice = try await managed.post(profile.origin, "devices", credential: key,
             body: ["installation_id": .string(UUID().uuidString.lowercased())])
-        return try StudioManagedBroker(profile: profile, manifest: manifest, device: device, client: managed)
+        return try StudioManagedBroker(profile: profile, manifest: manifest, device: device, client: managed, bundleVersion: bundleVersion)
     }
     public func start(operation: UUID, effort: String, taskClass: String) async throws -> StudioRunGrant {
         guard root == nil, ["", "off", "minimal", "low", "medium", "high", "xhigh", "max"].contains(effort), ["simple", "standard", "complex"].contains(taskClass) else { throw StudioError.permissionDenied }
-        let grant: StudioRunGrant = try await client.post(profile.origin, "runs", credential: device.token,
-            body: ["operation_id": .string(operation.uuidString.lowercased()), "effort": .string(effort), "task_class": .string(taskClass)])
+        var body: [String: StudioJSONValue] = ["operation_id": .string(operation.uuidString.lowercased()), "effort": .string(effort), "task_class": .string(taskClass)]
+        if let bundleVersion { body["bundle_version"] = .string(bundleVersion) }
+        let grant: StudioRunGrant = try await client.post(profile.origin, "runs", credential: device.token, body: body)
         try grant.validate(authority: device.authority)
         guard grant.role == "main" else { throw StudioError.invalidResponse }
         root = grant.runID; unconfirmed = nil; grants["main"] = grant; return grant

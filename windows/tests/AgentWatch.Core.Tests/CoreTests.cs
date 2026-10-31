@@ -322,8 +322,15 @@ public class BrokerTests : IDisposable
         var closes = studio.Requests.Where(r => r.Path.EndsWith("/close")).Select(r => r.Body!).ToList();
         Assert.Equal(["role", "slot"], closes[0].Select(p => p.Key).Order());
         Assert.Equal(2, closes[0]["slot"]!.GetValue<int>());
-        Assert.Equal(["role"], closes[1].Select(p => p.Key)); // closing slot 1 keeps the old body
+        Assert.Equal(["role", "slot"], closes[1].Select(p => p.Key).Order()); // closing slot 1 names it: Studio must not close the other slots
+        Assert.Equal(1, closes[1]["slot"]!.GetValue<int>());
         Assert.Equal("review", closes[1]["role"]!.GetValue<string>());
+
+        // An older Studio (no helper_slots) takes no slot field when a helper closes.
+        var (unslotted, unslottedProfile, unslottedKey) = await Connected();
+        answers = await Talk(unslotted, unslottedProfile, unslottedKey, Ask("config"), Start(), Ask("child", new() { ["role"] = "review" }), Ask("close", new() { ["role"] = "review" }));
+        Assert.Null(answers[3]["error"]);
+        Assert.Equal(["role"], unslotted.Requests.First(r => r.Path.EndsWith("/close")).Body!.Select(p => p.Key));
 
         // An older Studio (no helper_slots) is never asked for a second slot, nor one past what it offers.
         foreach (var (offered, asked) in new (int?, int)[] { (null, 2), (2, 3) })

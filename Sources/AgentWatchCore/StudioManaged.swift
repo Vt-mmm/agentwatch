@@ -238,8 +238,10 @@ public struct StudioManagedClient: Sendable {
     /// Closing the run may carry the runtime's process report (counts and
     /// outcomes only). It goes to a Studio that sends a workflow: an older
     /// Studio refuses unknown fields.
-    /// A helper's slot past the first is closed by naming it; slot 1 keeps
-    /// the body an older Studio takes.
+    /// A helper's slot is closed by naming it, so Studio closes that helper
+    /// only: without a slot it closes every running helper of the role. A
+    /// Studio that offers no helper slots has one helper per role and takes
+    /// the older body (it refuses unknown fields).
     public func close(role: String = "", slot: Int = 1, process: [String: StudioJSONValue]? = nil) async throws {
         let whole = role.isEmpty || role == "main"
         guard (1...Self.maxHelperSlots).contains(slot), !whole || slot == 1 else { throw StudioError.permissionDenied }
@@ -249,7 +251,7 @@ public struct StudioManagedClient: Sendable {
         guard let run = root ?? (whole ? unconfirmed : nil) else { return }
         guard whole || grants[key] != nil else { throw StudioError.permissionDenied }
         var body: [String: StudioJSONValue] = ["role": .string(role)]
-        if !whole, slot > 1 { body["slot"] = .number(Double(slot)) }
+        if !whole, (manifest.helperSlots ?? 1) >= 2 { body["slot"] = .number(Double(slot)) }
         if let process {
             guard whole, StudioProcessReport.valid(process, versions: manifest.processVersions ?? [1]) else { throw StudioError.invalidResponse }
             if manifest.harness?.configuration.workflow != nil { body["process"] = .object(process) }

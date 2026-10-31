@@ -144,7 +144,10 @@ public sealed class StudioManagedBroker
 
     // Closing the run may carry the runtime's process report (counts and
     // outcomes only), sent to a Studio whose Harness has a workflow. A helper's
-    // slot past the first is closed by naming it; slot 1 keeps the old body.
+    // slot is closed by naming it, so Studio closes that helper only: without a
+    // slot it closes every running helper of the role. A Studio that offers no
+    // helper slots has one helper per role and takes the older body (it refuses
+    // unknown fields).
     public async Task CloseAsync(string role = "", JsonObject? process = null, int slot = 1, CancellationToken cancellation = default)
     {
         var whole = role.Length == 0 || role == "main";
@@ -155,7 +158,7 @@ public sealed class StudioManagedBroker
         if ((root ?? (whole ? unconfirmed : null)) is not { } run) return;
         if (!whole && !grants.ContainsKey(key)) throw new StudioException(StudioError.permissionDenied);
         var body = new JsonObject { ["role"] = role };
-        if (!whole && slot > 1) body["slot"] = slot;
+        if (!whole && (Manifest.HelperSlots ?? 1) >= 2) body["slot"] = slot;
         if (process is not null)
         {
             if (!whole || !StudioProcessReport.Valid(process, Manifest.ProcessVersions ?? [1])) throw new StudioException(StudioError.invalidResponse);

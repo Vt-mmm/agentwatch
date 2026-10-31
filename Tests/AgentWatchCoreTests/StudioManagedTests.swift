@@ -262,8 +262,9 @@ private actor ManagedTransport: StudioHTTPTransport {
         XCTAssertTrue(sent[2].url?.path.hasSuffix("/close") == true)
     }
     /// Up to three grants of one helper role at once: slot 1 keeps the role's
-    /// key and the old body; a slot past the first names itself and needs a
-    /// Studio that offers that many; closing one slot keeps the others.
+    /// key and opens with the old body; a slot past the first names itself and
+    /// needs a Studio that offers that many; closing names the slot and keeps
+    /// the others.
     func testHelperSlotsHoldSeveralGrantsOfOneRole() async throws {
         let (profile, base) = try configuration()
         var manifest = base; manifest.helperSlots = 3
@@ -290,12 +291,16 @@ private actor ManagedTransport: StudioHTTPTransport {
         XCTAssertTrue(sent[3].url?.path.hasSuffix("/roles/\(childID.uuidString.lowercased())/renew") == true)
         XCTAssertEqual(body(4).keys.sorted(), ["role", "slot"]); XCTAssertEqual(body(4)["slot"] as? Int, 2)
         XCTAssertEqual(body(5)["slot"] as? Int, 3)
-        XCTAssertEqual(body(6).keys.sorted(), ["role"], "closing slot 1 keeps the old body")
+        XCTAssertEqual(body(6).keys.sorted(), ["role", "slot"]); XCTAssertEqual(body(6)["slot"] as? Int, 1, "closing slot 1 names it: Studio must not close the other slots")
         XCTAssertEqual(sent.count, 7)
         // An older Studio (no helper_slots) is never asked for a second slot.
-        let old = try broker(ManagedTransport([(201, grant()), (201, grant(role: "research"))]))
+        let oldTransport = ManagedTransport([(201, grant()), (201, grant(role: "research")), (204, [:])])
+        let old = try broker(oldTransport)
         _ = try await old.start(operation: UUID(), effort: "medium", taskClass: "standard")
         do { _ = try await old.child(role: "research", slot: 2); XCTFail("slot without helper_slots") } catch { XCTAssertEqual(error as? StudioError, .permissionDenied) }
+        _ = try await old.child(role: "research"); try await old.close(role: "research")
+        let oldSent = await oldTransport.captured()
+        XCTAssertEqual(((try? JSONSerialization.jsonObject(with: oldSent[2].httpBody ?? Data())) as? [String: Any])?.keys.sorted(), ["role"], "an older Studio takes no slot field")
         var two2 = base; two2.helperSlots = 2
         let limited = try StudioManagedBroker(profile: profile, manifest: two2, device: device, client: StudioManagedClient(transport: ManagedTransport([(201, grant())])))
         _ = try await limited.start(operation: UUID(), effort: "medium", taskClass: "standard")

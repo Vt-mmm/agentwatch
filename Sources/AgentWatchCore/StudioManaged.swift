@@ -177,7 +177,11 @@ public struct StudioManagedClient: Sendable {
     private let client: StudioManagedClient
     private let device: StudioManagedDevice
     private var root: UUID?
-    private var unconfirmed: UUID? // a run whose close Studio did not confirm
+    /// Runs whose close Studio did not confirm, oldest first. Each is sent
+    /// again after the next start: Studio never closes a run on its own lease,
+    /// so one left here stayed "running" in Studio for days (2026-11-03).
+    private var unconfirmed: [UUID] = []
+    nonisolated static let maxUnconfirmed = 8
     private var grants: [String: StudioRunGrant] = [:]
     public init(profile: StudioProfile, manifest: StudioManifest, device: StudioManagedDevice, client: StudioManagedClient) throws {
         try manifest.validate(profile: profile)
@@ -201,7 +205,15 @@ public struct StudioManagedClient: Sendable {
             body: ["operation_id": .string(operation.uuidString.lowercased()), "effort": .string(effort), "task_class": .string(taskClass)])
         try grant.validate(authority: device.authority)
         guard grant.role == "main" else { throw StudioError.invalidResponse }
-        root = grant.runID; unconfirmed = nil; grants["main"] = grant; return grant
+        root = grant.runID; grants["main"] = grant
+        // Studio just answered: the closes it missed go now. One that fails
+        // again waits for the next start (Studio closes it after a day anyway).
+        for run in unconfirmed {
+            if (try? await client.request(profile.origin, "runs/\(run.uuidString.lowercased())/close", credential: device.token, body: ["role": .string("")])) != nil {
+                unconfirmed.removeAll { $0 == run }
+            }
+        }
+        return grant
     }
     /// The most helper slots a broker command may name.
     public nonisolated static let maxHelperSlots = 3
@@ -224,7 +236,7 @@ public struct StudioManagedClient: Sendable {
         let grant: StudioRunGrant = try await client.post(profile.origin, "runs/\(runID.uuidString.lowercased())/recover", credential: device.token, body: [:])
         try grant.validate(authority: device.authority)
         guard grant.runID == runID, grant.role == "main" else { throw StudioError.identityChanged }
-        root = runID; unconfirmed = nil; grants["main"] = grant; return grant
+        root = runID; unconfirmed.removeAll { $0 == runID }; grants["main"] = grant; return grant
     }
     public func renew(role: String, slot: Int = 1) async throws -> StudioRunGrant {
         let key = Self.key(role: role, slot: slot)
@@ -248,7 +260,7 @@ public struct StudioManagedClient: Sendable {
         let key = Self.key(role: role, slot: slot)
         // The runtime's retry of a close Studio did not confirm reaches Studio
         // again for that run (closing twice is safe there).
-        guard let run = root ?? (whole ? unconfirmed : nil) else { return }
+        guard let run = root ?? (whole ? unconfirmed.last : nil) else { return }
         guard whole || grants[key] != nil else { throw StudioError.permissionDenied }
         var body: [String: StudioJSONValue] = ["role": .string(role)]
         if !whole, (manifest.helperSlots ?? 1) >= 2 { body["slot"] = .number(Double(slot)) }
@@ -260,14 +272,17 @@ public struct StudioManagedClient: Sendable {
         catch {
             // A run Studio did not confirm closed (unreachable, 5xx, refused
             // grant) no longer holds the broker: keeping it would refuse every
-            // later start. It stays unconfirmed for the runtime's retry until
-            // the next start; Studio settles it when its lease lapses. Only a
+            // later start. It stays unconfirmed for the runtime's retry and is
+            // sent again after the next start. Only a
             // refused report keeps it, so the runtime can close without one.
             let kind = (error as? StudioManagedRefusal)?.error ?? error as? StudioError
-            if whole, kind != .invalidResponse { unconfirmed = run; self.root = nil; grants.removeAll() }
+            if whole, kind != .invalidResponse {
+                if !unconfirmed.contains(run) { unconfirmed = Array((unconfirmed + [run]).suffix(Self.maxUnconfirmed)) }
+                self.root = nil; grants.removeAll()
+            }
             throw error
         }
-        if whole { self.root = nil; unconfirmed = nil; grants.removeAll() } else { grants.removeValue(forKey: key) }
+        if whole { self.root = nil; unconfirmed.removeAll { $0 == run }; grants.removeAll() } else { grants.removeValue(forKey: key) }
     }
 }
 

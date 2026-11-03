@@ -29,9 +29,9 @@ private actor ManagedTransport: StudioHTTPTransport {
         let manifest = StudioManifest(authority: authority, harness: harness, schemaVersion: 2, revision: String(repeating: "a", count: 64), orgID: org, user: user, keyID: keyID, credentialMode: .managed, expiresAt: Date().addingTimeInterval(3600), refreshSeconds: 300, models: [], codexCatalog: .object([:]))
         return (profile, manifest)
     }
-    func grant(role: String = "main", fence: Int = 1, model: String = "company-main") -> [String: Any] {
+    func grant(role: String = "main", fence: Int = 1, model: String = "company-main", run: UUID? = nil) -> [String: Any] {
         let id = role == "main" ? mainID : childID
-        return ["run_id": runID.uuidString, "role_id": id.uuidString, "role": role,
+        return ["run_id": (run ?? runID).uuidString, "role_id": id.uuidString, "role": role,
             "model_id": model, "provider": "codex", "provider_model_id": "gpt-6-sol", "effort": "medium", "fence": fence,
             "token": token("run", id), "expires_at": "2026-01-01T00:00:00Z", "profile_id": profileID.uuidString,
             "studio_instance_id": instance.uuidString, "dataset_epoch": epoch.uuidString, "auth_generation": 1]
@@ -210,22 +210,41 @@ private actor ManagedTransport: StudioHTTPTransport {
         XCTAssertNil(oldBody["process"]); XCTAssertEqual(oldBody["role"] as? String, "")
     }
     /// A close Studio could not confirm (503 after Stop during a command)
-    /// must not wedge the broker: the next start reaches Studio. Studio
-    /// settles the unconfirmed run when its lease lapses.
-    func testFailedCloseDoesNotBlockNextStart() async throws {
+    /// must not wedge the broker: the next start reaches Studio, and the
+    /// missed close is sent again right after it (Studio never closes a run
+    /// on its own lease: one left behind showed "running" for days).
+    func testFailedCloseDoesNotBlockNextStartAndIsSentAgain() async throws {
         let unavailable: [String: Any] = ["error": ["code": "managed_service_unavailable"]]
-        let transport = ManagedTransport([(201, grant()), (503, unavailable), (201, grant()), (204, [:])])
+        let first = UUID(), second = UUID()
+        let transport = ManagedTransport([(201, grant(run: first)), (503, unavailable), (201, grant(run: second)), (204, [:]), (204, [:])])
         let broker = try broker(transport)
         _ = try await broker.start(operation: UUID(), effort: "medium", taskClass: "standard")
         do { try await broker.close(); XCTFail("failed close reported as closed") }
         catch { XCTAssertEqual((error as? StudioManagedRefusal)?.error, .serverUnavailable) }
         _ = try await broker.start(operation: UUID(), effort: "medium", taskClass: "standard")
         try await broker.close()
-        // A start leaves the unconfirmed run to Studio: nothing more to close.
-        try await broker.close()
+        try await broker.close() // both confirmed: nothing left
         let paths = await transport.captured().compactMap { $0.url?.path }
-        XCTAssertEqual(paths.count, 4)
+        XCTAssertEqual(paths.count, 5)
         XCTAssertTrue(paths[2].hasSuffix("/managed/runs"))
+        XCTAssertTrue(paths[3].hasSuffix("/runs/\(first.uuidString.lowercased())/close"), paths[3])
+        XCTAssertTrue(paths[4].hasSuffix("/runs/\(second.uuidString.lowercased())/close"), paths[4])
+    }
+    /// A missed close that fails again after the next start is kept for the
+    /// start after that.
+    func testMissedCloseFailingAgainIsKept() async throws {
+        let unavailable: [String: Any] = ["error": ["code": "managed_service_unavailable"]]
+        let first = UUID()
+        let transport = ManagedTransport([(201, grant(run: first)), (503, unavailable), (201, grant()), (503, unavailable), (204, [:]), (201, grant()), (204, [:])])
+        let broker = try broker(transport)
+        _ = try await broker.start(operation: UUID(), effort: "medium", taskClass: "standard")
+        do { try await broker.close(); XCTFail("failed close reported as closed") } catch {}
+        _ = try await broker.start(operation: UUID(), effort: "medium", taskClass: "standard")
+        try await broker.close()
+        _ = try await broker.start(operation: UUID(), effort: "medium", taskClass: "standard")
+        let paths = await transport.captured().compactMap { $0.url?.path }
+        XCTAssertEqual(paths.count, 7)
+        XCTAssertTrue(paths[6].hasSuffix("/runs/\(first.uuidString.lowercased())/close"), paths[6])
     }
     /// The runtime asking again for a close Studio did not confirm reaches
     /// Studio again for the same run, so the runtime never reports a run

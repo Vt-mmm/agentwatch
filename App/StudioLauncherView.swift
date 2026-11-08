@@ -11,6 +11,7 @@ struct StudioLauncherView: View {
     @State private var busy = false
     @State private var message = ""
     @State private var failed = false
+    @State private var piRepair: StudioPiRuntimeError?
 
     private var models: [StudioModel] {
         guard case .available(let values) = studio.snapshot?.models else { return [] }
@@ -52,6 +53,15 @@ struct StudioLauncherView: View {
             }
             if !message.isEmpty {
                 Text(message).font(ClaudeFont.body(11.5)).foregroundStyle(failed ? Claude.orange : Claude.textMuted).fixedSize(horizontal: false, vertical: true)
+                if let piRepair {
+                    HStack {
+                        Button("Sửa cài đặt") { Task { await repairPi(piRepair) } }.controlSize(.small)
+                        Button("Sao chép lệnh") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(StudioManagedPiRuntime.installCommand(repair: piRepair != .bundleMissing), forType: .string)
+                        }.controlSize(.small)
+                    }
+                }
             }
         }
         .studioCard(padding: 12)
@@ -84,6 +94,20 @@ struct StudioLauncherView: View {
             let sync = StudioSyncStore.shared
             let target: StudioSyncTarget = sync.selected.contains(.piagent) ? .piagent : .pi
             guard sync.selected.contains(target) else { throw StudioCLIError.invalidArguments }
+            if sync.managedRuntime == .pi {
+                guard !web else { throw StudioCLIError.invalidArguments }
+                let root = StudioManagedPiRuntime.defaultRoot
+                message = "Đang kiểm tra quyền Pi…"; piRepair = nil
+                do {
+                    try await StudioManagedPiRuntime.authorize(root: root, profileID: profile.id)
+                    guard studio.profile?.id == profile.id else { throw StudioError.identityChanged }
+                    try await StudioTerminalOpener.open(try StudioManagedPiRuntime.terminal(root: root, project: project, profileID: profile.id))
+                    message = "Đã mở Pi. Chọn thinking trong phiên."
+                } catch let error as StudioPiRuntimeError where error.isRepairable {
+                    piRepair = error; throw error
+                }
+                return
+            }
             let directory = sync.directory(target)
             message = "Đang kiểm tra quyền Piagent…"
             try await StudioManagedConfiguration.authorize(directory: directory, profileID: profile.id)
@@ -91,6 +115,13 @@ struct StudioLauncherView: View {
             let command = try StudioManagedConfiguration.terminal(directory: directory, project: project, profileID: profile.id, web: web)
             try await StudioTerminalOpener.open(command)
             message = "Đã mở Piagent. Chọn thinking trong phiên."
+        } catch { failed = true; message = error.localizedDescription }
+    }
+    /// Opens Terminal with the npm command in the member's own shell; Agent Watch runs no npm itself.
+    @MainActor private func repairPi(_ error: StudioPiRuntimeError) async {
+        do {
+            try await StudioTerminalOpener.open(try StudioManagedPiRuntime.repairTerminal(repair: error != .bundleMissing))
+            failed = false; message = "Đã mở Terminal để cài bộ Pi. Xong thì quay lại đây, bấm Đồng bộ rồi mở lại."
         } catch { failed = true; message = error.localizedDescription }
     }
     private var managedAction: some View {

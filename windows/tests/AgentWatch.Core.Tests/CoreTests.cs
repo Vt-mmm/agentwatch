@@ -136,6 +136,26 @@ public class ManifestTests
 {
     static StudioManifest Parse(JsonObject manifest) => StudioClient.Decode<StudioManifest>(Encoding.UTF8.GetBytes(manifest.ToJsonString()));
 
+    // Advisor and general (Piagent's six working roles) are carried to the
+    // runtime when the Harness declares them; a malformed one is refused.
+    [Fact]
+    public void CarriesAdvisorAndGeneralHelpers()
+    {
+        var manifest = FakeStudio.Manifest();
+        var config = (JsonObject)manifest["harness"]!["configuration"]!;
+        config["advisor"] = new JsonObject { ["mode"] = "fixed", ["model_ids"] = new JsonArray("gpt-6-sol") };
+        config["general"] = new JsonObject { ["mode"] = "auto", ["model_ids"] = new JsonArray("gpt-6-sol", "gpt-6-luna") };
+        var parsed = Parse(manifest); parsed.Validate();
+        Assert.Equal(["gpt-6-sol"], parsed.Harness!.Configuration.Advisor!.ModelIds);
+        Assert.Equal(2, parsed.Harness.Configuration.General!.ModelIds.Length);
+        Assert.Contains("advisor", StudioHarness.HelperRoles); Assert.Contains("general", StudioHarness.HelperRoles);
+        var written = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(parsed.Harness.Configuration, StudioJson.Options))!.AsObject();
+        Assert.True(written.ContainsKey("advisor") && written.ContainsKey("general"));
+        Assert.False(written.ContainsKey("verify"), "a helper the Harness lacks is not sent");
+        config["general"] = new JsonObject { ["mode"] = "fixed", ["model_ids"] = new JsonArray("a", "b") };
+        Assert.Equal(StudioError.invalidResponse, Assert.Throws<StudioException>(() => Parse(manifest).Validate()).Code);
+    }
+
     [Fact]
     public void AcceptsACompanyManifestAndRefusesBrokenOnes()
     {

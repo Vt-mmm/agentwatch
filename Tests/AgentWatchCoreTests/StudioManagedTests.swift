@@ -91,6 +91,32 @@ private actor ManagedTransport: StudioHTTPTransport {
         XCTAssertEqual([scouting.role, verifying.role], ["scout", "verify"])
         do { _ = try await broker.child(role: "planner"); XCTFail("unknown helper role") } catch {}
     }
+    /// Advisor and general (Piagent's six working roles) reach the runtime when
+    /// the Harness declares them, and the broker starts them as helpers; a
+    /// malformed general role invalidates the manifest.
+    func testAdvisorAndGeneralReachRuntimeAndRunAsHelpers() async throws {
+        let (profile, base) = try configuration()
+        let main = StudioHarnessRole(mode: "fixed", modelIDs: ["company-main"])
+        var config = StudioHarness.Configuration(main: main, research: main, review: main)
+        config.advisor = StudioHarnessRole(mode: "fixed", modelIDs: ["company-advisor"]); config.general = StudioHarnessRole(mode: "auto", modelIDs: ["company-general", "company-general-old"])
+        let manifest = { (config: StudioHarness.Configuration) in StudioManifest(authority: base.authority, harness: StudioHarness(id: self.profileID, teamID: self.team, revision: 3, configuration: config), schemaVersion: 2, revision: base.revision, orgID: self.org, user: base.user, keyID: self.keyID, credentialMode: .managed, expiresAt: base.expiresAt, refreshSeconds: 300, models: [], codexCatalog: .object([:])) }
+        try manifest(config).validate(profile: profile)
+        guard case .object(let out) = try StudioManagedBrokerCommand.configValue(manifest(config)), case .object(let h) = out["harness"], case .object(let c) = h["configuration"],
+              case .object(let advisor) = c["advisor"], case .object(let general) = c["general"] else { return XCTFail("config shape") }
+        XCTAssertEqual(advisor["mode"].flatMap { if case .string(let s) = $0 { s } else { nil } }, "fixed")
+        XCTAssertEqual(general["model_ids"].flatMap { if case .array(let a) = $0 { a.count } else { nil } }, 2)
+        XCTAssertNil(c["verify"], "a helper the Harness lacks is not sent")
+        let decoded = try JSONDecoder().decode(StudioHarness.Configuration.self, from: Data(#"{"main":{"mode":"fixed","model_ids":["m"]},"research":null,"review":null,"advisor":{"mode":"fixed","model_ids":["a"]},"general":{"mode":"fixed","model_ids":["g"]}}"#.utf8))
+        XCTAssertEqual([decoded.advisor?.modelIDs, decoded.general?.modelIDs], [["a"], ["g"]])
+        var bad = config; bad.general = StudioHarnessRole(mode: "fixed", modelIDs: ["a", "b"])
+        XCTAssertThrowsError(try manifest(bad).validate(profile: profile))
+        let device = StudioManagedDevice(deviceID: deviceID, token: token("device", deviceID), expiresAt: Date(), instanceID: instance, epoch: epoch, generation: 1)
+        let broker = try StudioManagedBroker(profile: profile, manifest: manifest(config), device: device,
+                                             client: StudioManagedClient(transport: ManagedTransport([(201, grant()), (201, grant(role: "advisor")), (201, grant(role: "general"))])))
+        _ = try await broker.start(operation: UUID(), effort: "medium", taskClass: "standard")
+        let advising = try await broker.child(role: "advisor"), writing = try await broker.child(role: "general")
+        XCTAssertEqual([advising.role, writing.role], ["advisor", "general"])
+    }
     /// API-key vendor models (DeepSeek…) reach Piagent through the same
     /// manifest and grants; a malformed vendor or protocol is still refused.
     func testAPIKeyVendorModelsAndGrantsAreAccepted() async throws {

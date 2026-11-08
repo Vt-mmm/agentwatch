@@ -36,6 +36,11 @@ public struct StudioHarness: Codable, Sendable {
         /// A Studio without them sends neither, and the runtime offers neither.
         public var scout: StudioHarnessRole? = nil
         public var verify: StudioHarnessRole? = nil
+        /// Advisor gives a second opinion; general writes, only in its own clone
+        /// of the project (Piagent's six working roles). Absent from an older
+        /// Studio, and then the runtime offers neither.
+        public var advisor: StudioHarnessRole? = nil
+        public var general: StudioHarnessRole? = nil
         /// The Harness lets members turn on fast mode (a Codex model's priority
         /// tier, charged to the key's quota at a higher rate). Watch only
         /// carries it to the runtime, which shows the switch.
@@ -44,16 +49,16 @@ public struct StudioHarness: Codable, Sendable {
         /// before a command). Studio always states it; Watch only carries it,
         /// and the runtime offers Bypass only on true.
         public var bypassMode: Bool? = nil
-        enum CodingKeys: String, CodingKey { case main, research, review, workflow, scout, verify, fastMode = "fast_mode", bypassMode = "bypass_mode" }
+        enum CodingKeys: String, CodingKey { case main, research, review, workflow, scout, verify, advisor, general, fastMode = "fast_mode", bypassMode = "bypass_mode" }
     }
     /// The roles the main agent may delegate to.
-    public static let helperRoles: Set<String> = ["scout", "research", "verify", "review"]
+    public static let helperRoles: Set<String> = ["scout", "research", "advisor", "general", "verify", "review"]
     public let id: UUID
     public let teamID: UUID
     public let revision: Int64
     public let configuration: Configuration
     enum CodingKeys: String, CodingKey { case id, teamID = "team_id", revision, configuration }
-    var valid: Bool { revision > 0 && configuration.main.valid && [configuration.scout, configuration.research, configuration.verify, configuration.review].allSatisfy { $0?.valid ?? true } && (configuration.workflow?.valid ?? true) }
+    var valid: Bool { revision > 0 && configuration.main.valid && [configuration.scout, configuration.research, configuration.advisor, configuration.general, configuration.verify, configuration.review].allSatisfy { $0?.valid ?? true } && (configuration.workflow?.valid ?? true) }
 }
 public struct StudioManagedDevice: Decodable, Sendable {
     public let deviceID: UUID

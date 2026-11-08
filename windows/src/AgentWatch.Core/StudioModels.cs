@@ -129,7 +129,10 @@ public sealed record StudioHarnessConfiguration(
     // The Harness lets members turn on fast mode; Watch only carries it to the runtime.
     [property: JsonPropertyName("fast_mode")] bool? FastMode = null,
     // The Harness lets members choose Bypass; the runtime offers it only on true.
-    [property: JsonPropertyName("bypass_mode")] bool? BypassMode = null);
+    [property: JsonPropertyName("bypass_mode")] bool? BypassMode = null,
+    // Advisor gives a second opinion; general writes, only in its own clone of the project.
+    [property: JsonPropertyName("advisor")] StudioHarnessRole? Advisor = null,
+    [property: JsonPropertyName("general")] StudioHarnessRole? General = null);
 
 public sealed record StudioHarness(
     [property: JsonPropertyName("id")] Guid Id,
@@ -138,9 +141,9 @@ public sealed record StudioHarness(
     [property: JsonPropertyName("configuration")] StudioHarnessConfiguration Configuration)
 {
     // The roles the main agent may delegate to.
-    public static readonly string[] HelperRoles = ["scout", "research", "verify", "review"];
+    public static readonly string[] HelperRoles = ["scout", "research", "advisor", "general", "verify", "review"];
     public bool Valid => Revision > 0 && Configuration.Main.Valid
-        && new[] { Configuration.Scout, Configuration.Research, Configuration.Verify, Configuration.Review }.All(role => role?.Valid ?? true)
+        && new[] { Configuration.Scout, Configuration.Research, Configuration.Advisor, Configuration.General, Configuration.Verify, Configuration.Review }.All(role => role?.Valid ?? true)
         && (Configuration.Workflow?.Valid ?? true);
 }
 

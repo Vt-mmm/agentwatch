@@ -45,7 +45,7 @@ public enum ModelFamily: String, Sendable, CaseIterable, Codable {
 public enum Pricing {
     /// Version is carried into exports/audit logs so old reports remain
     /// explainable after providers change their public prices.
-    public static let versionLabel = "official-list-2026-09-06+claude-55-2026-09-29"
+    public static let versionLabel = "official-list-2026-09-06+claude-55-2026-09-29+gpt-6x-2026-11-18"
 
     /// Family fallbacks are retained for backwards-compatible tests and older
     /// Claude aliases. Production cost calculation uses `quote(forModelId:)`
@@ -76,7 +76,7 @@ public enum Pricing {
                                     isSingleRequest: Bool) -> PriceQuote? {
         let model = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard let base = quote(forModelId: model) else { return nil }
-        let modernOpenAI: Set<String> = ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
+        let modernOpenAI: Set<String> = ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
         let flatLongClaude: Set<String> = ["claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5", "claude-opus-5-5",
                                           "claude-sonnet-4-6", "claude-sonnet-5", "claude-sonnet-5-5", "claude-fable-5", "claude-fable-5-1"]
         var inputMultiplier = 1.0, outputMultiplier = 1.0, tierMultiplier = 1.0
@@ -108,7 +108,15 @@ public enum Pricing {
     /// Snapshot, not historical billing: https://developers.openai.com/api/docs/pricing
     /// and https://platform.claude.com/docs/en/about-claude/pricing (2026-09-06).
     private static let exactPrices: [String: Price] = [
+        // GPT-6.2 (released 2026-11-17, checked 2026-11-18):
+        // developers.openai.com/api/docs/models/gpt-6.2-astra and /gpt-6.2-sol.
+        // GPT-6.1 Sol, GPT-6 Sol and GPT-6 Luna match Agent Studio's reviewed price book.
+        "gpt-6.2-astra": Price(input: 8, output: 40, cacheRead: 0.4, cacheWrite: 10),
+        "gpt-6.2-sol": Price(input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5),
+        "gpt-6.1-sol": Price(input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5),
         "gpt-6-astra": Price(input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5),
+        "gpt-6-sol": Price(input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5),
+        "gpt-6-luna": Price(input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125),
         "gpt-5.6-sol": Price(input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5),
         "gpt-5.6-terra": Price(input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.5),
         "gpt-5.6-luna": Price(input: 0.2, output: 1.2, cacheRead: 0.02, cacheWrite: 0.25),

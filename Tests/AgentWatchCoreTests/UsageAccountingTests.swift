@@ -84,6 +84,17 @@ final class UsageAccountingTests: XCTestCase {
         XCTAssertNotNil(entry("claude-long", tokens: UsageTokens(input: 900_000, output: 1)).estimatedUSD)
     }
 
+    func testGPT6FamilyHasListPricesAndLongContextTier() {
+        var request = UsageEntry(id: "astra62", sessionID: "s", agent: "pi", provider: "openai", modelID: "gpt-6.2-astra",
+                                 timestamp: Date(), tokens: UsageTokens(input: 300_000, output: 100))
+        XCTAssertEqual(NSDecimalNumber(decimal: request.estimatedUSD!).doubleValue, 4.806, accuracy: 1e-9)
+        request.modelID = "gpt-6.2-sol"; request.tokens = UsageTokens(input: 1_000, output: 10)
+        XCTAssertEqual(NSDecimalNumber(decimal: request.estimatedUSD!).doubleValue, 0.0021, accuracy: 1e-12)
+        for model in ["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"] { XCTAssertNotNil(Pricing.quote(forModelId: model), model) }
+        XCTAssertNil(Pricing.quote(forModelId: "gpt-6.2"))
+        XCTAssertNil(Pricing.quote(forModelId: "gpt-6.1-terra"))
+    }
+
     func testCacheWriteTTLPricesOnlyOneHourSubsetAtOneHourRate() {
         let request = entry("cache", tokens: UsageTokens(input: 0, output: 0, cacheWrite: 200, cacheWrite1h: 100))
         XCTAssertEqual(NSDecimalNumber(decimal: request.estimatedUSD!).doubleValue, 0.000975, accuracy: 1e-12)

@@ -58,6 +58,9 @@ public struct StudioSyncResult: Codable, Identifiable, Sendable {
     @ObservationIgnored private let keys: (any StudioKeyStorage)?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var cachedManifest: StudioManifest?
+    /// Where the `runtime = pi` binding lives (tests point it at a disposable folder).
+    @ObservationIgnored public var piRuntimeRoot: URL = StudioManagedPiRuntime.defaultRoot
+    @ObservationIgnored public var piBundleSearch: StudioManagedPiRuntime.BundleSearch? = .standard
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var revisions: [String: String] = [:]
     @ObservationIgnored private var activeProfile: StudioProfile?
@@ -128,6 +131,8 @@ public struct StudioSyncResult: Codable, Identifiable, Sendable {
         if let keys { return try keys.load(profileID: profile.id, allowInteraction: false) }
         return try StudioKeychainStorage().load(profileID: profile.id, allowInteraction: false)
     }
+    /// The program the last synchronized manifest asks company conversations to open in.
+    public var managedRuntime: StudioManagedRuntime { StudioManagedRuntime.from(cachedManifest?.runtime) }
     public func directory(_ target: StudioSyncTarget) -> URL {
         directories[target.rawValue].map { URL(fileURLWithPath: $0, isDirectory: true) } ?? target.defaultDirectory
     }
@@ -239,8 +244,20 @@ public struct StudioSyncResult: Codable, Identifiable, Sendable {
                         }
                         guard target == .piagent else { throw StudioError.permissionDenied }
                         if let saved { try StudioClientConfiguration.adoptOrphanedReceipt(StudioManagedConfiguration.receiptURL(directory: dir), owner: profile.id, savedProfiles: saved) }
-                        let plan = try StudioManagedConfiguration.prepare(directory: dir, connection: profile, manifest: manifest, helper: helper)
-                        try StudioClientConfiguration.apply(plan, receipt: StudioManagedConfiguration.receiptURL(directory: dir))
+                        // `runtime = pi` adds its own binding next to the Piagent one. The
+                        // Piagent binding is written exactly as before; for `pi` it is only
+                        // best effort (a member may not have Piagent), and the Pi error is reported.
+                        let usesPi = StudioManagedRuntime.from(manifest.runtime) == .pi
+                        var piError: Error?
+                        if usesPi {
+                            do { try StudioClientConfiguration.apply(StudioManagedPiRuntime.prepare(root: piRuntimeRoot, connection: profile, manifest: manifest, helper: helper, search: piBundleSearch)) }
+                            catch { piError = error }
+                        } else { StudioManagedPiRuntime.retire(root: piRuntimeRoot) }
+                        do {
+                            let plan = try StudioManagedConfiguration.prepare(directory: dir, connection: profile, manifest: manifest, helper: helper)
+                            try StudioClientConfiguration.apply(plan, receipt: StudioManagedConfiguration.receiptURL(directory: dir))
+                        } catch { if !usesPi { throw error } }
+                        if let piError { throw piError }
                         revisions[physical] = manifest.revision
                         let result = StudioSyncResult(target: target, count: 1, message: "agent-watch-auto · đã nhập Harness.", success: true)
                         next.append(result); completed[physical] = result; continue

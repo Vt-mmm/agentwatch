@@ -5,6 +5,8 @@ public enum StudioError: String, Error, LocalizedError, Sendable, Equatable, Cod
     case invalidOrigin, invalidKey, incompatibleVersion, invalidResponse, redirectDenied
     case permissionDenied, quotaExceeded, rateLimited, serverUnavailable, upstreamUnavailable, offline
     case storage, keychainApprovalRequired, identityChanged, disconnectFirst
+    /// Studio refused a run (426 `bundle_too_old`): the Pi bundle on this machine is below the floor.
+    case bundleTooOld
 
     public var errorDescription: String? {
         switch self {
@@ -22,6 +24,7 @@ public enum StudioError: String, Error, LocalizedError, Sendable, Equatable, Cod
         case .keychainApprovalRequired: "macOS cần cho phép đọc key Studio. Bấm Cho phép Keychain ở phần kết nối."
         case .storage: "Không đọc hoặc lưu được key trong Keychain. Kiểm tra trạng thái mở khóa của máy rồi thử lại."
         case .identityChanged: "Danh tính server trả về đã thay đổi. Ngắt kết nối và kiểm tra lại tài khoản trước khi kết nối lại."
+        case .bundleTooOld: "Bộ Pi trên máy này đã quá cũ hoặc chưa báo phiên bản, nên Studio không cấp lượt chạy. Dùng “Sửa cài đặt” trong Agent Watch để cài bản mới nhất rồi thử lại."
         case .disconnectFirst: "Ngắt kết nối hiện tại trước khi chuyển sang Studio hoặc tài khoản khác."
         }
     }

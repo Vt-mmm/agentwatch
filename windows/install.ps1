@@ -106,16 +106,31 @@ function Install-AgentWatch([switch]$NoLaunch) {
         foreach ($file in @('AgentWatchApp.exe', 'AgentWatchApp.dll', 'agentwatch.exe', 'agentwatch.dll')) {
             if (-not (Test-Path (Join-Path $staged $file) -PathType Leaf)) { throw "Release is missing $file. The installed app has not been changed." }
         }
-        if (Test-Path $backup) { Remove-Item $backup -Recurse -Force }
-        # Only stop processes running from this installation. Wait for DLL
-        # handles to close and retry the rename, retaining the recoverable copy.
-        for ($attempt = 1; Test-Path $app; $attempt++) {
-            $prefix = $app + [IO.Path]::DirectorySeparatorChar
-            $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
-                $_.Path -and $_.Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) })
+        # Only stop processes running from this installation (app\ or the
+        # previous copy). Seen on 2026-10-08: a process left running from
+        # app.previous made the next update fail with "Access to the path
+        # 'AgentWatch.Core.dll' is denied". A copy that still cannot be
+        # deleted is renamed aside (Windows allows renaming a running image)
+        # and removed by a later update.
+        $installed = @($app, $backup) | ForEach-Object { $_ + [IO.Path]::DirectorySeparatorChar }
+        function Stop-InstalledAgentWatch {
+            $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $path = $_.Path
+                $path -and @($installed | Where-Object { $path.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }).Count })
             if ($running.Count) { Write-Host 'Closing Agent Watch and its company sessions for the update. Reopen Piagent after installation.' }
             $running | Stop-Process -Force -ErrorAction SilentlyContinue
             $running | Wait-Process -Timeout 5 -ErrorAction SilentlyContinue
+        }
+        Get-ChildItem $root -Directory -Filter 'app.previous-*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path $backup) {
+            Stop-InstalledAgentWatch
+            try { Remove-Item $backup -Recurse -Force -ErrorAction Stop } catch {
+                Move-Item $backup ($backup + '-' + [guid]::NewGuid().ToString('N'))
+            }
+        }
+        # Wait for DLL handles to close and retry the rename, retaining the
+        # recoverable copy.
+        for ($attempt = 1; Test-Path $app; $attempt++) {
+            Stop-InstalledAgentWatch
             try { Move-Item $app $backup; break } catch {
                 if ($attempt -ge 6) { throw "Agent Watch is still in use. Close it and its Piagent sessions, then retry. $($_.Exception.Message)" }
                 Start-Sleep -Seconds 1

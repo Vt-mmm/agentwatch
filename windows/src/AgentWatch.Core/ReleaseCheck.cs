@@ -16,6 +16,22 @@ public static class ReleaseCheck
         + "Write-Host 'Chưa cập nhật được. Agent Watch đang dùng vẫn giữ nguyên; thử lại sau hoặc chạy lại lệnh cài.'; Read-Host 'Nhấn Enter để đóng' }";
     public static readonly TimeSpan Every = TimeSpan.FromHours(1);
 
+    // How the update dialog opens the updater, tried in order. Seen on
+    // 2026-10-08: an Agent Watch first started from an administrator
+    // PowerShell (working directory C:\WINDOWS\system32) got "Access is
+    // denied" from ShellExecute for a bare "powershell.exe". So: the full
+    // path, a working directory the member owns (never app\, which the
+    // installer replaces), and a plain CreateProcess first; a GUI parent has
+    // no console, so the updater still gets its own window.
+    public static IEnumerable<System.Diagnostics.ProcessStartInfo> UpdaterStarts(string windowsDirectory, string workingDirectory)
+    {
+        var arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{UpdaterCommand}\"";
+        var powershell = Path.Combine(windowsDirectory, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+        yield return new(powershell, arguments) { UseShellExecute = false, WorkingDirectory = workingDirectory };
+        yield return new(powershell, arguments) { UseShellExecute = true, WorkingDirectory = workingDirectory };
+        yield return new("powershell.exe", arguments) { UseShellExecute = true, WorkingDirectory = workingDirectory };
+    }
+
     public static Version? Installed(Assembly? assembly = null)
     {
         var version = (assembly ?? Assembly.GetEntryAssembly())?.GetName().Version;
